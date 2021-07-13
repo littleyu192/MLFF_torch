@@ -127,7 +127,7 @@ class MovementDataset(Dataset):
 
 
 def main():
-    filename = './MOVEMENT'
+    filename = './train_data/MOVEMENT'
     valid_ratio = 0.2
     train_data_file = './train_data.csv'
     valid_data_file = './valid_data.csv'

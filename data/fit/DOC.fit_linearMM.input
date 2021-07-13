@@ -1,0 +1,4 @@
+   2, 200    ! ntype,m_neigh 
+   6   2.0   0.0   ! iat,rad,wp (vdw)
+   29  2.0   0.0   !  iat,rad,wp
+   0.9, 0.0, 0.1, 0.00001   ! w_E,w_E0,w_F,delta

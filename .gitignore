@@ -1,5 +1,33 @@
+# model file
 *.pt
-*__pycache__/*
-*pytest_cache/*
-src/runs/*
 
+# Byte-compiled / optimized / DLL files
+*.py[cod]
+*__pycache__/
+*pytest_cache/
+
+# pytorch run output files
+/src/runs/
+
+# object file
+*.o
+# exec file
+*.r
+
+# vscode config file
+/.vscode/
+
+# genfeature .x .mod files
+/data/gen_feature/*.x
+/data/gen_feature/*.mod
+
+# generate data file 
+/data/train_data/*
+!/data/train_data/MOVEMENT
+!/data/train_data/MOVEMENTmini
+/input
+/output
+/fread_dfeat
+
+# exec files
+/bin
