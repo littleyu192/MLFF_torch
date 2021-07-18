@@ -7,7 +7,7 @@ isClassify=False
 isRunMd=False                                   #是否训练运行md  default:False
 isRunMd_nn=False
 isFollowMd=False                                #是否是接续上次的md继续运行  default:False
-isFitVdw=False
+isFitVdw=True
 isRunMd100_nn=False
 isRunMd100=False
 add_force=False     # for NN md
@@ -31,7 +31,7 @@ mdImageFileDir=r'./MD'                              #设置md的初始image的�
 #PWmatDir=r'/home/buyu/PWmat/MDAlHsml3_loop'
 
 #训练时需要打开
-isCalcFeat=False
+isCalcFeat=True
 isFitLinModel=True
 
 #isClassify=True

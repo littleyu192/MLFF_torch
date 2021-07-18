@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 import os
 import sys
 codepath=os.path.abspath(sys.path[0])
@@ -20,7 +18,6 @@ def write_egroup_input():
             f.writelines(str(pm.b_init[i])+'\n')
         
 def run_write_egroup():
-    #command=pm.genFeatDir+"/write_egroup.x > ./output/out_write_egroup"
     command='write_egroup.x > ./output/out_write_egroup'
     print(command)
     os.system(command)
@@ -28,12 +25,8 @@ def run_write_egroup():
 def write_natoms_dfeat():
     max_natom = int(np.loadtxt(os.path.join(pm.OutputPath,'max_natom')))
     pp.collectAllSourceFiles()
-    # f_train_egroup = open(pm.f_train_egroup,'w')
-    # f_test_egroup = open(pm.f_test_egroup,'w')
     f_train_natom = open(pm.f_train_natoms,'w')
     f_test_natom = open(pm.f_test_natoms,'w')
-    # f_train_feat = open(pm.f_train_feat,'w')
-    # f_test_feat = open(pm.f_test_feat,'w')
     kk=0
     f_train_dfeat={}
     f_test_dfeat={}
@@ -55,9 +48,6 @@ def write_natoms_dfeat():
     egroup_all = pd.read_csv(os.path.join(pm.trainSetDir,'Egroup_weight'), header=None,names=range(max_natom+2))
     egroup_all = egroup_all.fillna(0)
     egroup_all = egroup_all.values[:,:].astype(float)
-    # print(dfeat_names.shape)
-    # print(dfeat_names[8,0])
-    
 
     count=0
     Imgcount=0
@@ -73,55 +63,21 @@ def write_natoms_dfeat():
         trainImgNum=int(ImgNum*(1-pm.test_ratio))
         trainImg=np.arange(0,trainImgNum)
         testImg=np.arange(trainImgNum,ImgNum)
-        # with open(os.path.join(system,'info.txt'),'r') as sourceFile:
-        #     sourceFile.readline()
-        #     natom=int(sourceFile.readline().split()[0])
-        #     ImgNum=int(sourceFile.readline().split()[0])
-        # useImgs=np.arange(0,ImgNum,interval)
         
         for i in trainImg:
             f_train_natom.writelines(str(int(natom))+' '+str(int(natom))+'\n')
-            # f_train_dfeat.writelines(str(os.path.join(system,'dfeat.fbin'))+', '+str(i+1)+'\n')
             for mm in pm.use_Ftype:
-                f_train_dfeat[mm].writelines(str(os.path.join(system,'dfeat.fbin.Ftype'+str(mm)))+', '+str(i+1)+', '+str(dfeat_names[mm][int(Imgcount+i),1])+'\n')
-            
-            # feat_train=np.concatenate((feat_train,feat_all[(count+i*natom):(count+natom*(i+1)),:]),axis=0)
-
-            # for k,line in enumerate(get_all):
-            #     if k >= count+i*natom and k < count+(i+1)*natom:             
-            #         f_train_feat.writelines(line)        
-            #     else:           
-            #         continue  
+                f_train_dfeat[mm].writelines(str(os.path.join(system,'dfeat.fbin.Ftype'+str(mm)))+', '+str(i+1)+', '+str(dfeat_names[mm][int(Imgcount+i),1])+'\n') 
         
         for i in testImg:
-            # print(i)
             f_test_natom.writelines(str(int(natom))+' '+str(int(natom))+'\n')
-            # f_test_dfeat.writelines(str(os.path.join(system,'dfeat.fbin'))+', '+str(i+1)+'\n')
             for mm in pm.use_Ftype:
                 f_test_dfeat[mm].writelines(str(os.path.join(system,'dfeat.fbin.Ftype'+str(mm)))+', '+str(i+1)+', '+str(dfeat_names[mm][int(Imgcount+i),1])+'\n')
-            # feat_test=np.concatenate((feat_test,feat_all[(count+i*natom):(count+natom*(i+1)),:]),axis=0)
-            # for k,line in enumerate(get_all):
-            #     if k >= count+i*natom and k < count+(i+1)*natom:             
-            #         f_test_feat.writelines(line)        
-            #     else:           
-            #         continue
         feat_train=np.concatenate((feat_train,feat_all[count:(count+natom*len(trainImg)),:]),axis=0)
         feat_test=np.concatenate((feat_test,feat_all[(count+natom*len(trainImg)):(count+natom*ImgNum),:]),axis=0)
 
-
         egroup_train = np.concatenate((egroup_train,egroup_all[count:(count+natom*len(trainImg)),:]),axis=0)
         egroup_test = np.concatenate((egroup_test,egroup_all[(count+natom*len(trainImg)):(count+natom*ImgNum),:]),axis=0)
-
-        # for k,line in enumerate(get_all):
-        #     m=int((k-count)/natom)
-        #     if m in trainImg:
-        #         f_train_feat.writelines(line)
-        #     if m in testImg:
-        #         f_test_feat.writelines(line)   
-            # if k >= count+i*natom and k < count+(i+1)*natom:             
-                     
-            # else:           
-            #     continue
 
         count=count+natom*ImgNum
         Imgcount=Imgcount+ImgNum
@@ -132,8 +88,6 @@ def write_natoms_dfeat():
 
     f_train_natom.close()
     f_test_natom.close()
-    # f_train_feat.close()
-    # f_test_feat.close()
     for i in pm.use_Ftype:
         f_train_dfeat[i].close()
         f_test_dfeat[i].close()
