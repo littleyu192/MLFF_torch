@@ -48,19 +48,14 @@ else:
 
 if pm.isFitVdw:
     ff.makeFitDirAndCopySomeFiles()
-    # readFittingParameters()
     ff.copyData()
     ff.writeFitInput()
     ff.FeatCollectIn()
-    # liuliping: deprecate makefile, use bash commands
-    #command='make pca -C'+pm.fitModelDir
     command = 'feat_collect_PCA.r feat_collect.in; '
     current_dir = os.getcwd()
     os.chdir(pm.fitModelDir)
     os.system(command)
     os.chdir(current_dir)
-    # liuliping: deprecate makefile, use bash commands
-    #command='make vdw -C'+pm.fitModelDir
     command = 'feat_collect_PCA.r feat_collect.in; ' + 'fit_vdw.r feat_PV.1; '
     os.chdir(pm.fitModelDir)
     os.system(command)

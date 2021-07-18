@@ -31,3 +31,8 @@
 
 # exec files
 /bin
+# lib file
+/lib
+
+# npy file
+*.npy
