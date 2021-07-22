@@ -15,11 +15,12 @@ pbc = True
 is_nn_do_profile = False
 #************** Dir **********************
 prefix = r'./'
-trainSetDir = r'./data/train_data'
-fortranFitSourceDir=r'./data/fit'
+trainSetDir = r'./train_data'
+fortranFitSourceDir=r'./fit'
 codedir=r'/home/husiyu/software/moleculeNN/MLFF-master/src/lib'
 fitModelDir = r'./fread_dfeat'
-#genFeatDir = '/home/buyu/MLFF/new-repulsive/ML_FRAME_WORK_vdw/gen_feature'
+train_data_path = r'./train_data/final_train'
+test_data_path = r'./train_data/final_test'
 
 #genFeatDir = r'./gen_feature'
 genFeatDir = r'./data/gen_feature'
@@ -67,8 +68,8 @@ Ftype1_para={
     'iflag_ftype':3       # same value for different types, iflag_ftype:1,2,3 when 3, iflag_grid must be 3
 }
 Ftype2_para={
-    'numOf3bfeat1':[3,3],
-    'numOf3bfeat2':[3,3],
+    'numOf3bfeat1':[3,3],     # 3*3=9
+    'numOf3bfeat2':[3,3],     # 3*3=9   总的特征数24+9+9=42
     'Rc':[5.5,5.5],
     'Rc2':[5.5,5.5],
     'Rm':[5.0,5.0],
@@ -78,6 +79,8 @@ Ftype2_para={
     'dR2':[0.5,0.5],
     'iflag_ftype':3   # same value for different types, iflag_ftype:1,2,3 when 3, iflag_grid must be 3
 }
+nFeatures=42
+
 
 E_tolerance=0.3
 # iflag_ftype=3        # Seems like, this should be in the Ftype1/2_para        # 2 or 3 or 4 when 4, iflag_grid must be 3
@@ -146,6 +149,7 @@ isMdProfile=False
 gpu_mem  = 0.9       # tensorflow used gpu memory
 cuda_dev = '0'       # unoccupied gpu, using 'nvidia-smi' cmd
 cupyFeat=True
+torch_dtype = 'float32'
 tf_dtype = 'float32' # dtype of tensorflow trainning, 'float32' faster than 'float64'
 test_ratio = 0.2
 #================================================================================

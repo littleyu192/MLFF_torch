@@ -712,7 +712,7 @@ ccccccccccccccccccccccccccccccccccccccccccc
        energy_group_pred(iat1)=Esum2/sum
        num_AEM_Egroup=num_AEM_Egroup+1
        AEM_Egroup=AEM_Egroup+(Esum1/sum-Esum2/sum)**2
-       MAE_Egroup=MAE_Egroup+ABS(Esum1/sum-Esum2/sum)
+       MAE_Egroup=MAE_Egroup+abs(Esum1/sum-Esum2/sum)
        enddo
 
 
@@ -729,7 +729,7 @@ cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
        num_AEM_Etot=num_AEM_Etot+1
        AEM_Etot=AEM_Etot+(Etot-Etot_pred)**2
-       MAE_Etot=MAE_Etot+ABS(Etot-Etot_pred)
+       MAE_Etot=MAE_Etot+abs(Etot-Etot_pred)
 
         do i=1,natom
         itype=iatom_type(i)
@@ -740,12 +740,12 @@ cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
         write(40+itype,*) force(3,i),force_pred(3,i)
         num_AEM_Eatom=num_AEM_Eatom+1
         AEM_Eatom=AEM_Eatom+(energy(i)-energy_pred(i))**2
-        MAE_Eatom=MAE_Eatom+ABS(energy(i)-energy_pred(i))
+        MAE_Eatom=MAE_Eatom+abs(energy(i)-energy_pred(i))
         num_AEM_F=num_AEM_F+3
         AEM_F=AEM_F+(force(1,i)-force_pred(1,i))**2+ 
      & (force(2,i)-force_pred(2,i))**2+(force(3,i)-force_pred(3,i))**2
-        MAE_F=MAE_F+ABS(force(1,i)-force_pred(1,i))+
-     & ABS(force(2,i)-force_pred(2,i))+ABS(force(3,i)-force_pred(3,i))
+        MAE_F=MAE_F+abs(force(1,i)-force_pred(1,i))+
+     & abs(force(2,i)-force_pred(2,i))+abs(force(3,i)-force_pred(3,i))
         enddo
 
 3000   continue
@@ -789,10 +789,10 @@ cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
        write(6,*) "RMSE_Etot=", dsqrt(AEM_Etot/num_AEM_Etot) 
        write(6,*) "RMSE_F=", dsqrt(AEM_F/num_AEM_F)
        
-       write(6,*) "MAE_Eatom=", MAE_Eatom/num_AEM_Eatom
-       write(6,*) "MAE_Egroup=", MAE_Egroup/num_AEM_Egroup
-       write(6,*) "MAE_Etot=", MAE_Etot/num_AEM_Etot 
-       write(6,*) "MAE_F=", MAE_F/num_AEM_F
+       !write(6,*) "MAE_Eatom=", MAE_Eatom/num_AEM_Eatom
+       !write(6,*) "MAE_Egroup=", MAE_Egroup/num_AEM_Egroup
+       !write(6,*) "MAE_Etot=", MAE_Etot/num_AEM_Etot 
+       !write(6,*) "MAE_F=", MAE_F/num_AEM_F
 
        write(6,*) "MSE_Eatom=", AEM_Eatom/num_AEM_Eatom
        write(6,*) "MSE_Egroup=", AEM_Egroup/num_AEM_Egroup

@@ -13,6 +13,8 @@
 *.o
 # exec file
 *.r
+# generate file
+*.csv
 
 # vscode config file
 /.vscode/
@@ -25,9 +27,9 @@
 /data/train_data/*
 !/data/train_data/MOVEMENT
 !/data/train_data/MOVEMENTmini
-/input
-/output
-/fread_dfeat
+/data/input/*
+/data/output/*
+/data/fread_dfeat/*
 
 # exec files
 /bin

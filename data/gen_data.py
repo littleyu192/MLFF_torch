@@ -6,16 +6,16 @@ import numpy as np
 import pandas as pd
 import os
 import sys
-sys.path.append("./lib")
+sys.path.append("../lib")
 from read_all import read_allnn
+import torch
 
-if pm.tf_dtype == 'float32':
-    tf_dtype = 'float32'
+if pm.torch_dtype == 'float32':
+    torch_dtype = torch.float32
     from convert_dfeat import convert_dfeat
 else:
-    tf_dtype = 'float64'
+    torch_dtype = torch.float64
     from convert_dfeat64 import convert_dfeat
-
 
 class MinMaxScaler:
     ''' a*x +b = x_scaled like sklearn's MinMaxScaler
@@ -108,9 +108,9 @@ def get_scalers(f_feat, f_ds, b_save=True):
 
 
 def process_data(f_train_feat, f_train_dfeat, f_train_natoms, f_train_egroup,
-                 f_test_feat, f_test_dfeat,  f_test_natoms, f_test_egroup, scalers, dir_path):
-    if not os.path.exists(dir_path):
-        os.mkdir(dir_path)
+                 scalers, nn_data_path):
+    if not os.path.exists(nn_data_path):
+        os.mkdir(nn_data_path)
     # natoms contain all atomnum of each image, format: totnatom, type1n, type2 n
     natoms = np.loadtxt(f_train_natoms, dtype=int)
     nImg = natoms.shape[0]
@@ -125,7 +125,7 @@ def process_data(f_train_feat, f_train_dfeat, f_train_natoms, f_train_egroup,
     egroup, divider, egroup_weight = prepare.r_egroup_csv(f_train_egroup)
     if os.path.exists(os.path.join(pm.dir_work, 'weight_for_cases')):
         weight_all = pd.read_csv(os.path.join(pm.dir_work, 'weight_for_cases'),
-                                 header=None).values[:, 0].astype(pm.tf_dtype).reshape(-1, 1)
+                                 header=None).values[:, 0].astype(pm.torch_dtype).reshape(-1, 1)
     else:
         weight_all = np.ones((engy_scaled.shape[0], 1))
     nfeat0m = feat_scaled.shape[1]  # 每个原子特征的维度
@@ -136,6 +136,8 @@ def process_data(f_train_feat, f_train_dfeat, f_train_natoms, f_train_egroup,
         itype = pm.atomType[i]
         feat_scale_a[:, i] = scalers[itype].feat_scaler.a
     feat_scale_a = np.asfortranarray(feat_scale_a)  # scaler 的 a参数
+    # feat_scale_a=np.ones((nfeat0m,pm.ntypes))   #如果不做scale，赋值为1
+    # feat_scale_a = np.asfortranarray(feat_scale_a)
     init = pm.use_Ftype[0]
 
     dfeatdirs = {}
@@ -160,9 +162,9 @@ def process_data(f_train_feat, f_train_dfeat, f_train_natoms, f_train_egroup,
             read_allnn.read_dfeat(k, itype_atom, feat_scale_a, nfeat[flag])
             if flag == 0:
                 energy_all[k] = np.array(
-                    read_allnn.energy_all).astype(pm.tf_dtype)
+                    read_allnn.energy_all).astype(pm.torch_dtype)
                 force_all[k] = np.array(read_allnn.force_all).transpose(
-                    1, 0, 2).astype(pm.tf_dtype)
+                    1, 0, 2).astype(pm.torch_dtype)
                 list_neigh_all[k] = np.array(
                     read_allnn.list_neigh_all).transpose(1, 0, 2).astype(int)
                 iatom_all[k] = np.array(read_allnn.iatom)
@@ -175,6 +177,7 @@ def process_data(f_train_feat, f_train_dfeat, f_train_natoms, f_train_egroup,
             ifeat_tmp_all[k] = np.array(read_allnn.ifeat_tmp_all).astype(int)
             read_allnn.deallo()
         flag = flag+1
+    #pm.fitModelDir=./fread_dfeat  
     with open(os.path.join(pm.fitModelDir, "feat.info"), 'w') as f:
         print(os.path.join(pm.fitModelDir, "feat.info"))
         f.writelines(str(pm.iflag_PCA)+'\n')
@@ -228,7 +231,7 @@ def process_data(f_train_feat, f_train_dfeat, f_train_natoms, f_train_egroup,
             convert_dfeat.conv_dfeat(image_num[mm],nfeat[kk],indImg[i],num_tmp_all[dfeat_name[mm]][image_num[mm]-1],dfeat_tmp,jneigh_tmp,ifeat_tmp,iat_tmp)
             kk=kk+1
 
-    dfeat_scaled = np.array(convert_dfeat.dfeat).transpose(1,2,0,3).astype(pm.tf_dtype)
+    dfeat_scaled = np.array(convert_dfeat.dfeat).transpose(1,2,0,3).astype(pm.torch_dtype)
     convert_dfeat.deallo()
     print("feat_scaled shape" + str(feat_scaled.shape))
     print("fors_scaled shape" + str(fors_scaled.shape))
@@ -240,34 +243,37 @@ def process_data(f_train_feat, f_train_dfeat, f_train_natoms, f_train_egroup,
     print("egroup shape" + str(egroup.shape))
     print("divider shape" + str(egroup.shape))
     print("dfeat_scaled shape" + str(dfeat_scaled.shape))
-    np.save(dir_path + "/feat_scaled.npy", feat_scaled)
-    np.save(dir_path + "/fors_scaled.npy", fors_scaled)
-    np.save(dir_path + "/nblist.npy", nblist)
-    np.save(dir_path + "/engy_scaled.npy", engy_scaled)
-    np.save(dir_path + "/itypes.npy", itypes)
-    np.save(dir_path + "/egroup_weight.npy", egroup_weight)
-    np.save(dir_path + "/weight_all.npy", weight_all)
-    np.save(dir_path + "/egroup.npy", egroup)
-    np.save(dir_path + "/divider.npy", divider)
-    np.save(dir_path + "/dfeat_scaled.npy", dfeat_scaled)
+    np.save(nn_data_path +"/feat_scaled.npy", feat_scaled)
+    np.save(nn_data_path + "/fors_scaled.npy", fors_scaled)
+    np.save(nn_data_path + "/nblist.npy", nblist)
+    np.save(nn_data_path + "/engy_scaled.npy", engy_scaled)
+    np.save(nn_data_path + "/itypes.npy", itypes)
+    np.save(nn_data_path + "/egroup_weight.npy", egroup_weight)
+    np.save(nn_data_path + "/weight_all.npy", weight_all)
+    np.save(nn_data_path + "/egroup.npy", egroup)
+    np.save(nn_data_path + "/divider.npy", divider)
+    np.save(nn_data_path + "/dfeat_scaled.npy", dfeat_scaled)
+    np.save(nn_data_path + "/ind_img.npy", np.array(indImg).reshape(-1))
 
 
 def main():
     # 计算scale变换的参数
-    scalers = get_scalers(pm.f_train_feat, pm.f_data_scaler, False)
+    scalers_train = get_scalers(pm.f_train_feat, pm.f_data_scaler, False)
     read_allnn.read_wp(pm.fitModelDir, pm.ntypes)
     print(read_allnn.wp_atom)
     process_data(pm.f_train_feat,
                  pm.f_train_dfeat,
                  pm.f_train_natoms,
-                 pm.f_train_egroup,
-                 pm.f_test_feat,
+                 pm.f_train_egroup, 
+                 scalers_train,
+                 pm.train_data_path)
+    scalers_test = get_scalers(pm.f_test_feat, pm.f_data_scaler, False)
+    process_data(pm.f_test_feat,
                  pm.f_test_dfeat,
                  pm.f_test_natoms,
                  pm.f_test_egroup,
-                 scalers,
-                 "data/train_data/final")
-
+                 scalers_test,
+                 pm.test_data_path)
 
 if __name__ == '__main__':
     main()

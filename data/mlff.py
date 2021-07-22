@@ -3,8 +3,8 @@ import prepare as pp
 import os
 import sys
 import parameters as pm
-codepath = os.getcwd()
-pm.fortranFitSourceDir = codepath + '/data/fit'
+#codepath = os.getcwd()
+#pm.fortranFitSourceDir = codepath + '/data/fit'
 # genFeatInputFile='./gen_feature.in'
 if os.path.exists('./input/'):
     pass
