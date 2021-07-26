@@ -50,6 +50,7 @@ isFitLinModel=True
 #********* for gen_feature.in *********************
 atomType=[29]                                  #铜有29个同位素,相当于29个种类的cu
 maxNeighborNum=100
+natoms=108
 
 iflag_PCA=0
 Rc_M=5.5                     # max of Rcut

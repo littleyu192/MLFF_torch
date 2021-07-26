@@ -15,7 +15,9 @@
 *.r
 # generate file
 *.csv
-
+#generate model
+*.pt
+/src/runs/*
 # vscode config file
 /.vscode/
 
@@ -38,3 +40,6 @@
 
 # npy file
 *.npy
+
+# log file
+*.log
