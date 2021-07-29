@@ -111,8 +111,8 @@ def train_finetuning(sample_batches, model, optimizer, criterion):
     error=0
     # backward_force=torch.tensor
     Etot_label = Variable(sample_batches['output_energy'][:,:,:].float().to(device))
-    Force_label = Variable(sample_batches['output_force'][:,:,:].float().to(device))
     Etot_label = torch.sum(Etot_label, dim=1)   #[40,108,1]-->[40,1]
+    Force_label = Variable(sample_batches['output_force'][:,:,:].float().to(device))
     len_batch = sample_batches["input_feat"].shape[0]
     out_atoms_energy = torch.zeros(len_batch, 1)
     for i in range(pm.natoms):
@@ -123,12 +123,9 @@ def train_finetuning(sample_batches, model, optimizer, criterion):
         model.to(device)
         model.train()
         x, out = model(input_data)
-        out_sum = out.sum()
+        out_sum = out.mean()
         out_sum.backward(retain_graph=True)
-        # gradients=torch.from_numpy(np.ones((40, 1)).float().to(device))
-        # out.backward(gradient=None)
         input_grad = input_data.grad  #input_data.grad.shape --> torch.size([40,42])
-
         # 加入力和Etot，重新计算此处的loss
         for batch_index in range(len_batch):
             atomi_dx, atomi_dy, atomi_dz = [0,0,0]
@@ -137,10 +134,6 @@ def train_finetuning(sample_batches, model, optimizer, criterion):
                 atomi_dy = atomi_dy + input_grad[batch_index, input_index]*dfeat[batch_index,:,input_index,1].sum()
                 atomi_dz = atomi_dz + input_grad[batch_index, input_index]*dfeat[batch_index,:,input_index,2].sum()
             atomi_force = torch.tensor([atomi_dx, atomi_dy, atomi_dz])  #反向计算出一个原子的力
-            # force_deviation = force[i,0,:] - atomi_force   #和labelF的偏差
-            # force_ABS_error = force.norm(1) / 3
-            # force_RMSE_error = math.sqrt(1/3) * force.norm(2)
-            # print(force_RMSE_error)
             atomi_force = atomi_force.unsqueeze(0)
             # print(atomi_force)
             if(batch_index==0):
