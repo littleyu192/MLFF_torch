@@ -1,0 +1,59 @@
+[33mcommit c00faf9f93d16a4dfa213593db058b418ce0ed65[m[33m ([m[1;36mHEAD -> [m[1;32mmaster[m[33m)[m
+Author: Xiaohuzzz <littleyu192@163.com>
+Date:   Thu Jul 29 15:34:15 2021 +0800
+
+    change Ei backward to Etot backward
+
+[33mcommit c6b81ac3a7f66444d56e5789c2319b463de801ac[m[33m ([m[1;31morigin/master[m[33m, [m[1;31morigin/HEAD[m[33m)[m
+Author: husiyu <littleyu192@163.com>
+Date:   Thu Jul 29 13:54:12 2021 +0800
+
+    modify
+
+[33mcommit 07026565f58f2b6cb1a823a7b4e598c954923d75[m
+Author: husiyu <littleyu192@163.com>
+Date:   Mon Jul 26 09:06:01 2021 +0800
+
+    torch model avail
+
+[33mcommit 2459eb7a6989c791181e3ce5f6967d62ea1b76a4[m
+Author: husiyu <littleyu192@163.com>
+Date:   Thu Jul 22 08:36:35 2021 +0800
+
+    dataloader and simple model
+
+[33mcommit f1bef50c20753764351f671da715383293335a8b[m
+Author: husiyu <littleyu192@163.com>
+Date:   Sun Jul 18 19:18:12 2021 +0800
+
+    gen final train data
+
+[33mcommit c28588231e9027475360867f42d24ea3e7c24a0d[m
+Author: husiyu <littleyu192@163.com>
+Date:   Sun Jul 18 16:32:58 2021 +0800
+
+    format code
+
+[33mcommit 0d12ca3e9bfcbc28f24d024aa810c3cdd0d57226[m
+Author: husiyu <littleyu192@163.com>
+Date:   Sun Jul 18 16:24:39 2021 +0800
+
+    add fortran code
+
+[33mcommit 4a049811a1acc629ce5f0529f283206d3a26ed93[m
+Author: husiyu <littleyu192@163.com>
+Date:   Sun Jul 18 15:13:09 2021 +0800
+
+    add build script
+
+[33mcommit eabe2c59da6ea2db8dbf0be5e815e3accc1941b0[m
+Author: husiyu <littleyu192@163.com>
+Date:   Tue Jul 13 08:29:53 2021 +0800
+
+    genfeature
+
+[33mcommit 5cefe6f34b10bb5ed4296b9acfdbb3ccf993eafb[m
+Author: husiyu <littleyu192@163.com>
+Date:   Fri Jul 2 09:24:47 2021 +0800
+
+    data loader and  model

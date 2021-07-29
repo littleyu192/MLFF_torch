@@ -1,0 +1,9 @@
+all: select_mm_VV_forceMPI.r feat_dist_xp.r
+select_mm_VV_forceMPI.r:
+	mpiifort -O3 select_mm_VV_forceMPI.f  calc_VV_force_sub.f fit_VV_force_sub.f -mkl -o $@
+     
+feat_dist_xp.r:
+	ifort -O3 feat_dist_xp.f -mkl -o $@
+
+clean:
+	rm -f select_mm_VV_forceMPI.r feat_dist_xp.r

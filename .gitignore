@@ -1,3 +1,13 @@
+# other configration
+/cu/*
+/CuO/*
+/data/*
+!/data/parameters.py
+!/data/PWdata/MOVEMENT
+/cu/*
+!/cu/parameters.py
+!/cu/PWdata/MOVEMENT
+
 # model file
 *.pt
 
@@ -7,36 +17,29 @@
 *pytest_cache/
 
 # pytorch run output files
-/src/runs/
-
+/data/runs/
+/cu/runs/
 # object file
 *.o
 # exec file
 *.r
 # generate file
 *.csv
-#generate model
-*.pt
-/src/runs/*
+*.log
 # vscode config file
 /.vscode/
-
-# genfeature .x .mod files
-/data/gen_feature/*.x
-/data/gen_feature/*.mod
 
 # generate data file 
 /data/train_data/*
 !/data/train_data/MOVEMENT
-!/data/train_data/MOVEMENTmini
 /data/input/*
 /data/output/*
 /data/fread_dfeat/*
 
 # exec files
-/bin
+/src/bin
 # lib file
-/lib
+/src/lib
 
 # npy file
 *.npy

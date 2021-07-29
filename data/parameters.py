@@ -15,21 +15,15 @@ pbc = True
 is_nn_do_profile = False
 #************** Dir **********************
 prefix = r'./'
-trainSetDir = r'./train_data'
-fortranFitSourceDir=r'./fit'
-codedir=r'/home/husiyu/software/moleculeNN/MLFF-master/src/lib'
+trainSetDir = r'./PWdata'
+codedir=r'/home/hsy/software/MLFF_torch'
+fortranFitSourceDir=codedir+'/src/pre_data/fit/'
 fitModelDir = r'./fread_dfeat'
 train_data_path = r'./train_data/final_train'
 test_data_path = r'./train_data/final_test'
 
-#genFeatDir = r'./gen_feature'
-genFeatDir = r'./data/gen_feature'
-
-#mdImageFileDir='/home/buyu/MLFF/MD/AlHbulk'
+genFeatDir = codedir+'./pre_data/gen_feature'
 mdImageFileDir=r'./MD'                              #设置md的初始image的文件所在的文件夹  default:'.'
-
-# this dir is not found?
-#PWmatDir=r'/home/buyu/PWmat/MDAlHsml3_loop'
 
 #训练时需要打开
 isCalcFeat=True
