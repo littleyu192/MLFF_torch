@@ -113,7 +113,7 @@ class MovementDataset(Dataset):
         self.egroup_weight=np.load(egroup_weight_path)
         self.divider=np.load(divider_path)
 
-        self.natoms=natoms
+        self.natoms = natoms
         # self.natoms = pd.read_csv(natoms_path)   #/fread_dfeat/NN_output/natoms_train.csv
         self.itype=np.load(itype_path)
         self.nblist=np.load(nblist_path)

@@ -26,28 +26,29 @@ ACTIVE = torch.relu
 B_INIT= -0.2
 
 class FCNet(nn.Module):
-    def __init__(self,BN = False,Dropout = False):              
+    def __init__(self,BN = False,Dropout = False, itype = 0):  #atomtypes=len(pm.atomType)
         super(FCNet,self).__init__()
         self.dobn = BN
         self.dodrop = Dropout                                  
         self.fcs=[]
         self.bns=[]
-        self.drops=[]                                          
+        self.drops=[]
+        self.itype= itype  # itype =0,1 if CuO                                       
         for i in range(pm.nLayers-1):
-            in_putsize = pm.nFeatures if i ==0 else pm.nNodes[i-1,0] #0为type1,1为type2
-            fc = nn.Linear(in_putsize,pm.nNodes[i,0])
+            in_putsize = pm.nFeatures if i==0 else pm.nNodes[i-1,itype] #0为type1,1为type2
+            fc = nn.Linear(in_putsize,pm.nNodes[i,itype])
             setattr(self,'fc%i'%i,fc)   #setattr函数用来设置属性，其中第一个参数为继承的类别，第二个为名称，第三个是数值
             self.fcs.append(fc)
             self.__set__init(fc)  #初始化网络训练参数
             if self.dobn:
-                bn = nn.BatchNorm1d(in_putsize,momentum=0.5)
+                bn = nn.BatchNorm1d(pm.nNodes[i,itype], momentum=0.5)
                 setattr(self,'bn%i'%i,bn)
                 self.bns.append(bn)
             if self.dodrop:
                 drop = nn.Dropout(0.5)
                 setattr(self,'drop%i'%i,drop)
                 self.drops.append(drop)
-        self.output = nn.Linear(pm.nNodes[pm.nLayers-2,0],1)  #最后一层
+        self.output = nn.Linear(pm.nNodes[pm.nLayers-2,itype],1)  #最后一层
         self.__set__init(self.output)
 
     def __set__init(self,layer):
@@ -59,14 +60,15 @@ class FCNet(nn.Module):
         for i in range(pm.nLayers-1):                         
             x = self.fcs[i](x)
             if self.dobn:       
-                x = self.bns(x)
+                x = self.bns[i](x)
             if self.dodrop:              
-                self.drops[i]
+                self.drops[i](x)
         x = ACTIVE(x)         #激活函数，可以自定义
         predict = self.output(x)  #网络的最后一层
         return input, predict
 
-# nets = [FCNet(),FCNet(BN=True),FCNet(Dropout=True)]
+# nets = [FCNet(),FCNet(BN=True),FCNet(Dropout=True)]  #默认一个原子类型
+# nets = [FCNet(itype=1),FCNet(BN=True, itype=1),FCNet(Dropout=True, itype=1)] 
 # for i,net in enumerate(nets):
 #     print('the %i th network:'%i)
 #     print(net)

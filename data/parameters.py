@@ -16,13 +16,13 @@ is_nn_do_profile = False
 #************** Dir **********************
 prefix = r'./'
 trainSetDir = r'./PWdata'
-codedir=r'/home/hsy/software/MLFF_torch'
+codedir=r'/home/husiyu/software/MLFF_torch'
 fortranFitSourceDir=codedir+'/src/pre_data/fit/'
 fitModelDir = r'./fread_dfeat'
 train_data_path = r'./train_data/final_train'
 test_data_path = r'./train_data/final_test'
 
-genFeatDir = codedir+'./pre_data/gen_feature'
+genFeatDir = r'./gen_feature'
 mdImageFileDir=r'./MD'                              #设置md的初始image的文件所在的文件夹  default:'.'
 
 #训练时需要打开
@@ -44,7 +44,7 @@ isFitLinModel=True
 #********* for gen_feature.in *********************
 atomType=[29]                                  #铜有29个同位素,相当于29个种类的cu
 maxNeighborNum=100
-natoms=108
+natoms=[108]
 
 iflag_PCA=0
 Rc_M=5.5                     # max of Rcut
@@ -153,6 +153,8 @@ activation_func='softplus'     # could choose 'softplus' and 'elup1' now
 ntypes=len(atomType)
 nLayers = 3
 nNodes = np.array([[60,60],[30,30],[1,1]])
+# nLayers=5
+# nNodes = np.array([[256,256],[128,128],[64,64],[32,32],[1,1]])
 b_init=np.array([166.3969])      # energy of one atom, for different types, just a rough value
 #nLayers = 4
 #nNodes = np.array([[16,],[64,],[32,],[1,]])
@@ -161,7 +163,7 @@ b_init=np.array([166.3969])      # energy of one atom, for different types, just
 # trainning 
 train_continue = False     #是否接着训练
 progressbar = False 
-flag_plt = True
+flag_plt = False
 train_stage = 2      # only 1 or 2, 1 is begining training from energy and then force+energy, 2 is directly training from force+energy
 train_verb = 0       
 

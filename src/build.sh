@@ -8,7 +8,7 @@ cd ../fit
 make
 cd ../fortran_code
 make
-cd ../bin
+cd bin
 ln -s ../pre_data/mlff.py .
 ln -s ../pre_data/seper.py .
 ln -s ../pre_data/gen_data.py .
