@@ -226,7 +226,7 @@ weight_decay_epoch = 50
 direc = './FC3model_minimize_Etot'
 if not os.path.exists(direc):
     os.makedirs(direc)
-'''
+
 #model的可选项: model=FCNet()  model=FCNet(BN=True)  model=FCNet(Dropout=True)
 
 #==========================Cu，单一元素时==========================
@@ -234,15 +234,15 @@ models = [FCNet().to(device)]
 optimizer = optim.Adam(models[0].parameters(), lr=learning_rate)
 #optimizers = [optim.Adam(models[0].parameters(), lr=learning_rate)]
 
-resume=False  # resume:恢复
+resume=True  # resume:恢复
 if resume:  # 中断的时候恢复训练
-    path=r"./FC3model_minimize_Etot/3layers143.pt"
+    path=r"./FC3model_minimize_Etot/3layers0type1321.pt"
     checkpoint = torch.load(path)
     models[0].load_state_dict(checkpoint['model'])
     optimizer.load_state_dict(checkpoint['optimizer'])
     start_epoch=checkpoint['epoch']+1
-'''
 
+'''
 #==========================CuO，两种元素时==========================
 models = [FCNet().to(device), FCNet(itype=1).to(device)]   # BN=False, Dropout=False
 optimizer = optim.Adam(models[0].parameters(), lr=learning_rate)
@@ -259,6 +259,7 @@ if resume:  # 中断的时候恢复训练
     models[1].load_state_dict(checkpoint0['model'])
     optimizer.load_state_dict(checkpoint0['optimizer'])
     start_epoch=checkpoint0['epoch']+1
+'''
 
 # if torch.cuda.device_count() > 1:
 #     model = nn.DataParallel(model)
