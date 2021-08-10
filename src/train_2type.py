@@ -61,7 +61,7 @@ loader_test = Data.DataLoader(torch_test_data, batch_size=batch_size, shuffle=Tr
 def train(sample_batches, models, optimizers, criterion):
     error=0
     # backward_force=torch.tensor
-    atom_type = Variable(sample_batches['input_itype'].int().to(device))   #[40,64] CuO  32个Cu 32个O
+    atom_type = Variable(sample_batches['input_itype'].int().to(device))   #[40,64] CuO  32个29,Cu 32个8,O
     Etot_label = Variable(sample_batches['output_energy'][:,:,:].float().to(device))
     Etot_label = torch.sum(Etot_label, dim=1)   #[40,108,1]-->[40,1]
     len_batch = sample_batches["input_feat"].shape[0]
@@ -84,7 +84,7 @@ def train(sample_batches, models, optimizers, criterion):
     Etot_shape = Etot_label.shape[0]  #40
     Etot_ABS_error = Etot_deviation.norm(1) / Etot_shape
     Etot_RMSE_error = math.sqrt(1/Etot_shape) * Etot_deviation.norm(2)
-    optimizer = optimizers[0]
+    optimizer = optimizers
     optimizer.zero_grad()
     loss=Etot_RMSE_error
     loss.backward()
@@ -234,7 +234,7 @@ models = [FCNet().to(device)]
 optimizer = optim.Adam(models[0].parameters(), lr=learning_rate)
 #optimizers = [optim.Adam(models[0].parameters(), lr=learning_rate)]
 
-resume=True  # resume:恢复
+resume=False  # resume:恢复
 if resume:  # 中断的时候恢复训练
     path=r"./FC3model_minimize_Etot/3layers0type1321.pt"
     checkpoint = torch.load(path)
@@ -249,7 +249,7 @@ optimizer = optim.Adam(models[0].parameters(), lr=learning_rate)
 #optimizers = []
 #optimizers.append(optim.Adam(models[0].parameters(), lr=learning_rate))
 #optimizers.append(optim.Adam(models[1].parameters(), lr=learning_rate))  #当有两种元素时，以此类推
-resume=True  # resume:恢复
+resume=False  # resume:恢复
 if resume:  # 中断的时候恢复训练
     path0=r"./FC3model_minimize_Etot/3layers0type466.pt"
     path1=r"./FC3model_minimize_Etot/3layers1type466.pt"
@@ -289,8 +289,8 @@ for epoch in range(start_epoch, n_epoch + 1):
     train_epoch_loss = 0
     j = 0
     for i_batch, sample_batches in enumerate(loader_train):
-        # train_error = train(sample_batches, models, optimizer, nn.MSELoss())   #预训练
-        train_error = train_finetuning(sample_batches, models, optimizer, nn.MSELoss())
+        train_error = train(sample_batches, models, optimizer, nn.MSELoss())   #预训练
+        # train_error = train_finetuning(sample_batches, models, optimizer, nn.MSELoss())
         # Log train/loss to TensorBoard at every iteration
         n_iter = (epoch - 1) * len(loader_train) + i_batch + 1
         writer.add_scalar('Train/loss', train_error, n_iter)
@@ -333,7 +333,7 @@ for epoch in range(start_epoch, n_epoch + 1):
     if val_loss < min_loss:
         min_loss = val_loss
         for i in range(len(pm.atomType)):
-            name = direc + '/3layers'+ str(i) + 'type' + str(epoch)+'.pt'
+            name = direc + '/3layers_'+ str(i) + 'type_' + str(epoch)+'.pt'
             state = {'model': models[i].state_dict(), 'optimizer':optimizer.state_dict(),'epoch': epoch}
             torch.save(state, name)
             print('saving model to {}'.format(name))

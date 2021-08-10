@@ -44,7 +44,8 @@ isFitLinModel=True
 #********* for gen_feature.in *********************
 atomType=[29]                                  #铜有29个同位素,相当于29个种类的cu
 maxNeighborNum=100
-natoms=108
+natoms=[108]
+
 
 iflag_PCA=0
 Rc_M=5.5                     # max of Rcut
@@ -168,7 +169,7 @@ train_stage = 2      # only 1 or 2, 1 is begining training from energy and then 
 train_verb = 0       
 
 learning_rate= 1e-3
-batch_size = 40        
+batch_size = 2        
 rtLossE      = 0.6     # weight for energy, NN fitting 各个原子能量所占的权重
 rtLossF      = 0.2     # weight for force, NN fitting 各个原子所受力所占的权重
 rtLossEtot   = 0.2

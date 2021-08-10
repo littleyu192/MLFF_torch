@@ -5,7 +5,8 @@ import torch
 import torch.nn as nn
 from torch.nn import init
 from torch.autograd import Variable
-import os
+import sys, os
+sys.path.append(os.getcwd())
 import parameters as pm    
 # import prepare as pp
 # pp.readFeatnum()
@@ -24,6 +25,7 @@ else:
 
 ACTIVE = torch.relu
 B_INIT= -0.2
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class FCNet(nn.Module):
     def __init__(self,BN = False,Dropout = False, itype = 0):  #atomtypes=len(pm.atomType)
@@ -66,9 +68,54 @@ class FCNet(nn.Module):
         x = ACTIVE(x)         #激活函数，可以自定义
         predict = self.output(x)  #网络的最后一层
         return input, predict
-
 # nets = [FCNet(),FCNet(BN=True),FCNet(Dropout=True)]  #默认一个原子类型
 # nets = [FCNet(itype=1),FCNet(BN=True, itype=1),FCNet(Dropout=True, itype=1)] 
 # for i,net in enumerate(nets):
 #     print('the %i th network:'%i)
 #     print(net)
+
+class MLFFNet(nn.Module):
+    def __init__(self, atomType = pm.atomType, natoms = pm.natoms):  #atomType=[8,32]
+        super(MLFFNet,self).__init__()
+        self.atomType = atomType
+        self.natoms = pm.natoms   #[32,32]
+        self.models = nn.ModuleList()
+        for i in range(len(self.atomType)):  #i=[0,1]
+            self.models.append(FCNet(itype = i))
+
+
+    def forward(self, image, dfeat, neighbor):
+        natoms_index = [0]
+        temp = 0
+        for i in self.natoms:
+            temp += i
+            natoms_index.append(temp)    #[0,32,64]
+        input_data = image
+        for i in range(len(natoms_index)-1):
+            x = input_data[:, natoms_index[i]:natoms_index[i+1]]
+            _, predict = self.models[i](x)
+            if(i==0):
+                Ei=predict #[32, 1]
+            else:
+                Ei=torch.cat((Ei, predict), dim=1)    #[64,1]
+        out_sum = Ei.sum()
+        Etot = Ei.sum(dim=1)
+        out_sum.backward(retain_graph=True)
+        input_grad_allatoms = input_data.grad
+
+        batch_size = image.shape[0]
+        Force = torch.zeros((batch_size, natoms_index[-1], 3)).to(device)
+        for batch_index in range(batch_size):
+            atom_index_temp = 0
+            for idx, natom in enumerate(self.natoms):  #[32,32]    
+                for i in range(natom):
+                    neighbori = neighbor[batch_index, atom_index_temp + i]  # neighbor [40, 64, 100] neighbori [1, 100]
+                    neighbor_number = neighbori.shape[-1]
+                    atom_force = torch.zeros((1, 3)).to(device)
+                    for nei in range(neighbor_number):
+                        nei_index = neighbori[nei] - 1 #第几个neighbor
+                        if(nei_index == 0):
+                            continue 
+                        atom_force += torch.matmul(input_grad_allatoms[batch_index, nei_index, :], dfeat[batch_index, atom_index_temp + i, nei, :, :])
+                    Force[batch_index, atom_index_temp+i] = atom_force
+        return Force, Etot, Ei

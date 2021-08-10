@@ -10,6 +10,8 @@
 
 # model file
 *.pt
+# eval file
+/eval/cu/*
 
 # Byte-compiled / optimized / DLL files
 *.py[cod]
