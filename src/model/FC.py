@@ -12,10 +12,10 @@ import parameters as pm
 # pp.readFeatnum()
 if pm.torch_dtype == 'float32':
     torch_dtype = torch.float32
-    print('info: torch.dtype = torch.float32 in Pytorch trainning.')
+    print('info: torch.dtype = torch.float32 in Pytorch training.')
 else:
     torch_dtype = torch.float64
-    print('info: torch.dtype = torch.float64 in Pytorch trainning. (it may be slower)')
+    print('info: torch.dtype = torch.float64 in Pytorch training. (it may be slower)')
 
 
 ################################################################
@@ -23,7 +23,8 @@ else:
 # Ei Neural Network
 ################################################################
 
-ACTIVE = torch.relu
+# ACTIVE = torch.relu
+ACTIVE = torch.sigmoid
 B_INIT= -0.2
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -47,7 +48,7 @@ class FCNet(nn.Module):
                 setattr(self,'bn%i'%i,bn)
                 self.bns.append(bn)
             if self.dodrop:
-                drop = nn.Dropout(0.5)
+                drop = nn.Dropout(0.5)   #0.5 or 0.3 in general
                 setattr(self,'drop%i'%i,drop)
                 self.drops.append(drop)
         self.output = nn.Linear(pm.nNodes[pm.nLayers-2,itype],1)  #最后一层
@@ -65,7 +66,7 @@ class FCNet(nn.Module):
                 x = self.bns[i](x)
             if self.dodrop:              
                 self.drops[i](x)
-        x = ACTIVE(x)         #激活函数，可以自定义
+            x = ACTIVE(x)         #激活函数，可以自定义
         predict = self.output(x)  #网络的最后一层
         return input, predict
 # nets = [FCNet(),FCNet(BN=True),FCNet(Dropout=True)]  #默认一个原子类型
@@ -114,8 +115,8 @@ class MLFFNet(nn.Module):
                     atom_force = torch.zeros((1, 3)).to(device)
                     for nei in range(neighbor_number):
                         nei_index = neighbori[nei] - 1 #第几个neighbor
-                        if(nei_index == 0):
-                            continue 
+                        if(nei_index == -1):
+                            break 
                         atom_force += torch.matmul(input_grad_allatoms[batch_index, nei_index, :], dfeat[batch_index, atom_index_temp + i, nei, :, :])
                     Force[batch_index, atom_index_temp+i] = atom_force
         return Force, Etot, Ei

@@ -55,7 +55,6 @@ class MinMaxScaler:
 
 
 class DataScaler:
-
     def __init__(self):
         self.feat_scaler = MinMaxScaler(feature_range=(0, 1))
         self.feat_a = None

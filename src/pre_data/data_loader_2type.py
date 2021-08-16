@@ -105,7 +105,7 @@ class MovementDataset(Dataset):
     def __init__(self, natoms, feat_path, dfeat_path,
                  egroup_path, egroup_weight_path, divider_path, 
                  itype_path, nblist_path,weight_all_path,
-                 energy_path, force_path, ind_img_path, label_path):  # , natoms_path
+                 energy_path, force_path, ind_img_path):  # , natoms_path
         super(MovementDataset, self).__init__()
         self.feat=np.load(feat_path)
         self.dfeat=np.load(dfeat_path)
@@ -155,7 +155,7 @@ class MovementDataset(Dataset):
         return image_number
 
 def get_pwmat_data(movement_filename, train_data_file_frompwmat, test_data_file_frompwmat):
-    movement_filename = './train_data/MOVEMENT'
+    movement_filename = pm.trainSetDir+'/MOVEMENT'
     train_data_file_frompwmat = './train_data/final_train/train_data.csv'
     test_data_file_frompwmat = './train_data/final_test/valid_data.csv'
     atoms_number_in_one_image, train_samples = get_data_property(filename, pm.test_ratio)
@@ -168,7 +168,7 @@ def get_pwmat_data(movement_filename, train_data_file_frompwmat, test_data_file_
 
 
 
-def get_torch_data(atoms_number_in_one_image, examplespath, data_file_frompwmat):
+def get_torch_data(atoms_number_in_one_image, examplespath):
     '''
     input para:
     atoms_number_in_one_image : can be read from parameter file, e.g. cu case 108
@@ -188,20 +188,18 @@ def get_torch_data(atoms_number_in_one_image, examplespath, data_file_frompwmat)
     ind_img = os.path.join(examplespath+'/ind_img.npy')
 
     f_energy = os.path.join(examplespath+'/engy_scaled.npy')
-    f_force = os.path.join(examplespath+'/fors_scaled.npy')
-    f_label_pwmat = os.path.join(examplespath+data_file_frompwmat)   
+    f_force = os.path.join(examplespath+'/fors_scaled.npy') 
 
     torch_data=MovementDataset(atoms_number_in_one_image, f_feat, f_dfeat,
                  f_egroup, f_egroup_weight, f_divider, 
                  f_itype, f_nblist, f_weight_all,
-                 f_energy, f_force, ind_img, f_label_pwmat)
+                 f_energy, f_force, ind_img)
     return torch_data
 
 def main():
     batch_size = pm.batch_size   #40
-    train_data_path='./train_data/final_train'
-    train_data_file_frompwmat = '/train_data.csv'
-    torch_train_data = get_torch_data(pm.natoms, train_data_path, train_data_file_frompwmat)
+    train_data_path=pm.train_data_path
+    torch_train_data = get_torch_data(pm.natoms, train_data_path)
     loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=True) 
     #是否打乱顺序，多线程读数据num_workers=4
 

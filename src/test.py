@@ -1,4 +1,6 @@
 
+from data_loader_2type import MovementDataset, get_torch_data
+import parameters as pm
 from torch.utils.tensorboard import SummaryWriter
 import torch
 import os
@@ -18,10 +20,8 @@ import torch.utils.data as Data
 from torch.autograd import Variable
 import math
 sys.path.append(os.getcwd())
-import parameters as pm
 codepath = os.path.abspath(sys.path[0])
 sys.path.append(codepath+'/pre_data')
-from data_loader_2type import MovementDataset, get_torch_data
 
 # from tensorboardX import SummaryWriter
 writer = SummaryWriter()
@@ -46,7 +46,8 @@ def test(sample_batches, model):
     label = Variable(sample_batches['output_energy'].float().to(device))
     model.to(device)
     model.train()
-    force_predict, Etot_predict, Ei_predict = model(input_data, dfeat, neighbor)
+    force_predict, Etot_predict, Ei_predict = model(
+        input_data, dfeat, neighbor)
 
     Etot_deviation = Etot_predict - Etot_label     # [40,1]
     Etot_square_deviation = Etot_deviation ** 2
@@ -74,25 +75,25 @@ def sec_to_hms(seconds):
 
 # ==========================part1:数据读取==========================
 batch_size = 1
-test_data_path = pm.test_data_path
-test_data_file_frompwmat = pm.test_data_path + './test_data.csv'
-torch_test_data = get_torch_data(
-    pm.natoms, test_data_path, test_data_file_frompwmat)
+test_data_path = pm.train_data_path
+torch_test_data = get_torch_data(pm.natoms, test_data_path)
 loader_test = Data.DataLoader(
     torch_test_data, batch_size=batch_size, shuffle=True)
+print("debug1")
 
 # ==========================part2:load模型==========================
 model = MLFFNet()
 # if torch.cuda.device_count() > 1:
 #     model = nn.DataParallel(model)
 model.to(device)
-path = r"./FC3model_minimize_Etot/3layers_MLFFNet_2epoch.pt"
+path = r"./FC3model_minimize_Etot/3layers_MLFFNet_27epoch.pt"
 checkpoint = torch.load(path)
 model.load_state_dict(checkpoint['model'])
 
 all_model_loss = []
 avgModelError = 0
 start = time.time()
+print("debug2")
 
 # ==========================part3:测试集==========================
 test_square_err = []

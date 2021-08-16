@@ -12,7 +12,7 @@
 *.pt
 # eval file
 /eval/cu/*
-
+/eval/CuO/*
 # Byte-compiled / optimized / DLL files
 *.py[cod]
 *__pycache__/
