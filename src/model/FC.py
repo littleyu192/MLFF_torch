@@ -24,7 +24,8 @@ else:
 ################################################################
 
 # ACTIVE = torch.relu
-ACTIVE = torch.sigmoid
+# ACTIVE = torch.sigmoid
+ACTIVE = torch.tanh
 B_INIT= -0.2
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -82,7 +83,7 @@ class MLFFNet(nn.Module):
         self.natoms = pm.natoms   #[32,32]
         self.models = nn.ModuleList()
         for i in range(len(self.atomType)):  #i=[0,1]
-            self.models.append(FCNet(itype = i))
+            self.models.append(FCNet(itype = i))   # Dropout=True
 
 
     def forward(self, image, dfeat, neighbor):

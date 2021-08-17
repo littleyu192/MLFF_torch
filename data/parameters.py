@@ -160,7 +160,7 @@ b_init=np.array([166.3969])      # energy of one atom, for different types, just
 #nNodes = np.array([[16,],[64,],[32,],[1,]])
 
 #================================================================================
-# trainning 
+# training 
 train_continue = False     #是否接着训练
 progressbar = False 
 flag_plt = False
