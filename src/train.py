@@ -208,7 +208,7 @@ for epoch in range(start_epoch, n_epoch + 1):
         fid_err_log = open(f_err_log, 'w')
     else:
         fid_err_log = open(f_err_log, 'a')
-    fid_err_log.write('%d %e %e %e %e %e %e %e %e %s\n'       \
+    fid_err_log.write('%d %e %e %e %e %e %e %e %e %s %e %e %e %e %e %e\n'       \
     % (epoch, function_err_avg, train_force_rmse_loss, train_etot_rmse_loss, train_total_loss, \
         valid_force_rmse_loss, valid_etot_rmse_loss, valid_total_loss, lr, time_cost,   \
             train_force_L2, train_ei_L2, train_etot_L2, valid_force_L2, valid_ei_L2, valid_etot_L2))
