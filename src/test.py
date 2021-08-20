@@ -1,6 +1,3 @@
-
-from data_loader_2type import MovementDataset, get_torch_data
-import parameters as pm
 from torch.utils.tensorboard import SummaryWriter
 import torch
 import os
@@ -20,8 +17,10 @@ import torch.utils.data as Data
 from torch.autograd import Variable
 import math
 sys.path.append(os.getcwd())
+import parameters as pm
 codepath = os.path.abspath(sys.path[0])
 sys.path.append(codepath+'/pre_data')
+from data_loader_2type import MovementDataset, get_torch_data
 
 # from tensorboardX import SummaryWriter
 writer = SummaryWriter()
@@ -89,7 +88,7 @@ model = MLFFNet()
 # if torch.cuda.device_count() > 1:
 #     model = nn.DataParallel(model)
 model.to(device)
-path = r"./FC3model_minimize_Etot/3layers_MLFFNet_27epoch.pt"
+path = r"./FC3model_minimize_Etot_force_tanh/3layers_MLFFNet_8epoch.pt"
 checkpoint = torch.load(path)
 model.load_state_dict(checkpoint['model'])
 
@@ -131,7 +130,7 @@ Ei_L2_loss = sum(Ei_L2_loss)/len(loader_test)
 end = time.time()
 time_cost = sec_to_hms(int(end-start))
 print('averaged test square loss = {:.8f}, testing force L2 loss = {:.8f}, testing ei L2 loss = {:.8f}, testing etot L2 loss = {:.8f}, time cost = {}'.format(
-    test_square_err, Force_L2_loss, Etot_L2_loss, Ei_L2_loss, time_cost))
+    test_square_err, Force_L2_loss, Ei_L2_loss, Etot_L2_loss, time_cost))
 
 f_err_log = pm.dir_work+'out_test_err.dat'
 fid_err_log = open(f_err_log, 'w')

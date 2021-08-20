@@ -11,6 +11,7 @@ workpath = os.path.abspath(pm.codedir)
 sys.path.append(workpath)
 import prepare as pp
 
+
 def write_egroup_input():
     with open(os.path.join(pm.InputPath, 'egroup.in'), 'w') as f:
         f.writelines(str(pm.dwidth)+'\n')

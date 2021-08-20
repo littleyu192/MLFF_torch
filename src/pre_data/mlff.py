@@ -66,3 +66,22 @@ if pm.isFitVdw:
 
 if pm.isFitLinModel:
     ff.fit()
+
+if pm.isRunMd100:
+    os.environ["CUDA_VISIBLE_DEVICES"] = pm.cuda_dev
+    # import preparatory_work as ppw
+    sys.path.append(codepath+'/../pre_data')
+    from md_run100 import MdRunner
+    # if not pm.isCalcFeat:
+    #     ppw.preparatoryWorkForMdImage()
+    mdRunner=MdRunner()
+    movementPath=os.path.join(pm.mdImageFileDir,'MOVEMENT')
+    with open(movementPath,'r') as sourceFile:
+        allData=sourceFile.read()
+        nimage=allData.count('Iteration')
+        # for imageIndex in range(nimage):
+            
+    for i in range(nimage):
+        mdRunner.run100(i)
+    mdRunner.final()
+

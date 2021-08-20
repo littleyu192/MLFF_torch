@@ -36,8 +36,8 @@ def train(sample_batches, model, optimizer, criterion):
   
     input_data = Variable(sample_batches['input_feat'].float().to(device), requires_grad=True)
     neighbor = Variable(sample_batches['input_nblist'].int().to(device))  # [40,108,100]
-    dfeat=Variable(sample_batches['input_dfeat'].float().to(device))  #[40,108,100,42,3]
-    model.to(device)
+    dfeat = Variable(sample_batches['input_dfeat'].float().to(device))  #[40,108,100,42,3]
+    model = model.to(device)
     model.train()
     force_predict, Etot_predict, Ei_predict = model(input_data, dfeat, neighbor)
     
@@ -57,9 +57,12 @@ def train(sample_batches, model, optimizer, criterion):
     Force_L2 = (1/Force_shape) * Force_square_deviation.sum()
 
     optimizer.zero_grad()
-    loss = torch.sum(Force_square_deviation) + torch.sum(Etot_square_deviation)
+    w_e = torch.sum(Force_square_deviation) / (torch.sum(Force_square_deviation)+torch.sum(Etot_square_deviation))
+    w_f = 1 - w_e
+    loss = w_f * torch.sum(Force_square_deviation) + w_e * torch.sum(Etot_square_deviation)
     # loss = torch.sum(Etot_square_deviation)   #30个epoch，etot就会变成0.*
     loss.backward()
+    # import ipdb; ipdb.set_trace()
     optimizer.step()
     error = error+float(loss.item())
     return error, Force_RMSE_error, Force_ABS_error, Etot_RMSE_error, Etot_ABS_error, Etot_L2, Ei_L2, Force_L2
@@ -120,7 +123,7 @@ n_epoch = 2000
 learning_rate = 0.1
 weight_decay = 0.9
 weight_decay_epoch = 10
-direc = './FC3model_minimize_Etot_force_tanh'
+direc = './FC3model_minimize_Etot_force_tanh_dropout3_weight'
 if not os.path.exists(direc):
     os.makedirs(direc)
 model = MLFFNet()
@@ -136,10 +139,11 @@ patience = 50	# 当验证集损失在连续50次没有降低时，停止模型�
 
 resume=False  # resume:恢复
 if resume:    # 中断的时候恢复训练
-    path=r"./FC3model_first_minimize_Etot_weight_decay/3layers_MLFFNet_30epoch.pt"
-    checkpoint = torch.load(path)
+    path=r"./FC3model_minimize_Etot_force_tanh/3layers_MLFFNet_8epoch.pt"
+    checkpoint = torch.load(path, map_location={'cpu':'cuda:0'})
     model.load_state_dict(checkpoint['model'])
-    optimizer.load_state_dict(checkpoint['optimizer'])
+    # optimizer.load_state_dict(checkpoint['optimizer'])
+    # import ipdb; ipdb.set_trace()
     start_epoch=checkpoint['epoch']+1
 # import ipdb; ipdb.set_trace()
 
@@ -157,8 +161,7 @@ if pm.flag_plt:
 for epoch in range(start_epoch, n_epoch + 1):
     print("epoch " + str(epoch))
     start = time.time()
-    if epoch > weight_decay_epoch:   # 学习率衰减
-        scheduler.step()
+    
     lr = optimizer.param_groups[0]['lr']
     
     train_epoch_force_RMSE_loss = 0
@@ -201,9 +204,11 @@ for epoch in range(start_epoch, n_epoch + 1):
     valid_ei_L2 = Ei_L2/len(loader_valid)
     valid_total_loss = valid_force_rmse_loss + valid_etot_rmse_loss
     print('valid force L2 = {:.8f}, valid ei L2 = {:.8f}, valid etot L2 = {:.8f}'.format(valid_force_L2, valid_ei_L2, valid_etot_L2))
-        
+    
+    if epoch > weight_decay_epoch:   # 学习率衰减
+        scheduler.step()
     iprint = 1 #隔几个epoch记录一次误差
-    f_err_log=pm.dir_work+'out_miminize_etot_force_tanh.dat'
+    f_err_log=pm.dir_work+'out_miminize_etot_force_tanh_dropout3_weight.dat'
     if epoch // iprint == 1:
         fid_err_log = open(f_err_log, 'w')
     else:
@@ -230,12 +235,16 @@ for epoch in range(start_epoch, n_epoch + 1):
         min_loss = valid_total_loss
         works_epoch = 0
         name = direc + '/3layers_' + 'MLFFNet_' + str(epoch)+'epoch.pt'
-        state = {'model': model.state_dict(), 'optimizer':optimizer.state_dict(),'epoch': epoch}
+        # state = {'model': model.state_dict(), 'optimizer':optimizer.state_dict(),'epoch': epoch}
+        state = {'model': model.state_dict(), 'epoch': epoch}
         torch.save(state, name)
         print('saving model to {}'.format(name))
     else:
         works_epoch += 1
         if works_epoch > patience:
+            name = direc + '/3layers_' + 'MLFFNet.pt'
+            state = {'model': model.state_dict(), 'optimizer':optimizer.state_dict(),'epoch': epoch}
+            torch.save(state, name)
             print("Early stopping")
             break
 # writer.close()

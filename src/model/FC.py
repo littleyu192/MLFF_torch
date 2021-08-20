@@ -49,7 +49,7 @@ class FCNet(nn.Module):
                 setattr(self,'bn%i'%i,bn)
                 self.bns.append(bn)
             if self.dodrop:
-                drop = nn.Dropout(0.5)   #0.5 or 0.3 in general
+                drop = nn.Dropout(0.3)   #0.5 or 0.3 in general
                 setattr(self,'drop%i'%i,drop)
                 self.drops.append(drop)
         self.output = nn.Linear(pm.nNodes[pm.nLayers-2,itype],1)  #最后一层
@@ -57,7 +57,7 @@ class FCNet(nn.Module):
 
     def __set__init(self,layer):
         init.normal_(layer.weight, mean = 0, std = 1)       
-        init.constant_(layer.weight,val=B_INIT)
+        init.constant_(layer.bias,val=B_INIT)
 
     def forward(self, x):
         input = x
@@ -83,7 +83,7 @@ class MLFFNet(nn.Module):
         self.natoms = pm.natoms   #[32,32]
         self.models = nn.ModuleList()
         for i in range(len(self.atomType)):  #i=[0,1]
-            self.models.append(FCNet(itype = i))   # Dropout=True
+            self.models.append(FCNet(itype = i, Dropout=True))   # Dropout=True
 
 
     def forward(self, image, dfeat, neighbor):

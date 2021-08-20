@@ -1,18 +1,25 @@
 # other configration
-/cu/*
-/CuO/*
 /data/*
 !/data/parameters.py
 !/data/PWdata/MOVEMENT
+!/data/plot_mlff_inference.py
 /cu/*
 !/cu/parameters.py
 !/cu/PWdata/MOVEMENT
+/CuO/*
+!/CuO/parameters.py
+!/CuO/PWdata/MOVEMENT
+/zwt/*
+!/zwt/parameters.py
+!/zwt/PWdata/MOVEMENT
 
 # model file
 *.pt
+*.dat
 # eval file
 /eval/cu/*
 /eval/CuO/*
+/eval/zwt/*
 # Byte-compiled / optimized / DLL files
 *.py[cod]
 *__pycache__/
