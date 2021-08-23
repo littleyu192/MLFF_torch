@@ -20,6 +20,8 @@
 /eval/cu/*
 /eval/CuO/*
 /eval/zwt/*
+/eval/data_cu/*
+
 # Byte-compiled / optimized / DLL files
 *.py[cod]
 *__pycache__/

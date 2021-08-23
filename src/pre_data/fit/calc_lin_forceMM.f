@@ -801,9 +801,24 @@ cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
        !E_loss=MSE_Eatom*weight_E0+MSE_Egroup*weight_E+MSE_F*weight_F
        !write(6,*) "E_loss=", E_loss 
-       write(6,*) "weight_E0", weight_E0 
-       write(6,*) "weight_E", weight_E 
-       write(6,*) "weight_F", weight_F
+
+       write(6,*) "square_loss_f=",  AEM_F
+       write(6,*) "square_loss_egroup=", AEM_Egroup
+       write(6,*) "square_loss_etot=", AEM_Etot
+
+       write(6,*) "weight_Egroup=", weight_E
+       write(6,*) "weight_Etot=",  weight_E0 
+       write(6,*) "weight_F=", weight_F
+      
+       write(6,*) "num_AEM_Eatom", num_AEM_Eatom
+       write(6,*) "num_AEM_Egroup", num_AEM_Egroup
+       write(6,*) "num_AEM_F", num_AEM_F
+
+       loss_func = weight_E*AEM_Egroup +
+     & weight_E0*AEM_Etot +
+     & weight_F*AEM_F
+       write(6,*) "loss=", loss_func
+       
        stop
        end
 

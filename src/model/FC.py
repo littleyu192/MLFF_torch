@@ -121,3 +121,14 @@ class MLFFNet(nn.Module):
                         atom_force += torch.matmul(input_grad_allatoms[batch_index, nei_index, :], dfeat[batch_index, atom_index_temp + i, nei, :, :])
                     Force[batch_index, atom_index_temp+i] = atom_force
         return Force, Etot, Ei
+
+    def get_egroup(self, Ei, Egroup_weight, divider):
+        batch_size = Ei.shape[0]
+        Egroup = torch.zeros_like(Ei)
+        for i in range(batch_size):
+            Etot1 = Ei[i]
+            weight_inner = Egroup_weight[i]
+            E_inner = torch.matmul(weight_inner, Etot1)
+            Egroup[i] = E_inner
+        Egroup_out = torch.divide(Egroup, divider)
+        return Egroup_out

@@ -131,6 +131,9 @@ class MovementDataset(Dataset):
         # self.labels_Etot = label["Etot"]
 
     def __getitem__(self, index):
+        ind_image = np.zeros(2)
+        ind_image[0] = self.ind_img[index]
+        ind_image[1] = self.ind_img[index+1]
         dic = {
             'input_feat': self.feat[self.ind_img[index]:self.ind_img[index+1]],
             'input_dfeat': self.dfeat[self.ind_img[index]:self.ind_img[index+1]],
@@ -144,6 +147,7 @@ class MovementDataset(Dataset):
 
             'output_energy':self.energy[self.ind_img[index]:self.ind_img[index+1]],
             'output_force':self.force[self.ind_img[index]:self.ind_img[index+1]],
+            'ind_image': ind_image
             # 'output_Etot_pwmat': torch.from_numpy(np.array(self.labels_Etot[index:index + 1])).float(),
             # 'output_energy_pwmat': torch.from_numpy(np.array(self.labels_Ei[index:index + 1])[0]).float(),
             # 'output_Fi_pwmat': torch.from_numpy(np.array(self.labels_Fi[index:index + 1])[0]).float(),

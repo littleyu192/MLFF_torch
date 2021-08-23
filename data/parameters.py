@@ -40,8 +40,8 @@ genFeatDir = r'./gen_feature'
 mdImageFileDir=r'./MD'                              #设置md的初始image的文件所在的文件夹  default:'.'
 
 #训练时需要打开
-#isCalcFeat=True
-#isFitLinModel=True
+isCalcFeat=True
+isFitLinModel=True
 
 #isClassify=True
 #isRunMd=True                                   #是否训练运行md  default:False
@@ -53,7 +53,7 @@ mdImageFileDir=r'./MD'                              #设置md的初始image的�
 #isRunMd100_nn=True
 #inference=True
 #linear预测时需要打开
-isRunMd100=True
+# isRunMd100=True
 #add_force=True     # for NN md
 #********* for gen_feature.in *********************
 atomType=[29]                                  #铜有29个同位素,相当于29个种类的cu
@@ -182,9 +182,13 @@ train_verb = 0
 
 learning_rate= 1e-3
 batch_size = 40        
-rtLossE      = 0.6     # weight for energy, NN fitting 各个原子能量所占的权重
-rtLossF      = 0.2     # weight for force, NN fitting 各个原子所受力所占的权重
-rtLossEtot   = 0.2
+#rtLossE      = 0.6     # weight for energy, NN fitting 各个原子能量所占的权重
+#rtLossF      = 0.2     # weight for force, NN fitting 各个原子所受力所占的权重
+#rtLossEtot   = 0.2
+rtLossE = 0.8
+rtLossF = 0.2
+rtLossEtot = 0
+
 bias_corr = True
 epochs_alltrain = 6000     # energy 训练循环次数
 epochs_Fi_train = 1000       # force+energy 训练循环次数 1000个epoch效果较好

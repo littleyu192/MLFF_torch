@@ -243,7 +243,7 @@ def process_data(f_train_feat, f_train_dfeat, f_train_natoms, f_train_egroup,
     print("egroup shape" + str(egroup.shape))
     print("divider shape" + str(egroup.shape))
     print("dfeat_scaled shape" + str(dfeat_scaled.shape))
-    np.save(nn_data_path +"/feat_scaled.npy", feat_scaled)
+    np.save(nn_data_path + "/feat_scaled.npy", feat_scaled)
     np.save(nn_data_path + "/fors_scaled.npy", fors_scaled)
     np.save(nn_data_path + "/nblist.npy", nblist)
     np.save(nn_data_path + "/engy_scaled.npy", engy_scaled)
