@@ -41,6 +41,7 @@ def train(sample_batches, model, optimizer, criterion):
     egroup_weight = Variable(sample_batches['input_egroup_weight'].float().to(device))
     ind_img = Variable(sample_batches['ind_image'].int().to(device))
     divider = Variable(sample_batches['input_divider'].float().to(device))
+    optimizer.zero_grad()
     model = model.to(device)
     model.train()
     force_predict, Etot_predict, Ei_predict = model(input_data, dfeat, neighbor)
@@ -68,7 +69,6 @@ def train(sample_batches, model, optimizer, criterion):
     Egroup_RMSE_error = math.sqrt(1/Egroup_shape) * Egroup_deviation.norm(2)
     Egroup_L2 = (1/Egroup_shape) * Egroup_square_deviation.sum()
     
-    optimizer.zero_grad()
     # w_e = torch.sum(Force_square_deviation) / (torch.sum(Force_square_deviation)+torch.sum(Etot_square_deviation))
     # w_f = 1 - w_e
     # loss = w_f * torch.sum(Force_square_deviation) + w_e * torch.sum(Etot_square_deviation)
@@ -83,7 +83,7 @@ def train(sample_batches, model, optimizer, criterion):
 
     loss.backward()
     optimizer.step()
-    error = error+float(loss.item())
+    error = error + float(loss.item())
 
     return loss, force_square_loss, etot_square_loss, egroup_square_loss, \
         Force_RMSE_error, Force_ABS_error, Etot_RMSE_error, Etot_ABS_error, Egroup_RMSE_error, Egroup_ABS_error, \
@@ -118,6 +118,10 @@ def valid(sample_batches, model, criterion):
     Ei_L2 = Etot_L2 / atom_number
 
     Force_deviation = force_predict - Force_label
+    # print("==========force predict==========")
+    # print(force_predict)
+    # print("==========force label==========")
+    # print(Force_label)
     Force_square_deviation = Force_deviation ** 2
     Force_shape = Force_deviation.shape[0] * Force_deviation.shape[1] * Force_deviation.shape[2]   #40*108*3
     Force_ABS_error = Force_deviation.norm(1) / Force_shape
@@ -138,7 +142,10 @@ def valid(sample_batches, model, criterion):
     # loss = torch.sum(Etot_square_deviation)
     # loss = error / Etot_shape
     # loss = 0.8 * torch.sum(Egroup_square_deviation) + 0.2 * torch.sum(Force_square_deviation)
-    loss = pm.rtLossF * force_square_loss + pm.rtLossEtot * etot_square_loss + pm.rtLossE * egroup_square_loss
+    # loss = pm.rtLossF * force_square_loss + pm.rtLossEtot * etot_square_loss + pm.rtLossE * egroup_square_loss
+
+    loss = torch.sum(Force_square_deviation) 
+
     error = error+float(loss.item())
     return error, force_square_loss, etot_square_loss, egroup_square_loss, \
         Force_RMSE_error, Force_ABS_error, Etot_RMSE_error, Etot_ABS_error, Egroup_RMSE_error, Egroup_ABS_error,\
@@ -165,7 +172,7 @@ n_epoch = 2000
 learning_rate = 0.1
 weight_decay = 0.9
 weight_decay_epoch = 10
-direc = './FC3model_minimize_8Eg_2force_tanh_dropout3'
+direc = './FC3model_minimize_Etot_force_tanh_dropout3_test'
 if not os.path.exists(direc):
     os.makedirs(direc)
 model = MLFFNet()
@@ -181,7 +188,7 @@ patience = 50	# 当验证集损失在连续50次没有降低时，停止模型�
 
 resume=False  # resume:恢复
 if resume:    # 中断的时候恢复训练
-    path=r"./FC3model_minimize_8Eg_2force_tanh/3layers_MLFFNet_8epoch.pt"
+    path=r"./FC3model_minimize_Etot_force_tanh_dropout3_test/3layers_MLFFNet_34epoch.pt"
     checkpoint = torch.load(path, map_location={'cpu':'cuda:0'})
     model.load_state_dict(checkpoint['model'])
     # optimizer.load_state_dict(checkpoint['optimizer'])

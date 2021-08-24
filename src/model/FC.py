@@ -23,7 +23,7 @@ else:
 # Ei Neural Network
 ################################################################
 
-# ACTIVE = torch.relu
+# ACTIVE = torch.relu  #softplus
 # ACTIVE = torch.sigmoid
 ACTIVE = torch.tanh
 B_INIT= -0.2
@@ -93,15 +93,29 @@ class MLFFNet(nn.Module):
             temp += i
             natoms_index.append(temp)    #[0,32,64]
         input_data = image
+        # batch_size = input_data.shape[0]
+        # for batch_index in range(batch_size):
+        #     for i in range(len(natoms_index)-1):
+        #         x = input_data[batch_index, natoms_index[i]:natoms_index[i+1]]
+        #         _, predict = self.models[i](x)
+        #         if(i==0):
+        #             Ei_tmp = predict #[32, 1]
+        #         else:
+        #             Ei_tmp = torch.cat((Ei_tmp, predict), dim=1)    #[64,1]
+        #     Ei_tmp = Ei_tmp.unsqueeze(dim=0)
+        #     if batch_index == 0:
+        #         Ei = Ei_tmp
+        #     else:
+        #         Ei = torch.cat((Ei, Ei_tmp), dim=0)
         for i in range(len(natoms_index)-1):
             x = input_data[:, natoms_index[i]:natoms_index[i+1]]
             _, predict = self.models[i](x)
             if(i==0):
-                Ei=predict #[32, 1]
+                Ei = predict #[32, 1]
             else:
-                Ei=torch.cat((Ei, predict), dim=1)    #[64,1]
-        out_sum = Ei.sum()
+                Ei = torch.cat((Ei, predict), dim=1)    #[64,1]
         Etot = Ei.sum(dim=1)
+        out_sum = Etot.sum()
         out_sum.backward(retain_graph=True)
         input_grad_allatoms = input_data.grad
 
@@ -119,6 +133,8 @@ class MLFFNet(nn.Module):
                         if(nei_index == -1):
                             break 
                         atom_force += torch.matmul(input_grad_allatoms[batch_index, nei_index, :], dfeat[batch_index, atom_index_temp + i, nei, :, :])
+                        print("The dEtot/dfeature for batch_index %d, neighbor_inde %d" %(batch_index, nei_index))
+                        print(input_grad_allatoms[batch_index, nei_index, :])
                     Force[batch_index, atom_index_temp+i] = atom_force
         return Force, Etot, Ei
 
