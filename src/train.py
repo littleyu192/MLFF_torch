@@ -305,7 +305,7 @@ for epoch in range(start_epoch, n_epoch + 1):
         fid_err_log = open(f_err_log, 'w')
     else:
         fid_err_log = open(f_err_log, 'a')
-    fid_err_log.write('%d %e %e %e %e %e %e %e %e %e %e %e %e %e %e e% s% %e %e %e %e %e %e %e %e\n'       \
+    fid_err_log.write('%d %e %e %e %e %e %e %e %e %e %e %e %e %e %e %e %s %e %e %e %e %e %e %e %e\n'       \
     % (epoch, train_function_err_avg, train_epoch_force_square_loss, train_epoch_etot_square_loss, train_epoch_egroup_square_loss, \
         train_force_rmse_loss, train_etot_rmse_loss, train_egroup_rmse_loss, lr, \
         valid_loss_function_err, valid_epoch_force_square_loss, valid_epoch_etot_square_loss, valid_epoch_egroup_square_loss,\
