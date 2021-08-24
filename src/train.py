@@ -57,6 +57,10 @@ def train(sample_batches, model, optimizer, criterion):
     Ei_L2 = Etot_L2 / atom_number
 
     Force_deviation = force_predict - Force_label
+    # print("==========force predict==========")
+    # print(force_predict)
+    # print("==========force label==========")
+    # print(Force_label)
     Force_square_deviation = Force_deviation ** 2
     Force_shape = Force_deviation.shape[0] * Force_deviation.shape[1] * Force_deviation.shape[2]   #40*108*3
     Force_ABS_error = Force_deviation.norm(1) / Force_shape
@@ -119,10 +123,6 @@ def valid(sample_batches, model, criterion):
     Ei_L2 = Etot_L2 / atom_number
 
     Force_deviation = force_predict - Force_label
-    # print("==========force predict==========")
-    # print(force_predict)
-    # print("==========force label==========")
-    # print(Force_label)
     Force_square_deviation = Force_deviation ** 2
     Force_shape = Force_deviation.shape[0] * Force_deviation.shape[1] * Force_deviation.shape[2]   #40*108*3
     Force_ABS_error = Force_deviation.norm(1) / Force_shape

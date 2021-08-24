@@ -133,8 +133,8 @@ class MLFFNet(nn.Module):
                         if(nei_index == -1):
                             break 
                         atom_force += torch.matmul(input_grad_allatoms[batch_index, nei_index, :], dfeat[batch_index, atom_index_temp + i, nei, :, :])
-                        print("The dEtot/dfeature for batch_index %d, neighbor_inde %d" %(batch_index, nei_index))
-                        print(input_grad_allatoms[batch_index, nei_index, :])
+                        # print("The dEtot/dfeature for batch_index %d, neighbor_inde %d" %(batch_index, nei_index))
+                        # print(input_grad_allatoms[batch_index, nei_index, :])
                     Force[batch_index, atom_index_temp+i] = atom_force
         return Force, Etot, Ei
 
