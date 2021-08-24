@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 from numpy.lib.type_check import real
 import os
 import sys

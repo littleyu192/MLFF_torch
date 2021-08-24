@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 from torch.serialization import load
 from torch.utils.tensorboard import SummaryWriter
 import torch
