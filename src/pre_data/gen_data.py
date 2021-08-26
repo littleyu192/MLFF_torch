@@ -105,7 +105,8 @@ def get_scalers(f_feat, f_ds, b_save=True):
             dsnp.append(np.array(engy_as[itype]))
     if b_save:
         dsnp = np.array(dsnp)
-        np.save("ds.npy", dsnp)
+        f_npfile=os.path.join(pm.fitModelDir,'NN_output/NNFi/data_scaler.npy')
+        np.save(f_npfile, dsnp)
     return scalers
 
 
@@ -260,7 +261,7 @@ def process_data(f_train_feat, f_train_dfeat, f_train_natoms, f_train_egroup,
 
 def main():
     # 计算scale变换的参数
-    scalers_train = get_scalers(pm.f_train_feat, pm.f_data_scaler, False)
+    scalers_train = get_scalers(pm.f_train_feat, pm.f_data_scaler, True)
     read_allnn.read_wp(pm.fitModelDir, pm.ntypes)
     print(read_allnn.wp_atom)
     process_data(pm.f_train_feat,
