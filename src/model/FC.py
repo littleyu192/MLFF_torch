@@ -3,6 +3,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.nn import init
 from torch.autograd import Variable
 import sys, os
@@ -23,9 +24,11 @@ else:
 # Ei Neural Network
 ################################################################
 
-# ACTIVE = torch.relu  #softplus
-# ACTIVE = torch.sigmoid
-ACTIVE = torch.tanh
+# ACTIVE = torch.tanh
+# ACTIVE = F.softplus 
+# ACTIVE = torch.relu  
+ACTIVE = torch.sigmoid
+ 
 B_INIT= -0.2
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -67,7 +70,7 @@ class FCNet(nn.Module):
                 x = self.bns[i](x)
             if self.dodrop:              
                 self.drops[i](x)
-            x = ACTIVE(x)         #激活函数，可以自定义
+            # x = ACTIVE(x)         #激活函数，可以自定义
         predict = self.output(x)  #网络的最后一层
         return input, predict
 # nets = [FCNet(),FCNet(BN=True),FCNet(Dropout=True)]  #默认一个原子类型
@@ -75,6 +78,35 @@ class FCNet(nn.Module):
 # for i,net in enumerate(nets):
 #     print('the %i th network:'%i)
 #     print(net)
+
+class preMLFFNet(nn.Module):
+    def __init__(self, atomType = pm.atomType, natoms = pm.natoms):  #atomType=[8,32]
+        super(preMLFFNet,self).__init__()
+        self.atomType = atomType
+        self.natoms = pm.natoms   #[32,32]
+        self.models = nn.ModuleList()
+        for i in range(len(self.atomType)):  #i=[0,1]
+            self.models.append(FCNet(itype = i, Dropout=True))   # Dropout=True
+
+
+    def forward(self, image, dfeat, neighbor):
+        natoms_index = [0]
+        temp = 0
+        for i in self.natoms:
+            temp += i
+            natoms_index.append(temp)    #[0,32,64]
+        input_data = image
+        
+        for i in range(len(natoms_index)-1):
+            x = input_data[:, natoms_index[i]:natoms_index[i+1]]
+            _, predict = self.models[i](x)
+            if(i==0):
+                Ei = predict #[32, 1]
+            else:
+                Ei = torch.cat((Ei, predict), dim=1)    #[64,1]
+        Etot = Ei.sum(dim=1)
+        return Etot, Ei
+
 
 class MLFFNet(nn.Module):
     def __init__(self, atomType = pm.atomType, natoms = pm.natoms):  #atomType=[8,32]
