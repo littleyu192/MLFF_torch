@@ -27,8 +27,12 @@ else:
 # ACTIVE = torch.tanh
 # ACTIVE = F.softplus 
 # ACTIVE = torch.relu  
+def dsigmoid(x):
+    return torch.sigmoid(x) * (1 - torch.sigmoid(x))
 ACTIVE = torch.sigmoid
  
+dACTIVE = dsigmoid
+
 B_INIT= -0.2
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -70,7 +74,7 @@ class FCNet(nn.Module):
                 x = self.bns[i](x)
             if self.dodrop:              
                 self.drops[i](x)
-            # x = ACTIVE(x)         #激活函数，可以自定义
+            x = ACTIVE(x)         #激活函数，可以自定义
         predict = self.output(x)  #网络的最后一层
         return input, predict
 # nets = [FCNet(),FCNet(BN=True),FCNet(Dropout=True)]  #默认一个原子类型
@@ -118,7 +122,7 @@ class MLFFNet(nn.Module):
             self.models.append(FCNet(itype = i, Dropout=True))   # Dropout=True
 
 
-    def forward(self, image, dfeat, neighbor):
+    def forward(self, image, dfeat, neighbor, Egroup_weight, divider):
         natoms_index = [0]
         temp = 0
         for i in self.natoms:
@@ -146,12 +150,17 @@ class MLFFNet(nn.Module):
                 Ei = predict #[32, 1]
             else:
                 Ei = torch.cat((Ei, predict), dim=1)    #[64,1]
-        Etot = Ei.sum(dim=1)
-        out_sum = Etot.sum()
-        out_sum.backward(retain_graph=True)
-        input_grad_allatoms = input_data.grad
 
+        de = self.get_de(image, dfeat, neighbor)
+        input_grad_allatoms = de 
+
+        Etot = Ei.sum(dim=1)
+        # out_sum = Etot.sum()
+        # out_sum.backward(retain_graph=True)
+        # input_grad_allatoms = input_data.grad
+        
         batch_size = image.shape[0]
+        # import ipdb; ipdb.set_trace()
         Force = torch.zeros((batch_size, natoms_index[-1], 3)).to(device)
         for batch_index in range(batch_size):
             atom_index_temp = 0
@@ -168,7 +177,8 @@ class MLFFNet(nn.Module):
                         # print("The dEtot/dfeature for batch_index %d, neighbor_inde %d" %(batch_index, nei_index))
                         # print(input_grad_allatoms[batch_index, nei_index, :])
                     Force[batch_index, atom_index_temp+i] = atom_force
-        return Force, Etot, Ei
+        Egroup = self.get_egroup(Ei, Egroup_weight, divider)
+        return Force, Etot, Ei, Egroup
 
     def get_egroup(self, Ei, Egroup_weight, divider):
         batch_size = Ei.shape[0]
@@ -180,3 +190,33 @@ class MLFFNet(nn.Module):
             Egroup[i] = E_inner
         Egroup_out = torch.divide(Egroup, divider)
         return Egroup_out
+
+    def get_de(self, image, dfeat, neighbor):
+        batch_size = image.shape[0]
+        atom_type_num = len(self.atomType)
+        for i in range(atom_type_num):
+            model_weight = self.models[i].state_dict()
+            W = []
+            B = []
+            L = []
+            dL = []
+            W.append(model_weight['fc0.weight'].transpose(0, 1))            
+            B.append(model_weight['fc0.bias'])            
+            dL.append(dACTIVE(torch.matmul(image, W[0]) + B[0]))
+            L.append(ACTIVE(torch.matmul(image, W[0]) + B[0]))
+            for ilayer in range(1, pm.nLayers-1):
+                W.append(model_weight['fc' + str(ilayer) + '.weight'].transpose(0, 1))            
+                B.append(model_weight['fc' + str(ilayer) + '.bias'])            
+                dL.append(dACTIVE(torch.matmul(L[ilayer-1], W[ilayer]) + B[ilayer]))
+                L.append(ACTIVE(torch.matmul(L[ilayer-1], W[ilayer]) + B[ilayer]))
+            ilayer += 1
+            W.append(model_weight['output.weight'].transpose(0, 1))            
+            B.append(model_weight['output.bias'])            
+            res = W[ilayer].transpose(0, 1)
+            ilayer -= 1
+            while ilayer >= 0:
+                res = dL[ilayer] * res
+                res = res.unsqueeze(2) * W[ilayer]
+                res = res.sum(axis=-1)
+                ilayer -= 1
+            return res
