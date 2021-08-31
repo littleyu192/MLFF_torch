@@ -225,7 +225,10 @@ def calFeatGrid():
 def r_feat_csv(f_feat):
     """ read feature and energy from pandas data
     """
-    df   = pd.read_csv(f_feat,header=None,index_col=False,dtype=pm.tf_dtype)
+    # df   = pd.read_csv(f_feat,  encoding= 'unicode_escape')
+    # import ipdb;ipdb.set_trace()
+
+    df   = pd.read_csv(f_feat,header=None,index_col=False,dtype=pm.tf_dtype, encoding= 'unicode_escape')
     itypes = df[1].values.astype(int)
     engy = df[2].values
     feat = df.drop([0,1,2],axis=1).values 

@@ -43,6 +43,9 @@ mdImageFileDir=r'./MD'                              #设置md的初始image的�
 isCalcFeat=True
 isFitLinModel=True
 
+isNNpretrain=False
+isNNfinetuning=True
+
 #isClassify=True
 #isRunMd=True                                   #是否训练运行md  default:False
 #isRunMd_nn=True
