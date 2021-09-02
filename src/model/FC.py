@@ -215,8 +215,9 @@ class MLFFNet(nn.Module):
             res = W[ilayer].transpose(0, 1)
             ilayer -= 1
             while ilayer >= 0:
-                res = dL[ilayer] * res
-                res = res.unsqueeze(2) * W[ilayer]
-                res = res.sum(axis=-1)
+                res = dL[ilayer] * res   #(2,108,30)*(1,30)-->(2,108,30)
+                res = res.unsqueeze(2) * W[ilayer]  #(2,108,1,30)*(60,30)-->(2,108,60,30)
+                res = res.sum(axis=-1)  #(2,108,60,30)-->(2,108,60)
                 ilayer -= 1
             return res
+
