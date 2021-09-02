@@ -9,10 +9,12 @@ import torch.autograd as autograd
 import matplotlib.pyplot as plt
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.nn.modules import loss
 import torch.optim as optim
 from torch.nn.parameter import Parameter
 from torch.utils.data import Dataset, DataLoader
 from model.FC import preMLFFNet, MLFFNet
+from model.LN import LNNet
 import torch.utils.data as Data
 from torch.autograd import Variable
 import math
@@ -76,26 +78,28 @@ def train(sample_batches, model, optimizer, criterion):
     Etot_label = torch.sum(Etot_label, dim=1)   #[40,108,1]-->[40,1]
     Force_label = Variable(sample_batches['output_force'][:,:,:].float().to(device))   #[40,108,3]
     Egroup_label = Variable(sample_batches['input_egroup'].float().to(device))
-
     input_data = Variable(sample_batches['input_feat'].float().to(device), requires_grad=True)
     neighbor = Variable(sample_batches['input_nblist'].int().to(device))  # [40,108,100]
     dfeat = Variable(sample_batches['input_dfeat'].float().to(device))  #[40,108,100,42,3]
     egroup_weight = Variable(sample_batches['input_egroup_weight'].float().to(device))
     ind_img = Variable(sample_batches['ind_image'].int().to(device))
     divider = Variable(sample_batches['input_divider'].float().to(device))
-    optimizer.zero_grad()
     model = model.to(device)
     # import ipdb; ipdb.set_trace()
     # model = model.cuda()
     # model = torch.nn.parallel.DistributedDataParallel(model)
     model.train()
-    force_predict, Etot_predict, Ei_predict, Egroup_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
+    # force_predict, Etot_predict, Ei_predict, Egroup_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
+    Etot_predict, force_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
+    # import ipdb; ipdb.set_trace()
+    
+    optimizer.zero_grad()
     # Egroup_predict = model.get_egroup(Ei_predict, egroup_weight, divider)   #[40,108,1]
     # print("==========Etot predict==========")
     # print(Etot_predict)
 
     # Etot_deviation = Etot_predict - Etot_label     # [40,1]
-    print("etot predict: " + str(Etot_predict[0,0]) +  "etot label: " + str(Etot_label[0,0]))
+    print("etot predict: " + str(Etot_predict[0]) +  "etot label: " + str(Etot_label[0]))
     # Etot_square_deviation = Etot_deviation ** 2
     # Etot_shape = Etot_label.shape[0]  #40
     # Etot_ABS_error = Etot_deviation.norm(1) / Etot_shape
@@ -113,6 +117,7 @@ def train(sample_batches, model, optimizer, criterion):
     # Force_ABS_error = Force_deviation.norm(1) / Force_shape
     # Force_RMSE_error = math.sqrt(1/Force_shape) * Force_deviation.norm(2)
     # Force_L2 = (1/Force_shape) * Force_square_deviation.sum()
+    # import ipdb; ipdb.set_trace()
 
     # Egroup_deviation = Egroup_predict - Egroup_label
     # Egroup_square_deviation = Egroup_deviation ** 2
@@ -137,10 +142,11 @@ def train(sample_batches, model, optimizer, criterion):
     # loss =  pm.rtLossF * force_square_loss + pm.rtLossEtot * etot_square_loss + pm.rtLossE * egroup_square_loss
     
     # ===========loss 选取torch.nn的函数==========
-    loss = pm.rtLossF * criterion(force_predict, Force_label) + pm.rtLossEtot * criterion(Etot_predict, Etot_label) + pm.rtLossE * criterion(Egroup_predict, Egroup_label)
-    # import ipdb; ipdb.set_trace()
+    # loss = pm.rtLossF * criterion(force_predict, Force_label) + pm.rtLossEtot * criterion(Etot_predict, Etot_label) + pm.rtLossE * criterion(Egroup_predict, Egroup_label)
+    loss = criterion(force_predict, Force_label) + criterion(Etot_predict, Etot_label)
+    print("loss: " + str(loss))
 
-    loss.backward(retain_graph=True)
+    loss.backward()
     optimizer.step()
     # error = error + float(loss.item())
     # return loss, force_square_loss, etot_square_loss, egroup_square_loss, \
@@ -224,10 +230,10 @@ loader_valid = Data.DataLoader(torch_valid_data, batch_size=1, shuffle=True)
 # ==========================part2:指定模型参数==========================
 
 n_epoch = 2000
-learning_rate = 0.001
+learning_rate = 0.1
 weight_decay = 0.9
 weight_decay_epoch = 2
-direc = './FC3model'
+direc = './FC3model_mini_force'
 if not os.path.exists(direc):
     os.makedirs(direc) 
 
@@ -307,7 +313,9 @@ if pm.isNNpretrain == True:
 
 # ==========================part4:模型finetuning==========================
 if pm.isNNfinetuning == True:
-    model = MLFFNet()
+    # model = MLFFNet()
+    model = LNNet()
+
     # if torch.cuda.device_count() > 1:
         # model = nn.DataParallel(model)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
@@ -350,10 +358,11 @@ if pm.isNNfinetuning == True:
                 # Force_RMSE_error, Force_ABS_error, Force_L2, Etot_RMSE_error, Etot_ABS_error, Etot_L2, \
                 #     Egroup_RMSE_error, Egroup_ABS_error, Egroup_L2 = train(sample_batches, model, optimizer, nn.MSELoss())
                 loss = train(sample_batches, model, optimizer, nn.MSELoss())
+                # import ipdb; ipdb.set_trace()
                 # Log train/loss to TensorBoard at every iteration
                 n_iter = (epoch - 1) * len(loader_train) + i_batch + 1
                 # writer.add_scalar('Train/loss', Force_RMSE_error, n_iter)
-                loss_function_err += loss
+                # loss_function_err += loss
                 # import ipdb; ipdb.set_trace()
                 # train_epoch_force_square_loss += force_square_loss
                 # train_epoch_etot_square_loss += etot_square_loss
