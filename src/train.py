@@ -25,7 +25,7 @@ sys.path.append(codepath+'/pre_data')
 from data_loader_2type import MovementDataset, get_torch_data
 from torch.utils.tensorboard import SummaryWriter
 # from tensorboardX import SummaryWriter
-import torchviz
+#import torchviz
 
 
 

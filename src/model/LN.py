@@ -50,7 +50,10 @@ class LNNet(nn.Module):
             # self.b = nn.Parameter(torch.randn(pm.nNodes[i, itype], 1))
             self.weights.append(w)
             # self.biases.append(self.b)
-        self.output = nn.Parameter(torch.randn(1, pm.nNodes[pm.nLayers-2,itype]))  #最后一层
+        if (pm.nLayers == 1):
+            self.output = nn.Parameter(torch.randn(1, input_size)
+        else:
+            self.output = nn.Parameter(torch.randn(1, pm.nNodes[pm.nLayers-2,itype]))  #最后一层
         # self.register_parameter("output", self.output)
     #     self.__set__init(self.output)
 

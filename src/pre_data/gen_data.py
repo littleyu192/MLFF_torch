@@ -247,6 +247,10 @@ def process_data(f_train_feat, f_train_dfeat, f_train_natoms, f_train_egroup,
         os.makedirs(nn_data_path)
     # natoms contain all atomnum of each image, format: totnatom, type1n, type2 n
     natoms = np.loadtxt(f_train_natoms, dtype=int)
+    print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+    print(f_train_natoms)
+    print(natoms.shape)
+    print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
     nImg = natoms.shape[0]
     indImg = np.zeros((nImg+1,), dtype=int)
     indImg[0] = 0
