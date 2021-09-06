@@ -25,8 +25,8 @@ sys.path.append(codepath+'/pre_data')
 from data_loader_2type import MovementDataset, get_torch_data
 from torch.utils.tensorboard import SummaryWriter
 # from tensorboardX import SummaryWriter
-#import torchviz
-
+import torchviz
+import time
 
 
 writer = SummaryWriter()
@@ -108,7 +108,7 @@ def train(sample_batches, model, optimizer, criterion):
     # Ei_L2 = Etot_L2 / atom_number
 
     # Force_deviation = force_predict - Force_label
-    print("force predict: " + str(force_predict[0,0]) +  "force label: " + str(Force_label[0,0]))
+    print("force predict: " + str(-force_predict[0,0]) +  "force label: " + str(Force_label[0,0]))
     # print(force_predict[0,0])
     # print("==========force label==========")
     # print(Force_label[0,0])
@@ -143,11 +143,24 @@ def train(sample_batches, model, optimizer, criterion):
     
     # ===========loss 选取torch.nn的函数==========
     # loss = pm.rtLossF * criterion(force_predict, Force_label) + pm.rtLossEtot * criterion(Etot_predict, Etot_label) + pm.rtLossE * criterion(Egroup_predict, Egroup_label)
-    loss = criterion(force_predict, Force_label) + criterion(Etot_predict, Etot_label)
-    print("loss: " + str(loss))
-
+    loss_F = criterion(force_predict, Force_label)
+    loss_Etot = criterion(Etot_predict, Etot_label)
+    w_f = loss_Etot / (loss_Etot + loss_F)
+    w_e = 1 - w_f
+    w_f = 0
+    w_e = 1
+    loss = w_e * criterion(Etot_predict, Etot_label) + w_f * criterion(force_predict, Force_label)
+    print('*'*10)
+    print("weighted etot MSE loss: " + str(criterion(Etot_predict, Etot_label)))
+    print("weighted force MSE loss: " + str(criterion(force_predict, Force_label)))
+    
+    # print("weighted loss: " + str(loss))
+    time_start = time.time()
     loss.backward()
     optimizer.step()
+    time_end = time.time()
+    print("update grad time:", time_end - time_start, 's')
+
     # error = error + float(loss.item())
     # return loss, force_square_loss, etot_square_loss, egroup_square_loss, \
     #     Force_RMSE_error, Force_ABS_error, Force_L2, Etot_RMSE_error, Etot_ABS_error, Etot_L2, \
@@ -233,7 +246,7 @@ n_epoch = 2000
 learning_rate = 0.1
 weight_decay = 0.9
 weight_decay_epoch = 2
-direc = './FC3model_mini_force'
+direc = './FC3model_mini_etot_scale_dfeat_e10'
 if not os.path.exists(direc):
     os.makedirs(direc) 
 
@@ -313,8 +326,8 @@ if pm.isNNpretrain == True:
 
 # ==========================part4:模型finetuning==========================
 if pm.isNNfinetuning == True:
-    # model = MLFFNet()
-    model = LNNet()
+    model = MLFFNet()
+    # model = LNNet()
 
     # if torch.cuda.device_count() > 1:
         # model = nn.DataParallel(model)

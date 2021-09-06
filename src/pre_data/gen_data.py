@@ -100,14 +100,14 @@ class DataScalers:
         for i in range(pm.ntypes):
             self.scalers[pm.atomType[i]] = DataScaler()
 
-        # from os import path
+        from os import path
 
-        # if load and path.isfile(f_ds):
-        #     self.loadDSs_np(f_ds)
-        # elif path.isfile(f_feat):
-        #     self.get_scalers(f_feat, f_ds, b_save=True)
-        # else:
-        #     exit(["===Error in DataScaler, don't find ", f_ds, f_feat, '==='])
+        if load and path.isfile(f_ds):
+            self.loadDSs_np(f_ds)
+        elif path.isfile(f_feat):
+            self.get_scalers(f_feat, f_ds, b_save=True)
+        else:
+            exit(["===Error in DataScaler, don't find ", f_ds, f_feat, '==='])
 
         # return
 
@@ -134,7 +134,21 @@ class DataScalers:
             self.save2np(f_ds)
     
         #return self.feat_scalers
+    def pre_engy(self, engy, itypes):
+            # engy_scaled = cp.zeros_like(engy)
+            # for i in range(pm.ntypes):
+            #     itype = pm.atomType[i]
+            #     engy_scaled[itypes == itype] = self.scalers[itype].\
+            #         engy_scaler.transform(engy[itypes == itype])
+        return engy
 
+    def pre_feat(self, feat, itypes):
+        feat_scaled = np.zeros(feat.shape)
+        for i in range(pm.ntypes):
+            itype = pm.atomType[i]
+            feat_scaled[itypes == itype] = self.scalers[itype].\
+                                           feat_scaler.transform(feat[itypes == itype])
+        return feat_scaled
 
     def pre_dfeat(self, dfeat, itypes, nblt):
         dfeat_scaled = np.zeros(dfeat.shape)
@@ -188,59 +202,6 @@ class DataScalers:
         return
 
 
-def pre_feat(scalers, feat, itypes):
-    feat_scaled = np.zeros(feat.shape)
-    for i in range(pm.ntypes):
-        itype = pm.atomType[i]
-        feat_scaled[itypes == itype] = scalers[itype].\
-                                        feat_scaler.transform(feat[itypes == itype])
-    return feat_scaled
-
-def get_scalers(f_feat, f_ds, b_save=True):
-        itypes, feat, engy = prepare.r_feat_csv(f_feat)
-        scalers = {}
-        feat_as = {}
-        engy_as = {}
-        print('=DS.get_scaler ', f_feat,
-            'feat.shape, feat.dtype', feat.shape, feat.dtype)
-        print('=DS.get_scaler ', f_feat,
-            'engy.shape, feat.dtype', engy.shape, engy.dtype)
-        print('=DS.get_scaler ', f_feat, 'itypes.shape, feat.dtype',
-            itypes.shape, itypes.dtype)
-        dsnp = []
-        for i in range(pm.ntypes):
-            itype = pm.atomType[i]
-            scalers[itype] = DataScaler()
-            subfeat = feat[itypes == itype]
-            subengy = engy[itypes == itype]
-            scalers[itype].feat_scaler.fit_transform(subfeat)
-            scalers[itype].engy_scaler.fit_transform(subengy)
-            feat_b = scalers[itype].feat_scaler.transform(
-                np.zeros((1, subfeat.shape[1])))
-            engy_b = scalers[itype].engy_scaler.transform(
-                np.zeros((1, subengy.shape[1])))
-            feat_as[itype] = scalers[itype].\
-                feat_scaler.transform(np.ones((1, subfeat.shape[1]))) - feat_b
-            engy_as[itype] = scalers[itype].\
-                engy_scaler.transform(np.ones((1, subengy.shape[1]))) - engy_b
-
-            feat_scaler = scalers[itype].feat_scaler
-            engy_scaler = scalers[itype].engy_scaler
-            if b_save:
-                dsnp.append(np.array(feat_scaler.fr))
-                dsnp.append(np.array(feat_scaler.a))
-                dsnp.append(np.array(feat_scaler.b))
-                dsnp.append(np.array(feat_as[itype]))
-                dsnp.append(np.array(engy_scaler.fr))
-                dsnp.append(np.array(engy_scaler.a))
-                dsnp.append(np.array(engy_scaler.b))
-                dsnp.append(np.array(engy_as[itype]))
-        if b_save:
-            dsnp = np.array(dsnp)
-            f_npfile=os.path.join(pm.fitModelDir,'NN_output/NNFi/data_scaler.npy')
-            np.save(f_npfile, dsnp)
-        return scalers
-
 def process_data(f_train_feat, f_train_dfeat, f_train_natoms, f_train_egroup,
                  scalers, nn_data_path):
     if not os.path.exists(nn_data_path):
@@ -258,8 +219,10 @@ def process_data(f_train_feat, f_train_dfeat, f_train_natoms, f_train_egroup,
         indImg[i+1] = indImg[i] + natoms[i, 0]
 
     itypes, feat, engy = prepare.r_feat_csv(f_train_feat)
-    feat_scaled = pre_feat(scalers, feat, itypes)
-    engy_scaled = engy
+    feat_scaled = scalers.pre_feat(feat, itypes)
+    engy_scaled = scalers.pre_engy(engy, itypes)
+    # feat_scaled = pre_feat(scalers, feat, itypes)
+    # engy_scaled = engy
     egroup, divider, egroup_weight = prepare.r_egroup_csv(f_train_egroup)
     if os.path.exists(os.path.join(pm.dir_work, 'weight_for_cases')):
         weight_all = pd.read_csv(os.path.join(pm.dir_work, 'weight_for_cases'),
@@ -272,7 +235,7 @@ def process_data(f_train_feat, f_train_dfeat, f_train_natoms, f_train_egroup,
     feat_scale_a = np.zeros((nfeat0m, pm.ntypes))
     for i in range(pm.ntypes):
         itype = pm.atomType[i]
-        feat_scale_a[:, i] = scalers[itype].feat_scaler.a
+        feat_scale_a[:, i] = scalers.scalers[itype].feat_scaler.a
         feat_scale_a = np.asfortranarray(feat_scale_a)  # scaler 的 a参数
     # feat_scale_a=np.ones((nfeat0m,pm.ntypes))   #如果不做scale，赋值为1
     # feat_scale_a = np.asfortranarray(feat_scale_a)
@@ -396,21 +359,26 @@ def process_data(f_train_feat, f_train_dfeat, f_train_natoms, f_train_egroup,
 
 def main():
     # 计算scale变换的参数
-    scalers_train = get_scalers(pm.f_train_feat, pm.f_data_scaler, True)
+    data_scalers = DataScalers(f_ds=pm.f_data_scaler,
+                                   f_feat=pm.f_train_feat)
+    
+    # scalers_train = get_scalers(pm.f_train_feat, pm.f_data_scaler, True)
     read_allnn.read_wp(pm.fitModelDir, pm.ntypes)
     print(read_allnn.wp_atom)
     process_data(pm.f_train_feat,
                  pm.f_train_dfeat,
                  pm.f_train_natoms,
                  pm.f_train_egroup, 
-                 scalers_train,
+                 data_scalers,
                  pm.train_data_path)
-    scalers_test = get_scalers(pm.f_test_feat, pm.f_data_scaler, False)
+    # scalers_test = get_scalers(pm.f_test_feat, pm.f_data_scaler, False)
+    data_scalers = DataScalers(f_ds=pm.f_data_scaler,
+                                   f_feat=pm.f_test_feat)
     process_data(pm.f_test_feat,
                  pm.f_test_dfeat,
                  pm.f_test_natoms,
                  pm.f_test_egroup,
-                 scalers_test,
+                 data_scalers,
                  pm.test_data_path)
 
 if __name__ == '__main__':
