@@ -1,0 +1,14 @@
+  xatom.config               ! xatom.config
+  1, 100, 1.0, 300, 300     ! iMD,MDstep,dt,T1,T2 (same as in PWmat)
+  F                         ! T or F, IN.MDOPT (same as in PWmat)
+  2                         ! imodel: 1, Linear; 2, VV; 3, NN  
+  1                         ! interval for MOVEMENT output
+  1                         ! ntype
+  3   6.0                   ! iZ, mass(iZ)   ! Note, if iZ in xatom.config not found, mass=2*iz
+
+------------------------------------------------------------------------
+Run the main_MD.x (e.g., as >mpirun -n 4 main_MD.x)
+in the top level directory after you fit the Linear model, 
+in the directory where you have parameters.py,  fread_dfeat, input, output subdirectories. 
+Place xatom.config, and this MD.input in that directory. 
+

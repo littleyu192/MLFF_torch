@@ -1,0 +1,4 @@
+in cori
+need to module load impi 
+then use
+mpiifort  -mkl

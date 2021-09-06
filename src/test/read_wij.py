@@ -105,7 +105,8 @@ def read_scaler():
 
 if __name__ =="__main__":
     pt_file=os.path.join(pm.codedir,'NN_output/NNFi/data_scaler.npy')
-    pt_file = "./FC3model/3layers_MLFFNet_5epoch.pt"
+    # pt_file = "./FC3model_mini_force/3layers_MLFFNet.pt"
+    pt_file = sys.argv[1]
     pt2npy(pt_file)
     read_wij()
     read_scaler()
