@@ -87,3 +87,17 @@ if pm.isRunMd100:
         mdRunner.run100(i)
     mdRunner.final()
 
+# liuliping MD_code.NEW, md100 workflow
+if hasattr(pm, 'isNewMd100'):
+    if pm.isNewMd100:
+        os.system('rm -f MOVEMENT')
+        sys.path.append(codepath+'/../test')
+        import md100
+        imodel = 3    # 1:linear;  2:VV;   3:NN;
+        num_process = 1
+        if hasattr(pm, 'md100_imodel'):
+            imodel = pm.md100_imodel
+        if hasattr(pm, 'md_num_process'):
+            num_process = pm.md_num_process
+        md100.run_md100(imodel=imodel, atom_type=pm.atomType, num_process=num_process)
+

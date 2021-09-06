@@ -18,4 +18,7 @@ chmod +x ./seper.py
 chmod +x ./gen_data.py
 chmod +x ./data_loader_2type.py
 cd ..
+cd test/MD
+make
+cd ../..
 
