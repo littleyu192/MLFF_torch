@@ -7,11 +7,11 @@ isClassify=False
 isRunMd=False                                   #是否训练运行md  default:False
 isRunMd_nn=False
 isFollowMd=False                                #是否是接续上次的md继续运行  default:False
-isFitVdw=True
+isFitVdw=False  #训练时需关掉
 isRunMd100_nn=False
 isRunMd100=False
 add_force=False     # for NN md
-pbc = True
+pbc = False
 is_nn_do_profile = False
 #************** Dir **********************
 
@@ -40,11 +40,11 @@ genFeatDir = r'./gen_feature'
 mdImageFileDir=r'./MD'                              #设置md的初始image的文件所在的文件夹  default:'.'
 
 #训练时需要打开
-isCalcFeat=True
-isFitLinModel=True
+#isCalcFeat=True
+#isFitLinModel=True
 
-isNNpretrain=False
-isNNfinetuning=True
+#isNNpretrain=False
+#isNNfinetuning=True
 
 #isClassify=True
 #isRunMd=True                                   #是否训练运行md  default:False
@@ -53,6 +53,11 @@ isNNfinetuning=True
 #isFitVdw=True
 
 #NN预测时需要打开
+isNewMd100=True
+md_num_process = 1   # mpirun -n ${md_num_process} main_MD.x
+is_md100_egroup = False
+is_md100_show_X11_fig = False
+
 #isRunMd100_nn=True
 #inference=True
 #linear预测时需要打开
@@ -170,7 +175,7 @@ ntypes=len(atomType)
 nLayers = 3
 nNodes = np.array([[60,60],[30,30],[1,1]])
 # nLayers=5
-# nNodes = np.array([[256,256],[128,128],[64,64],[32,32],[1,1]])
+# nNodes = np.array([[256,256],[256,256],[256,256],[64,64],[1,1]])
 b_init=np.array([166.3969])      # energy of one atom, for different types, just a rough value
 #nLayers = 4
 #nNodes = np.array([[16,],[64,],[32,],[1,]])
@@ -184,7 +189,7 @@ train_stage = 2      # only 1 or 2, 1 is begining training from energy and then 
 train_verb = 0       
 
 learning_rate= 1e-3
-batch_size = 80       
+batch_size = 10       
 #rtLossE      = 0.6     # weight for energy, NN fitting 各个原子能量所占的权重
 #rtLossF      = 0.2     # weight for force, NN fitting 各个原子所受力所占的权重
 #rtLossEtot   = 0.2
@@ -252,3 +257,5 @@ f_Einn_model   = d_nnEi+'allEi_final.ckpt'
 f_Finn_model   = d_nnFi+'Fi_final.ckpt'
 f_data_scaler = d_nnFi+'data_scaler.npy'
 f_Wij_np  = d_nnFi+'Wij.npy'
+
+#f_wij_txt = os.path.join(fitModelDir, "Wij.txt")
