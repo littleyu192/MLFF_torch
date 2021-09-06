@@ -72,6 +72,15 @@ class dmirror_net(nn.Module):
         self.W_1 = torch.rand(L2_dim, L1_dim)
         self.W_2 = torch.rand(1, L2_dim)
         self.W_3 = torch.rand(1, L1_dim)
+        
+        self.W_1 = torch.tensor([
+            [0.2, 0.8, 0.3, 0.6],
+            [0.7, 0.8, 0.1, 0.9]
+        ])
+        self.W_2 = torch.tensor([
+            [0.3, 0.4]
+        ])
+        self.W_3 = torch.tensor([[0.5, 0.6, 0.7, 0.8]])
         #self.W_1 = torch.tensor([3.]).unsqueeze(1)
         #self.W_2 = torch.tensor([4.]).unsqueeze(1)
         #self.W_3 = torch.tensor([5.]).unsqueeze(1)
@@ -119,15 +128,17 @@ class dmirror_net(nn.Module):
         return dlossdf * dfdw2
 
 
-input_x = torch.tensor([10., 9., 8., 7., 6., 5., 3., 2.])
+#input_x = torch.tensor([10., 9., 8., 7., 6., 5., 3., 2.])
+input_x = torch.tensor([10., 9., 8., 7.])
 label = torch.tensor([500.])
-n = dmirror_net(8, 16)
+n = dmirror_net(4, 2)
+#n = dmirror_net(1, 1)
 loss_fn = nn.MSELoss()
 
-learning_rate = 0.01
+learning_rate = 0.00000001
 weight_decay = 0.9
 weight_decay_round = 10
-optimizer = optim.Adam(n.parameters(), lr=learning_rate)
+optimizer = optim.SGD(n.parameters(), lr=learning_rate)
 scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=weight_decay)
 
 
