@@ -56,50 +56,14 @@ class MLFF_dmirror(nn.Module):
 
         for batch_idx in range(batch_size):
             for i in range(self.natoms):
-                Force[batch_idx, i, :] = result_dEtot_dFeat[batch_idx, :]
-
-
-
-        return Etot, Force
-
-#        '''
-        for batch_idx in range(batch_size):
-            dFeat dfeat[batch_index, atom_index_temp + i, nei, :, :]
-            
-
-        Force = torch.matmul(
-
-            for idx, natom in enumerate(self.natoms):  #[32,32]  [108] 
-            if(batch_index==0):
-                batches_Ei = Ei.unsqueeze(0) #[108]-->[1,108]
-                Etot = one_sample_Etot.unsqueeze(0) #[1] --> [1,1]
-                input_grad_allatoms = one_sample_input_grad_allatoms.unsqueeze(0) #[108,42]-->[1,108,42]
-            else:
-                batches_Ei = torch.cat((batches_Ei, Ei.unsqueeze(0)), dim=0)  #[1,108] --> [2,108]
-                Etot = torch.cat((Etot, one_sample_Etot.unsqueeze(0)), dim=0) #[1,1]-->[2,1]   -->2
-                input_grad_allatoms = torch.cat((input_grad_allatoms, one_sample_input_grad_allatoms.unsqueeze(0)), dim=0) #[2,108,42]
-
-        Force = torch.zeros((batch_size, natoms_index[-1], 3)).to(device)
-        for batch_index in range(batch_size):
-            atom_index_temp = 0
-            for idx, natom in enumerate(self.natoms):  #[32,32]    
-                for i in range(natom):
-                    neighbori = neighbor[batch_index, atom_index_temp + i]  # neighbor [40, 64, 100] neighbori [1, 100]
-                    neighbor_number = neighbori.shape[-1]
-                    atom_force = torch.zeros((1, 3)).to(device)
-                    for nei in range(neighbor_number):
-                        nei_index = neighbori[nei] - 1 #第几个neighbor
-                        if(nei_index == -1):
-                            break 
-                        atom_force += torch.matmul(input_grad_allatoms[batch_index, nei_index, :], dfeat[batch_index, atom_index_temp + i, nei, :, :])
-                        # print("The dEtot/dfeature for batch_index %d, neighbor_inde %d" %(batch_index, nei_index))
-                        # print(input_grad_allatoms[batch_index, nei_index, :])
-                    Force[batch_index, atom_index_temp+i] = atom_force
-
-        # Egroup = self.get_egroup(Ei, Egroup_weight, divider)
+                a = result_dEtot_dFeat[batch_idx].squeeze(1)
+                b0 = dfeat[batch_idx, i]
+                b = b0.view([self.natoms * self.dim_feat, 3])
+                Force[batch_idx, i, :] = torch.mm(a, b)
 
         return Etot, Force
 
+'''
     def get_egroup(self, Ei, Egroup_weight, divider):
         batch_size = Ei.shape[0]
         Egroup = torch.zeros_like(Ei)
@@ -110,5 +74,4 @@ class MLFF_dmirror(nn.Module):
             Egroup[i] = E_inner
         Egroup_out = torch.divide(Egroup, divider)
         return Egroup_out
-
 '''
