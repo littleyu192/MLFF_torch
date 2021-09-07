@@ -15,6 +15,7 @@ from torch.nn.parameter import Parameter
 from torch.utils.data import Dataset, DataLoader
 from model.FC import preMLFFNet, MLFFNet
 from model.LN import LNNet
+from model.MLFF_dmirror import MLFF_dmirror
 import torch.utils.data as Data
 from torch.autograd import Variable
 import math
@@ -314,7 +315,8 @@ if pm.isNNpretrain == True:
 # ==========================part4:模型finetuning==========================
 if pm.isNNfinetuning == True:
     # model = MLFFNet()
-    model = LNNet()
+    #model = LNNet()
+    mldel = MLFF_dmirror()
 
     # if torch.cuda.device_count() > 1:
         # model = nn.DataParallel(model)
