@@ -14,7 +14,8 @@ import torch.optim as optim
 from torch.nn.parameter import Parameter
 from torch.utils.data import Dataset, DataLoader
 from model.FC import preMLFFNet, MLFFNet
-# from model.LN import LNNet
+from model.LN import LNNet
+from model.MLFF_dmirror import MLFF_dmirror
 import torch.utils.data as Data
 from torch.autograd import Variable
 import math
@@ -378,10 +379,10 @@ if pm.isNNpretrain == True:
 
 # ==========================part4:模型finetuning==========================
 if pm.isNNfinetuning == True:
-    data_scalers = DataScalers(f_ds=pm.f_data_scaler, f_feat=pm.f_train_feat, load=True)
-    # import ipdb; ipdb.set_trace()
-    model = MLFFNet(data_scalers)
-    # model = LNNet()
+
+    # model = MLFFNet()
+    #model = LNNet()
+    model = MLFF_dmirror()
     # if torch.cuda.device_count() > 1:
         # model = nn.DataParallel(model)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
