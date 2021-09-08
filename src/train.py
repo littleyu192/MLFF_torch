@@ -92,6 +92,10 @@ def train(sample_batches, model, optimizer, criterion):
     model.train()
     # force_predict, Etot_predict, Ei_predict, Egroup_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
     Etot_predict, force_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
+    print(Etot_predict.shape)
+    print(force_predict.sape)
+    print(Etot_predict)
+    print(force_predict)
     # import ipdb; ipdb.set_trace()
     
     optimizer.zero_grad()
@@ -316,7 +320,7 @@ if pm.isNNpretrain == True:
 if pm.isNNfinetuning == True:
     # model = MLFFNet()
     #model = LNNet()
-    mldel = MLFF_dmirror()
+    model = MLFF_dmirror()
 
     # if torch.cuda.device_count() > 1:
         # model = nn.DataParallel(model)

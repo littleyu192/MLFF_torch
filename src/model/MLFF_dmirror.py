@@ -9,6 +9,8 @@ sys.path.append(os.getcwd())
 import parameters as pm    
 # import prepare as pp
 # pp.readFeatnum()
+from model.dmirror import dmirror_FC
+
 if pm.torch_dtype == 'float32':
     torch_dtype = torch.float32
     print('info: torch.dtype = torch.float32 in Pytorch training.')
@@ -26,7 +28,7 @@ class MLFF_dmirror(nn.Module):
         self.natoms = pm.natoms
         self.net_cfg = pm.MLFF_dmirror_cfg
         self.dim_feat = pm.nFeatures
-        self.net = dmirror_FC(net_cfg, F.softplus, F.sigmoid)
+        self.net = dmirror_FC(self.net_cfg, F.softplus, F.sigmoid)
         print(self.natoms)
         print("111111111111111111")
 
