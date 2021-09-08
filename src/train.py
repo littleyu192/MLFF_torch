@@ -121,7 +121,11 @@ def train(sample_batches, model, optimizer, criterion, start_lr, real_lr):
     # model = torch.nn.parallel.DistributedDataParallel(model)
     model.train()
     # force_predict, Etot_predict, Ei_predict, Egroup_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
-    Etot_predict, force_predict, Ei_predict, Egroup_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
+    Etot_predict, force_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
+    print(Etot_predict.shape)
+    print(force_predict.sape)
+    print(Etot_predict)
+    print(force_predict)
     
     optimizer.zero_grad()
     # Egroup_predict = model.get_egroup(Ei_predict, egroup_weight, divider)   #[40,108,1]

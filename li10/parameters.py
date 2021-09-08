@@ -147,7 +147,7 @@ cuda_dev = '0'       # unoccupied gpu, using 'nvidia-smi' cmd
 cupyFeat=True
 torch_dtype = 'float32'
 tf_dtype = 'float32' # dtype of tensorflow trainning, 'float32' faster than 'float64'
-test_ratio = 0.2
+test_ratio = 0.5
 #================================================================================
 # NN model related
 activation_func='softplus'     # could choose 'softplus' and 'elup1' now
@@ -163,6 +163,9 @@ b_init=np.array([166.3969])      # energy of one atom, for different types, just
 #nNodes = np.array([[16,],[64,],[32,],[1,]])
 isNNpretrain = False
 isNNfinetuning = True
+
+# MLFF_dmirror configurations
+MLFF_dmirror_cfg = [('linear', 42, 1, True)]
 
 #================================================================================
 # training 
