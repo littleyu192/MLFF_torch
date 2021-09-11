@@ -43,8 +43,9 @@ isFitLinModel=True
 #add_force=True     # for NN md
 #********* for gen_feature.in *********************
 atomType=[3]                                  # MOVEMENT of Li, from Zhang WenTao
-maxNeighborNum=100
 natoms=[2]
+maxNeighborNum=27
+maxNeighborNum=100
 
 
 iflag_PCA=0
@@ -165,7 +166,14 @@ isNNpretrain = False
 isNNfinetuning = True
 
 # MLFF_dmirror configurations
-MLFF_dmirror_cfg = [('linear', 42, 1, True)]
+MLFF_dmirror_cfg = [
+                       # ('linear', 42, 1, True),
+                        ('linear', 42, 30, True),
+                        ('activation',),
+                        ('linear', 30, 60, True),
+                        ('activation',),
+                        ('linear', 60, 1, True)
+                   ]
 
 #================================================================================
 # training 

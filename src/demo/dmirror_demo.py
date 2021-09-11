@@ -96,7 +96,7 @@ class dmirror_net(nn.Module):
         x1 = self.layer1(x0)
         x2 = self.layer2(x1)
         x3 = self.layer3(x2)
-        x4 = self.layer4(torch.ones([1]))
+        x4 = self.layer4(torch.ones(1))
         x5 = self.layer5(x4, x1)
         x6 = self.layer6(x5)
         x7 = torch.mv(self.W_3, x6)
