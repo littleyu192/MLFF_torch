@@ -21,45 +21,51 @@ else:
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
+def d_sigmoid(x):
+    return torch.sigmoid(x) * (1 - torch.sigmoid(x))
+
 class MLFF_dmirror(nn.Module):
     def __init__(self):
         super(MLFF_dmirror, self).__init__()
         self.atomType = pm.atomType
-        self.natoms = pm.natoms
+        self.natoms = pm.natoms[0]
         self.net_cfg = pm.MLFF_dmirror_cfg
         self.dim_feat = pm.nFeatures
-        self.net = dmirror_FC(self.net_cfg, F.softplus, F.sigmoid)
-        print(self.natoms)
-        print("111111111111111111")
+        #self.net = dmirror_FC(self.net_cfg, F.softplus, F.sigmoid)
+        self.net = dmirror_FC(self.net_cfg, torch.sigmoid, d_sigmoid)
+        #print(self.natoms)
+        #print("111111111111111111")
 
     def forward(self, image, dfeat, neighbor, Egroup_weight, divider):
-        print(dfeat.shape)
-        print(neighbor.shape)
-        print("2222222222222222222")
+        #print(dfeat.shape)
+        #print(neighbor.shape)
+        #print("2222222222222222222")
         batch_size = image.shape[0]
+        #print(batch_size)
+        #print("3333333333333333333")
         result_Ei = torch.zeros(
-            [batch_size, self.natoms], dtype=torch.float64
-        )
+            (batch_size, self.natoms)
+        ).to(device)
         result_dEi_dFeat = torch.zeros(
-            [batch_size, self.natoms, self.dim_feat], dtype=torch.float64
-        )
+            (batch_size, self.natoms, self.dim_feat)
+        ).to(device)
 
         for batch_idx in range(batch_size):
             for i in range(self.natoms):
                 Ei, dEi_dFeat = self.net(image[batch_idx, i, :])
-                result_Ei[batch_idx, i, 0] = Ei
+                result_Ei[batch_idx, i] = Ei
                 result_dEi_dFeat[batch_idx, i, :] = dEi_dFeat
 
         Etot = torch.sum(result_Ei, 1)
-        Force = torch.zeros([batch_size, self.natoms, 3], dtype=torch.float64)
+        Force = torch.zeros((batch_size, self.natoms, 3)).to(device)
         result_dEtot_dFeat = result_dEi_dFeat.view(
             [batch_size, self.natoms * self.dim_feat]
         )
 
         for batch_idx in range(batch_size):
             for i in range(self.natoms):
-                a = result_dEtot_dFeat[batch_idx].squeeze(1)
-                b0 = dfeat[batch_idx, i]
+                a = result_dEtot_dFeat[batch_idx].unsqueeze(0)
+                b0 = dfeat[batch_idx, i, :self.natoms]  # FIXME: this is fool?
                 b = b0.view([self.natoms * self.dim_feat, 3])
                 Force[batch_idx, i, :] = torch.mm(a, b)
 

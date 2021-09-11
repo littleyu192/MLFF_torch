@@ -92,10 +92,6 @@ def train(sample_batches, model, optimizer, criterion):
     model.train()
     # force_predict, Etot_predict, Ei_predict, Egroup_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
     Etot_predict, force_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
-    print(Etot_predict.shape)
-    print(force_predict.sape)
-    print(Etot_predict)
-    print(force_predict)
     # import ipdb; ipdb.set_trace()
     
     optimizer.zero_grad()
@@ -104,7 +100,7 @@ def train(sample_batches, model, optimizer, criterion):
     # print(Etot_predict)
 
     # Etot_deviation = Etot_predict - Etot_label     # [40,1]
-    print("etot predict: " + str(Etot_predict[0]) +  "etot label: " + str(Etot_label[0]))
+    #print("etot predict: " + str(Etot_predict[0]) +  "etot label: " + str(Etot_label[0]))
     # Etot_square_deviation = Etot_deviation ** 2
     # Etot_shape = Etot_label.shape[0]  #40
     # Etot_ABS_error = Etot_deviation.norm(1) / Etot_shape
@@ -113,7 +109,7 @@ def train(sample_batches, model, optimizer, criterion):
     # Ei_L2 = Etot_L2 / atom_number
 
     # Force_deviation = force_predict - Force_label
-    print("force predict: " + str(force_predict[0,0]) +  "force label: " + str(Force_label[0,0]))
+    #print("force predict: " + str(force_predict[0,0]) +  "force label: " + str(Force_label[0,0]))
     # print(force_predict[0,0])
     # print("==========force label==========")
     # print(Force_label[0,0])
@@ -237,7 +233,8 @@ loader_valid = Data.DataLoader(torch_valid_data, batch_size=1, shuffle=True)
 n_epoch = 2000
 learning_rate = 0.1
 weight_decay = 0.9
-weight_decay_epoch = 2
+weight_decay_epoch = 20     # for 3-layer sigmoid
+#weight_decay_epoch = 100     # for 1-layer no activation
 direc = './FC3model_mini_force'
 if not os.path.exists(direc):
     os.makedirs(direc) 
@@ -286,6 +283,7 @@ if pm.isNNpretrain == True:
 
         if epoch > weight_decay_epoch:   # 学习率衰减
             scheduler.step()
+            print("ddddddddddd")
         iprint = 1               #隔几个epoch记录一次误差
         f_err_log=pm.dir_work+'pretraining.dat'
         if epoch // iprint == 1:
@@ -435,8 +433,9 @@ if pm.isNNfinetuning == True:
             #         .format(valid_loss_function_err, valid_epoch_force_square_loss, valid_epoch_etot_square_loss, \
             #         valid_epoch_egroup_square_loss, valid_force_rmse_loss, valid_etot_rmse_loss, valid_egroup_rmse_loss))
             
-            # if epoch > weight_decay_epoch:   # 学习率衰减
-            #     scheduler.step()
+            if epoch % weight_decay_epoch == 0:   # 学习率衰减
+                scheduler.step()
+                print("eeeeeeeeeeeeeeeeeeee")
             # iprint = 1 #隔几个epoch记录一次误差
             # f_err_log=pm.dir_work+'finetuning.dat'
             # if epoch // iprint == 1:
