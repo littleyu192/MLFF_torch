@@ -293,13 +293,10 @@ torch_valid_data = get_torch_data(pm.natoms, valid_data_path)
 loader_valid = Data.DataLoader(torch_valid_data, batch_size=1, shuffle=True)
 
 # ==========================part2:指定模型参数==========================
-
-n_epoch = 2000   #5000
-learning_rate = 0.1
+n_epoch = 2000
+learning_rate = 0.8
 weight_decay = 0.9
-
-weight_decay_epoch = 20     # for 3-layer sigmoid
-#weight_decay_epoch = 100     # for 1-layer no activation
+weight_decay_epoch = 100
 direc = './FC3model_mini_force'
 if not os.path.exists(direc):
     os.makedirs(direc) 

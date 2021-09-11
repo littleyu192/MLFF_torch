@@ -184,7 +184,7 @@ train_stage = 2      # only 1 or 2, 1 is begining training from energy and then 
 train_verb = 0       
 
 learning_rate= 1e-3
-batch_size = 2        
+batch_size = 5      
 rtLossE      = 0.0     # weight for energy, NN fitting 各个原子能量所占的权重
 rtLossF      = 0.2     # weight for force, NN fitting 各个原子所受力所占的权重
 rtLossEtot   = 0.8
