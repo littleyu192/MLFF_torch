@@ -167,7 +167,10 @@ isNNfinetuning = True
 
 # MLFF_dmirror configurations
 MLFF_dmirror_cfg = [
-                       # ('linear', 42, 1, True),
+                        ('linear', 42, 1, True),
+                   ]
+
+MLFF_dmirror_cfg1 = [
                         ('linear', 42, 30, True),
                         ('activation',),
                         ('linear', 30, 60, True),

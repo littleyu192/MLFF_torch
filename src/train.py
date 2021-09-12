@@ -232,7 +232,7 @@ loader_valid = Data.DataLoader(torch_valid_data, batch_size=1, shuffle=True)
 
 n_epoch = 2000
 learning_rate = 0.8
-weight_decay = 0.9
+weight_decay = 1.0
 weight_decay_epoch = 100
 direc = './FC3model_mini_force'
 if not os.path.exists(direc):
@@ -322,6 +322,7 @@ if pm.isNNfinetuning == True:
     # if torch.cuda.device_count() > 1:
         # model = nn.DataParallel(model)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    #optimizer = optim.SGD(model.parameters(), lr=learning_rate)
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=weight_decay)
     start = time.time()
     min_loss = np.inf
