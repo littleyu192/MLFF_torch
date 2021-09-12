@@ -14,7 +14,7 @@ import torch.optim as optim
 from torch.nn.parameter import Parameter
 from torch.utils.data import Dataset, DataLoader
 from model.FC import preMLFFNet, MLFFNet
-from model.LN import LNNet
+# from model.LN import LNNet
 import torch.utils.data as Data
 from torch.autograd import Variable
 import math
@@ -23,6 +23,7 @@ import parameters as pm
 codepath=os.path.abspath(sys.path[0])
 sys.path.append(codepath+'/pre_data')
 from data_loader_2type import MovementDataset, get_torch_data
+from scalers import DataScalers
 from torch.utils.tensorboard import SummaryWriter
 # from tensorboardX import SummaryWriter
 import torchviz
@@ -102,7 +103,8 @@ def train(sample_batches, model, optimizer, criterion):
     # Ei_L2 = Etot_L2 / atom_number
 
     # Force_deviation = force_predict - Force_label
-    print("training stage force predict: " + str(-force_predict[0,0]) +  "force label: " + str(Force_label[0,0]))
+    print("training stage force predict: " + str(force_predict[0,0]) +  "force label: " + str(Force_label[0,0]))
+    # import ipdb;ipdb.set_trace()
     # print(force_predict[0,0])
     # print("==========force label==========")
     # print(Force_label[0,0])
@@ -142,6 +144,8 @@ def train(sample_batches, model, optimizer, criterion):
     w_e = 1 - w_f
     w_f = pm.rtLossF
     w_e = pm.rtLossE
+    w_f = 0
+    w_e = 1
     loss = w_e * criterion(Etot_predict, Etot_label) + w_f * criterion(force_predict, Force_label)
     print('*'*10)
     print("weighted etot MSE loss: " + str(loss_Etot))
@@ -217,6 +221,8 @@ def valid(sample_batches, model, criterion):
     w_e = 1 - w_f
     w_f = pm.rtLossF
     w_e = pm.rtLossE
+    w_f = 0
+    w_e = 1
     loss = w_f * criterion(force_predict, Force_label) + w_e * criterion(Etot_predict, Etot_label)
 
     error = error+float(loss.item())
@@ -235,19 +241,19 @@ def sec_to_hms(seconds):
 batch_size = pm.batch_size   #40
 train_data_path=pm.train_data_path
 torch_train_data = get_torch_data(pm.natoms, train_data_path)
-loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=True)
+loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=False)
 
 valid_data_path=pm.test_data_path
 torch_valid_data = get_torch_data(pm.natoms, valid_data_path)
-loader_valid = Data.DataLoader(torch_valid_data, batch_size=1, shuffle=True)
+loader_valid = Data.DataLoader(torch_valid_data, batch_size=1, shuffle=False)
 
 # ==========================part2:指定模型参数==========================
 
 n_epoch = 2000
 learning_rate = 0.1
 weight_decay = 0.9
-weight_decay_epoch = 2
-direc = './FC3model_mini_pm_rtloss'
+weight_decay_epoch = 10
+direc = './FC3model_mini_pm_loss'
 if not os.path.exists(direc):
     os.makedirs(direc) 
 
@@ -327,7 +333,9 @@ if pm.isNNpretrain == True:
 
 # ==========================part4:模型finetuning==========================
 if pm.isNNfinetuning == True:
-    model = MLFFNet()
+    data_scalers = DataScalers(f_ds=pm.f_data_scaler, f_feat=pm.f_train_feat, load=True)
+    # import ipdb; ipdb.set_trace()
+    model = MLFFNet(data_scalers)
     # model = LNNet()
 
     # if torch.cuda.device_count() > 1:
@@ -447,7 +455,7 @@ if pm.isNNfinetuning == True:
         if epoch > weight_decay_epoch:   # 学习率衰减
             scheduler.step()
         iprint = 1 #隔几个epoch记录一次误差
-        f_err_log=pm.dir_work+'finetuning.dat'
+        f_err_log=pm.dir_work+'mini_pm.dat'
         if epoch // iprint == 1:
             fid_err_log = open(f_err_log, 'w')
         else:
