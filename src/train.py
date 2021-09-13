@@ -29,9 +29,47 @@ from torch.utils.tensorboard import SummaryWriter
 # from tensorboardX import SummaryWriter
 import torchviz
 import time
+import getopt
 
+# output control
+output_verbose = False
+output_summary = False
+opt_epochs = 0
+opt_lr = float(0)
+opt_gamma = float(0)
+opt_step = 0
+opt_act = 'sigmoid'
+opts,args = getopt.getopt(sys.argv[1:],'-h-v-s-e:-l:-g:-t:-a:',['help','verbose','summary','epochs=','lr=','gamma=','step=','act='])
+for opt_name,opt_value in opts:
+    if opt_name in ('-h','--help'):
+        print("Available parameters:")
+        print("     -h, --help                  :  print help info")
+        print("     -v, --verbose               :  verbose output")
+        print("     -s, --summary               :  output summary when training finish")
+        print("     -e epochs, --epochs=epochs  :  specify training epochs")
+        print("     -l lr, --lr=lr              :  specify initial training lr")
+        print("     -g gamma, --gamma=gamma     :  specify gamma of StepLR scheduler")
+        print("     -t step, --step=step        :  specify step_size of StepLR scheduler")
+        print("     -a act, --act=act           :  specify activation_type of MLFF_dmirror")
+        print("                                    current supported: [sigmoid, softplus]")
+        exit()
+    if opt_name in ('-v','--verbose'):
+        output_verbose = True
+    if opt_name in ('-s','--summary'):
+        output_summary = True
+    if opt_name in ('-e','--epochs'):
+        opt_epochs = int(opt_value)
+    if opt_name in ('-l','--lr'):
+        opt_lr = float(opt_value)
+    if opt_name in ('-g','--gamma'):
+        opt_gamma = float(opt_value)
+    if opt_name in ('-t','--step'):
+        opt_step = int(opt_value)
+    if opt_name in ('-a','--act'):
+        opt_act = opt_value
+    
 
-writer = SummaryWriter()
+#writer = SummaryWriter()
 torch.manual_seed(2021)
 torch.cuda.manual_seed(2021)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -71,7 +109,7 @@ def pretrain(sample_batches, premodel, optimizer, criterion):
 
     return etot_square_loss, Etot_RMSE_error, Etot_ABS_error, Etot_L2
 
-def train(sample_batches, model, optimizer, criterion):
+def train(sample_batches, model, optimizer, criterion, last_epoch):
     error=0
     Etot_label = Variable(sample_batches['output_energy'][:,:,:].float().to(device))
     atom_number = Etot_label.shape[1]
@@ -87,15 +125,24 @@ def train(sample_batches, model, optimizer, criterion):
     model = model.to(device)
     # model = model.cuda()
     # model = torch.nn.parallel.DistributedDataParallel(model)
-    model.train()
+    # model.train()
     # force_predict, Etot_predict, Ei_predict, Egroup_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
-    Etot_predict, force_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
+    Etot_predict, Force_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
     
     optimizer.zero_grad()
     # Egroup_predict = model.get_egroup(Ei_predict, egroup_weight, divider)   #[40,108,1]
 
     # Etot_deviation = Etot_predict - Etot_label     # [40,1]
-    print("training stage etot predict: " + str(Etot_predict[0]) +  "etot label: " + str(Etot_label[0]))
+    if (output_verbose or (output_summary and last_epoch)):
+        print("etot predict =============================================>")
+        print(Etot_predict)
+        print("etot label ===============================================>")
+        print(Etot_label)
+        print("force predict ============================================>")
+        print(Force_predict)
+        print("force label ==============================================>")
+        print(Force_label)
+
     # Etot_square_deviation = Etot_deviation ** 2
     # Etot_shape = Etot_label.shape[0]  #40
     # Etot_ABS_error = Etot_deviation.norm(1) / Etot_shape
@@ -104,7 +151,6 @@ def train(sample_batches, model, optimizer, criterion):
     # Ei_L2 = Etot_L2 / atom_number
 
     # Force_deviation = force_predict - Force_label
-    print("training stage force predict: " + str(force_predict[0,0]) +  "force label: " + str(Force_label[0,0]))
     # import ipdb;ipdb.set_trace()
     # print(force_predict[0,0])
     # print("==========force label==========")
@@ -138,33 +184,34 @@ def train(sample_batches, model, optimizer, criterion):
     # loss =  pm.rtLossF * force_square_loss + pm.rtLossEtot * etot_square_loss + pm.rtLossE * egroup_square_loss
     
     # ===========loss 选取torch.nn的函数==========
-    # loss = pm.rtLossF * criterion(force_predict, Force_label) + pm.rtLossEtot * criterion(Etot_predict, Etot_label) + pm.rtLossE * criterion(Egroup_predict, Egroup_label)
-    loss_F = criterion(force_predict, Force_label)
+    #loss = pm.rtLossF * criterion(force_predict, Force_label) + pm.rtLossEtot * criterion(Etot_predict, Etot_label) + pm.rtLossE * criterion(Egroup_predict, Egroup_label)
+    loss = pm.rtLossF * criterion(Force_predict, Force_label) + pm.rtLossEtot * criterion(Etot_predict, Etot_label)
+    loss_F = criterion(Force_predict, Force_label)
     loss_Etot = criterion(Etot_predict, Etot_label)
-    w_f = loss_Etot / (loss_Etot + loss_F)
-    w_e = 1 - w_f
-    w_f = pm.rtLossF
-    w_e = pm.rtLossE
-    w_f = 0
-    w_e = 1
-    loss = w_e * criterion(Etot_predict, Etot_label) + w_f * criterion(force_predict, Force_label)
-    print('*'*10)
-    print("weighted etot MSE loss: " + str(loss_Etot))
-    print("weighted force MSE loss: " + str(loss_F))
+    print("loss = %f (loss_etot = %f, loss_force = %f, RMSE_etot = %f, RMSE_force = %f)" %(loss, loss_Etot, loss_F, loss_Etot ** 0.5, loss_F ** 0.5))
+    #w_f = loss_Etot / (loss_Etot + loss_F)
+    #w_e = 1 - w_f
+    #w_f = pm.rtLossF
+    #w_e = pm.rtLossE
+    #w_f = 0
+    #w_e = 1
+    #loss = w_e * criterion(Etot_predict, Etot_label) + w_f * criterion(force_predict, Force_label)
+    #print("etot MSE loss: " + str(loss_Etot))
+    #print("force MSE loss: " + str(loss_F))
     
     # print("weighted loss: " + str(loss))
-    time_start = time.time()
+    #time_start = time.time()
     loss.backward()
     optimizer.step()
-    time_end = time.time()
-    print("update grad time:", time_end - time_start, 's')
+    #time_end = time.time()
+    #print("update grad time:", time_end - time_start, 's')
 
     # error = error + float(loss.item())
     # return loss, force_square_loss, etot_square_loss, egroup_square_loss, \
     #     Force_RMSE_error, Force_ABS_error, Force_L2, Etot_RMSE_error, Etot_ABS_error, Etot_L2, \
     #          Egroup_RMSE_error, Egroup_ABS_error, Egroup_L2
 
-    return loss, loss_F, loss_Etot
+    return loss
 
 def valid(sample_batches, model, criterion):
     error=0
@@ -250,7 +297,9 @@ loader_valid = Data.DataLoader(torch_valid_data, batch_size=1, shuffle=False)
 
 # ==========================part2:指定模型参数==========================
 
-n_epoch = 500
+n_epoch = 25
+if (opt_epochs != 0):
+    n_epoch = opt_epochs
 learning_rate = 0.1
 weight_decay = 0.9
 weight_decay_epoch = 10
@@ -259,9 +308,23 @@ if not os.path.exists(direc):
     os.makedirs(direc) 
 
 # for Scheduler
-LR_base = 0.8
-LR_gamma = 0.5
-LR_milestones = [1000, 1500, 1700, 1800, 1900, 2000]
+LR_base = 0.1
+if (opt_lr != 0.):
+    LR_base = opt_lr
+LR_gamma = 0.9
+if (opt_gamma != 0.):
+    LR_gamma = opt_gamma
+LR_step = 100
+if (opt_step != 0):
+    LR_step = opt_step
+
+print("Training: n_epoch = %d" %n_epoch)
+print("Training: LR_base = %f" %LR_base)
+print("Training: LR_gamma = %f" %LR_gamma)
+print("Training: LR_step = %d" %LR_step)
+
+
+#LR_milestones = [1000, 1500, 1700, 1800, 1900, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000]
 #LR_tmax=200
 #LR_eta_min=0.05
 #LR_factor1 = 1.1
@@ -350,7 +413,7 @@ if pm.isNNfinetuning == True:
     # import ipdb; ipdb.set_trace()
     # model = MLFFNet(data_scalers)
     # model = LNNet()
-    model = MLFF_dmirror()
+    model = MLFF_dmirror(opt_act)
 
     # if torch.cuda.device_count() > 1:
         # model = nn.DataParallel(model)
@@ -361,7 +424,8 @@ if pm.isNNfinetuning == True:
     #                            steps_per_epoch=LR_steps, epochs=LR_epochs)
     #scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=LR_factor)
     #scheduler1 = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', factor=LR_factor1)
-    scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=LR_milestones, gamma=LR_gamma)
+    #scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=LR_milestones, gamma=LR_gamma)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=LR_step, gamma=LR_gamma)
     #scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=LR_tmax, eta_min=LR_eta_min)
     #scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=LR_gamma)
     start = time.time()
@@ -386,10 +450,13 @@ if pm.isNNfinetuning == True:
 
     
     for epoch in range(start_epoch, n_epoch + 1):
-        print("epoch " + str(epoch))
-        start = time.time()
+        if (epoch == n_epoch):
+            last_epoch = True
+        else:
+            last_epoch = False
         lr = optimizer.param_groups[0]['lr']
-        print("learning rate:" + str(lr))
+        print("\n<-------------------------  epoch %d (lr=%f) ------------------------->" %(epoch, lr))
+        start = time.time()
         loss_function_err = 0
         train_epoch_force_square_loss = 0
         train_epoch_etot_square_loss = 0
@@ -401,7 +468,7 @@ if pm.isNNfinetuning == True:
             # loss, force_square_loss, etot_square_loss, egroup_square_loss, \
             # Force_RMSE_error, Force_ABS_error, Force_L2, Etot_RMSE_error, Etot_ABS_error, Etot_L2, \
             #     Egroup_RMSE_error, Egroup_ABS_error, Egroup_L2 = train(sample_batches, model, optimizer, nn.MSELoss())
-            loss, loss_F, loss_Etot = train(sample_batches, model, optimizer, nn.MSELoss())
+            loss = train(sample_batches, model, optimizer, nn.MSELoss(), last_epoch)
             # import ipdb; ipdb.set_trace()
             # Log train/loss to TensorBoard at every iteration
             n_iter = (epoch - 1) * len(loader_train) + i_batch + 1
@@ -442,7 +509,9 @@ if pm.isNNfinetuning == True:
         # valid_epoch_force_RMSE_loss = 0
         # valid_epoch_etot_RMSE_loss = 0
         # valid_epoch_egroup_RMSE_loss = 0
+        scheduler.step()
         
+        """
         for i_batch, sample_batches in enumerate(loader_valid):
             # error, force_square_loss, etot_square_loss, egroup_square_loss, \
             # Force_RMSE_error, Force_ABS_error, Force_L2, Etot_RMSE_error, Etot_ABS_error, Etot_L2, \
@@ -507,3 +576,4 @@ if pm.isNNfinetuning == True:
                 print("Early stopping")
                 break
 writer.close()
+"""
