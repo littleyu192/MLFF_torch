@@ -144,6 +144,8 @@
       num=num+1
       feat_all(num,iat1)=feat2(k,itype,iat1)
       dfeat_all(num,iat1,1:nneigh,:)=dfeat2(k,itype,iat1,1:nneigh,:)
+      print *, 'dfeat_all(num,iat1,1:nneigh,:)'
+      print *, dfeat_all(num,iat1,1:nneigh,:), num, iat1, nneigh
       enddo
       enddo
 

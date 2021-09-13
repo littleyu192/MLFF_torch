@@ -43,7 +43,7 @@
        endif
        enddo
        if(itype_atom(i).eq.0) then
-         write(6,*) "this atom type didn't found", itype_atom(i)
+         write(6,*) "this atom type didn't found", iatom(i),iat_type(1:ntype)
          stop
        endif
       enddo

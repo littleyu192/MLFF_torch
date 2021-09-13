@@ -40,11 +40,10 @@ genFeatDir = r'./gen_feature'
 mdImageFileDir=r'./MD'                              #设置md的初始image的文件所在的文件夹  default:'.'
 
 #训练时需要打开
-#isCalcFeat=True
-#isFitLinModel=True
-
-#isNNpretrain=False
-#isNNfinetuning=True
+isCalcFeat=True
+isFitLinModel=True
+isNNpretrain=False
+isNNfinetuning=True
 
 #isClassify=True
 #isRunMd=True                                   #是否训练运行md  default:False
@@ -53,10 +52,10 @@ mdImageFileDir=r'./MD'                              #设置md的初始image的�
 #isFitVdw=True
 
 #NN预测时需要打开
-isNewMd100=True
-md_num_process = 1   # mpirun -n ${md_num_process} main_MD.x
-is_md100_egroup = False
-is_md100_show_X11_fig = False
+#isNewMd100=True
+#md_num_process = 12   # mpirun -n ${md_num_process} main_MD.x
+#is_md100_egroup = False
+#is_md100_show_X11_fig = False
 
 #isRunMd100_nn=True
 #inference=True
@@ -166,8 +165,8 @@ isMdProfile=False
 gpu_mem  = 0.9       # tensorflow used gpu memory
 cuda_dev = '0'       # unoccupied gpu, using 'nvidia-smi' cmd
 cupyFeat=True
-torch_dtype = 'float32'
-tf_dtype = 'float32' # dtype of tensorflow trainning, 'float32' faster than 'float64'
+torch_dtype = 'float64'
+tf_dtype = 'float64' # dtype of tensorflow trainning, 'float32' faster than 'float64'
 #================================================================================
 # NN model related
 activation_func='softplus'     # could choose 'softplus' and 'elup1' now
@@ -189,7 +188,7 @@ train_stage = 2      # only 1 or 2, 1 is begining training from energy and then 
 train_verb = 0       
 
 learning_rate= 1e-3
-batch_size = 10       
+batch_size = 40       
 #rtLossE      = 0.6     # weight for energy, NN fitting 各个原子能量所占的权重
 #rtLossF      = 0.2     # weight for force, NN fitting 各个原子所受力所占的权重
 #rtLossEtot   = 0.2

@@ -35,7 +35,7 @@
       real*8 feat_all(nfeat0m,natom),dfeat_allR(nfeat0m,natom,m_neigh,3)
       real*8 dfeat_all(nfeat0m,natom,m_neigh,3)
       integer nfeat_atom(natom)
-      
+
 
       num_neigh_alltype=0
       do iat=1,natom
@@ -57,6 +57,7 @@
       enddo
       num_neigh_alltype(iat)=num
       enddo
+
 !ccccccccccccccccccccccccccccccccccccccccc
 
       pi=4*datan(1.d0)
@@ -100,6 +101,7 @@
 1000  continue
 3000  continue
 
+
 !   Now, the three body feature
 !ccccccccccccccccccccccccccccccccccccc
 
@@ -130,6 +132,7 @@
 
 5000  continue
 
+
 !ccccccccccccccccccccccccccccccccccc
 !  Now, we have to redefine the dfeat_all in another way. 
 !  dfeat_all(i,iat,jneigh,3) means:
@@ -138,6 +141,7 @@
 !  d_ith_feat_of_jth_neigh/d_R(iat)
 !cccccccccccccccccccccccccccccccccccccc
       dfeat_allR=0.d0
+      !dfeat_all=0.d0
 
       do iat=1,natom
       do j=1,num_neigh_alltype(iat)
@@ -155,6 +159,10 @@
  
       do ii_f=1,nfeat_atom(iat)
       dfeat_allR(ii_f,iat2,j2,:)=dfeat_all(ii_f,iat,j,:)
+      !dfeat_all(ii_f,iat,j,:)=dfeat_allR(ii_f,iat2,j2,:)
+
+      !print *, 'dfeat_allR(ii_f,iat2,j2,:)'
+      !print *, dfeat_allR(ii_f,iat2,j2,:), ii_f, iat2, j2
 !ccc Note, dfeat_allR(i,iat2,j2,3), it can have more i then nfeat_atom(iat2), 
 ! since it is the nfeat of j2_neighbore
       enddo
@@ -166,6 +174,7 @@
       enddo
       enddo
 !ccccccccccccccccccccccccccccccccccccc
+
       return
       end subroutine find_feature_2b_type3
 

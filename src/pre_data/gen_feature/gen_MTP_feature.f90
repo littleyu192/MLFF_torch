@@ -1,4 +1,4 @@
-PROGRAM gen_3b_feature
+PROGRAM gen_MTP_feature
     IMPLICIT NONE
     INTEGER :: ierr
     integer :: move_file=1101
@@ -15,19 +15,15 @@ PROGRAM gen_3b_feature
     character(len=50) char_tmp(20)
     character(len=200) trainSetFileDir(200)
     character(len=200) trainSetDir
-    character(len=200) MOVEMENTDir,dfeatDir,infoDir,trainDataDir,inquirepos2
+    character(len=200) MOVEMENTDir,dfeatDir,infoDir,trainDataDir,inquirepos1
     integer(8) inp
     integer sys_num,sys,recalc_grid
 
     integer,allocatable,dimension (:,:,:) :: list_neigh,iat_neigh,iat_neigh_M
     integer,allocatable,dimension (:,:) :: num_neigh
     real*8,allocatable,dimension (:,:,:,:) :: dR_neigh
-    real*8,allocatable,dimension (:,:) :: grid31,grid32
-    real*8,allocatable,dimension (:,:,:) :: grid31_2,grid32_2
-    integer n2b_t,n3b1_t,n3b2_t,it
 
     real*8 Rc_M
-    integer n3b1m,n3b2m,kkk,ii
 
     real*8,allocatable,dimension (:,:) :: feat
     real*8,allocatable,dimension (:,:) :: feat1
@@ -62,11 +58,26 @@ PROGRAM gen_3b_feature
     real*8, allocatable, dimension (:,:) :: dfeat_tmp
     integer,allocatable, dimension (:) :: iat_tmp,jneigh_tmp,ifeat_tmp
     integer ii_tmp,jj_tmp,iat2,num_tmp,num_tot,i_tmp,jjj,jj
-    integer iflag_grid,iflag_ftype
     real*8 fact_grid,dR_grid1,dR_grid2
 
-    real*8 Rc_type(100), Rc2_type(100), Rm_type(100),fact_grid_type(100),dR_grid1_type(100),dR_grid2_type(100)
-    integer iflag_grid_type(100),n3b1_type(100),n3b2_type(100)
+    real*8 Rc_type(100), Rm_type(100)
+
+!cccccccccccccccccccccccccccccccccccccccccccccccc
+    character*1 txt
+    integer numT_all(20000,10)
+    integer rank_all(4,20000,10),mu_all(4,20000,10),jmu_b_all(4,20000,10),itype_b_all(4,20000,10)
+    integer indi_all(5,4,20000,10),indj_all(5,4,20000,10)
+    integer jmu_b(10,5000),itype_b(10,5000)
+    integer numCC_type(10)
+
+
+    integer indi(10,10),indj(10,10),ind(10,10)
+    integer mu(10),rank(10)
+    integer iflag_ti(10,10),iflag_tj(10,10)
+    integer nMTP_type(100)
+    integer numCC,kk,numC,kkk,kkc
+    integer n2bm,ii,n2b_type(10)
+    integer numc0
 
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
     INTERFACE
@@ -79,29 +90,130 @@ PROGRAM gen_3b_feature
     END INTERFACE
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
-    open(10,file="input/gen_3b_feature.in",status="old",action="read")
+    open(10,file="input/gen_MTP_feature.in",status="old",action="read")
     rewind(10)
     read(10,*) Rc_M,m_neigh
     read(10,*) ntype
-    do i=1,ntype
-    read(10,*) iat_type(i)
-    read(10,*) Rc_type(i),Rc2_type(i),Rm_type(i),iflag_grid_type(i),fact_grid_type(i),dR_grid1_type(i),dR_grid2_type(i)
-    read(10,*) n3b1_type(i),n3b2_type(i)
 
-     if(Rc_type(i).gt.Rc_M) then
+    do 100  itype=1,ntype
+    read(10,*) iat_type(itype)
+    read(10,*) Rc_type(itype),Rm_type(itype)
+     if(Rc_type(itype).gt.Rc_M) then
       write(6,*) "Rc_type must be smaller than Rc_M, gen_3b_feature.in",i,Rc_type(i),Rc_M
       stop
      endif
-     if(Rc2_type(i).gt.2*Rc_type(i)) then
-      write(6,*) "Rc2_type must be smaller than 2*Rc_type, gen_3b_feature.in",i,Rc_type(i),Rc2_type(i)
-      stop
-     endif
 
-    enddo
+    read(10,*) nMTP_type(itype)   ! number of MTP type (line, each line can be expanded to many MTP)
+
+    numCC=0
+    do 99 kkk=1,nMTP_type(itype)
+
+     read(10,*) num
+     backspace(10)
+     if(num.gt.4) then
+      write(6,*) "we only support contraction upto 4 tensors,stop",num
+      stop
+      endif
+ !  Cannot do double loop with txt
+        if(num.eq.1) then
+        read(10,*,iostat=ierr) num,(mu(i),i=1,num),(rank(i),i=1,num),&
+        txt,(ind(j,1),j=1,rank(1)),txt
+        elseif(num.eq.2) then
+        read(10,*,iostat=ierr) num,(mu(i),i=1,num),(rank(i),i=1,num),&
+        txt,(ind(j,1),j=1,rank(1)),txt,txt,(ind(j,2),j=1,rank(2)),txt
+        elseif(num.eq.3) then
+        read(10,*,iostat=ierr) num,(mu(i),i=1,num),(rank(i),i=1,num),&
+        txt,(ind(j,1),j=1,rank(1)),txt,txt,(ind(j,2),j=1,rank(2)),txt, &
+        txt,(ind(j,3),j=1,rank(3)),txt
+        elseif(num.eq.4) then
+        read(10,*,iostat=ierr) num,(mu(i),i=1,num),(rank(i),i=1,num),&
+        txt,(ind(j,1),j=1,rank(1)),txt,txt,(ind(j,2),j=1,rank(2)),txt, &
+        txt,(ind(j,3),j=1,rank(3)),txt,txt,(ind(j,4),j=1,rank(4)),txt
+        endif
+
+      if(ierr.ne.0) then
+        write(6,*) "the tensor contraction line is not correct",kkk,itype
+        stop
+        endif
+
+        do i=1,num
+        do j=1,rank(i)
+        indi(j,i)=ind(j,i)/10
+        indj(j,i)=ind(j,i)-indi(j,i)*10
+        enddo
+        enddo
+
+        iflag_ti=0
+        iflag_tj=0
+        do i=1,num
+        do j=1,rank(i)
+        if(iflag_ti(indj(j,i),indi(j,i)).ne.0) then
+        write(6,*) "contraction error", i,j,indj(j,i),indi(j,i)
+        stop
+        endif
+        iflag_ti(indj(j,i),indi(j,i))=i
+        iflag_tj(indj(j,i),indi(j,i))=j
+        enddo
+        enddo
+
+        do i=1,num
+        do j=1,rank(i)
+        if(iflag_ti(j,i).ne.indi(j,i).or.iflag_tj(j,i).ne.indj(j,i)) then
+        write(6,*) "contraction correspondence confluct",i,j
+        stop
+        endif
+        enddo
+        enddo
+
+        call get_expand_MT(ntype,num,indi,indj,mu,rank,numC,jmu_b,itype_b)
+! numC is the MTP of this line (after expansion, due mu, and ntype)
+
+        numc0=1
+        do i=1,num
+        numc0=(1+mu(i))*numc0*ntype
+        enddo
+
+        write(6,"('num_feat,line(kkk,itype,numc,numc(before reduce)',4(i4,1x))") kkk,itype,numc,numc0
+        if(numCC+numc.gt.20000) then
+         write(6,*) "too many features",numCC+numC,itype
+        stop
+        endif
+
+        do kk=1,numC
+        kkc=numCC+kk
+        numT_all(kkc,itype)=num       ! num is the number of tensor in this line
+          do i=1,num
+          rank_all(i,kkc,itype)=rank(i)
+          mu_all(i,kkc,itype)=mu(i)
+          jmu_b_all(i,kkc,itype)=jmu_b(i,kk)  ! the mu of this kk
+          itype_b_all(i,kkc,itype)=itype_b(i,kk)  ! the type of this kk
+          enddo
+          do i=1,num
+          do j=1,rank(i) 
+          indi_all(j,i,kkc,itype)=indi(j,i)
+          indj_all(j,i,kkc,itype)=indj(j,i)
+          enddo
+          enddo
+       enddo
+       numCC=numCC+numc
+99     continue
+       numCC_type(itype)=numCC    ! numCC_type is the total MTP term of this itype
+
+       write(6,*) "numCC_type",itype,numCC_type(itype)
+      
+100   continue
     read(10,*) E_tolerance
-    read(10,*) iflag_ftype
-    read(10,*) recalc_grid
     close(10)
+
+    write(6,*) "iat_type",iat_type(1:ntype)
+
+      nfeat0m=0
+      do itype=1,ntype
+      if(numCC_type(itype).gt.nfeat0m) nfeat0m=numCC_type(itype)
+      nfeat0(itype)=numCC_type(itype)
+      enddo
+     write(6,*) "itype,nfeat0=",(nfeat0(itype),itype=1,ntype)
+
 
     open(13,file="input/location")
     rewind(13)
@@ -112,175 +224,13 @@ PROGRAM gen_3b_feature
     read(13,'(a200)') trainSetFileDir(i)    
     enddo
     close(13)
-    trainDataDir=trim(trainSetDir)//"/trainData.txt.Ftype2"
-    inquirepos2=trim(trainSetDir)//"/inquirepos2.txt"
+    trainDataDir=trim(trainSetDir)//"/trainData.txt.Ftype5"
+    inquirepos1=trim(trainSetDir)//"/inquirepos5.txt"
 !cccccccccccccccccccccccccccccccccccccccc
 
-    do i=1,ntype
-    if(iflag_ftype.eq.3.and.iflag_grid_type(i).ne.3) then
-    write(6,*) "if iflag_ftype.eq.3, iflag_grid must equal 3, stop"
-    stop
-    endif
-    enddo
-
-     n3b1m=0
-     n3b2m=0
-     do i=1,ntype
-     if(n3b1_type(i).gt.n3b1m) n3b1m=n3b1_type(i)
-     if(n3b2_type(i).gt.n3b2m) n3b2m=n3b2_type(i)
-     enddo
-
-!cccccccccccccccccccccccccccccccccccccccccccccccc
-     num=0
-     do itype2=1,ntype
-     do itype1=1,itype2
-     do k1=1,n3b1m
-     do k2=1,n3b1m
-     do k12=1,n3b2m
-     ii_f=0
-     if(itype1.ne.itype2) ii_f=1
-     if(itype1.eq.itype2.and.k1.le.k2) ii_f=1
-     if(ii_f.gt.0) then
-     num=num+1
-     endif
-     enddo
-     enddo
-     enddo
-     enddo
-     enddo
-     nfeat0m=num
-     write(6,*) "max,nfeat0m=",nfeat0m
-
-     do itype=1,ntype
-     num=0
-     do itype2=1,ntype
-     do itype1=1,itype2
-     do k1=1,n3b1_type(itype)
-     do k2=1,n3b1_type(itype)
-     do k12=1,n3b2_type(itype)
-     ii_f=0
-     if(itype1.ne.itype2) ii_f=1
-     if(itype1.eq.itype2.and.k1.le.k2) ii_f=1
-     if(ii_f.gt.0) then
-     num=num+1
-     endif
-     enddo
-     enddo
-     enddo
-     enddo
-     enddo
-     nfeat0(itype)=num
-     enddo
-     write(6,*) "itype,nfeat0=",(nfeat0(itype),itype=1,ntype)
-
 
 !cccccccccccccccccccccccccccccccccccccccccccccccccccc
-
-
 !cccccccccccccccccccccccccccccccccccccccccccccccccccc
-    allocate(grid31(0:n3b1m+1,ntype))
-    allocate(grid32(0:n3b2m+1,ntype))
-    allocate(grid31_2(2,n3b1m,ntype))
-    allocate(grid32_2(2,n3b2m,ntype))
-!cccccccccccccccccccccccccccccccccccccccccccccccccccc
-     do kkk=1,ntype    ! center atom
-
-     
-     Rc=Rc_type(kkk)
-     Rc2=Rc2_type(kkk)
-     Rm=Rm_type(kkk)
-     iflag_grid=iflag_grid_type(kkk)
-     fact_grid=fact_grid_type(kkk)
-     dR_grid1=dR_grid1_type(kkk)
-     dR_grid2=dR_grid2_type(kkk)
-     n3b1=n3b1_type(kkk)
-     n3b2=n3b2_type(kkk)
-
-!cccccccccccccccccccccccccccccccccccccccc
-
-    if(iflag_grid.eq.1.or.iflag_grid.eq.2) then
-
-    if (recalc_grid.eq.1) then
-        if(iflag_grid.eq.1) then
-        call get_grid3b_type1(grid31(0,kkk),grid32(0,kkk),Rc,Rc2,Rm,n3b1,n3b2)
-        elseif(iflag_grid.eq.2) then
-        call get_grid3b_type2(trainSetFileDir,sys_num,grid31(0,kkk),grid32(0,kkk),Rc,Rc2,Rm,n3b1,n3b2, &
-            m_neigh,ntype,iat_type,fact_grid,dR_grid1,dR_grid2,kkk)
-        endif
-        open(10,file="output/grid3b_cb12_type12."//char(kkk+48))
-        rewind(10)
-        do i=0,n3b1+1
-        write(10,*) grid31(i,kkk),0
-        write(10,*) grid31(i,kkk),1
-        write(10,*) grid31(i,kkk),0
-        enddo
-        close(10)
-
-        open(10,file="output/grid3b_b1b2_type12."//char(kkk+48))
-        rewind(10)
-        do i=0,n3b2+1
-        write(10,*) grid32(i,kkk),0 
-        write(10,*) grid32(i,kkk),1
-        write(10,*) grid32(i,kkk),0
-        enddo
-        close(10)
-      else
-        open(10,file="output/grid3b_cb12_type12."//char(kkk+48))
-        rewind(10)
-        do i=0,n3b1+1
-        read(10,*) grid31(i,kkk)
-        read(10,*) grid31(i,kkk)
-        read(10,*) grid31(i,kkk)
-        enddo
-        close(10)
-
-        open(10,file="output/grid3b_b1b2_type12."//char(kkk+48))
-        rewind(10)
-        do i=0,n3b2+1
-        read(10,*) grid32(i,kkk)
-        read(10,*) grid32(i,kkk)
-        read(10,*) grid32(i,kkk)
-        enddo
-        close(10)
-      endif      ! recalc_grid.eq.1
-
-     endif   ! iflag_grid.eq.1,2
-
-!cccccccccccccccccccccccccccccccccccccccccccc
-    if(iflag_grid.eq.3) then  
- ! for iflag_grid.eq.3, the graid is just read in. 
- ! Its format is different from above grid31, grid32. 
- ! For each point, it just have two numbers, r1,r2, indicating the region of the sin peak function.
-
-    open(13,file="output/grid3b_cb12_type3."//char(kkk+48))
-    rewind(13)
-    read(13,*) n3b1_t
-    if(n3b1_t.ne.n3b1) then
-    write(6,*) "n3b1_t.ne.n3b1,in grid31_type3", n3b1_t,n3b1
-    stop
-    endif
-    do i=1,n3b1
-    read(13,*) it,grid31_2(1,i,kkk),grid31_2(2,i,kkk)
-    if(grid31_2(2,i,kkk).gt.Rc_type(kkk)) write(6,*) "grid31_2.gt.Rc",grid31_2(2,i,kkk),Rc_type(kkk)
-    enddo
-    close(13)
-
-    open(13,file="output/grid3b_b1b2_type3."//char(kkk+48))
-    rewind(13)
-    read(13,*) n3b2_t
-    if(n3b2_t.ne.n3b2) then
-    write(6,*) "n3b2_t.ne.n3b2,in grid32_type3", n3b2_t,n3b2
-    stop
-    endif
-    do i=1,n3b2
-    read(13,*) it,grid32_2(1,i,kkk),grid32_2(2,i,kkk)
-    if(grid32_2(2,i,kkk).gt.Rc2_type(kkk)) write(6,*) "grid32_2.gt.Rc",grid32_2(2,i,kkk),Rc2_type(kkk)
-    enddo
-    close(13)
-    endif
-
-    enddo     ! kkk=1,ntype
-
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -293,8 +243,8 @@ PROGRAM gen_3b_feature
 
     do 2333 sys=1,sys_num
         MOVEMENTDir=trim(trainSetFileDir(sys))//"/MOVEMENT"
-        dfeatDir=trim(trainSetFileDir(sys))//"/dfeat.fbin.Ftype2"
-        infoDir=trim(trainSetFileDir(sys))//"/info.txt.Ftype2"
+        dfeatDir=trim(trainSetFileDir(sys))//"/dfeat.fbin.Ftype5"
+        infoDir=trim(trainSetFileDir(sys))//"/info.txt.Ftype5"
     
 
 !cccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -364,10 +314,9 @@ PROGRAM gen_3b_feature
 !cccccccccccccccccccccccccccccccccccccccccccccccccccc
      open(333,file=infoDir)
      rewind(333)
-     write(333,"(i4,3x,i3,2x,10(i4,1x))") nfeat0M,ntype,(nfeat0(ii),ii=1,ntype)
+     write(333,"(i4,2x,i2,3x,10(i4,1x))") nfeat0M,ntype,(nfeat0(ii),ii=1,ntype)
      write(333,*) natom
     ! write(333,*) iatom
-
 
 
       num_tot=0
@@ -479,13 +428,12 @@ PROGRAM gen_3b_feature
      endif
     enddo
       if(itype_atom(i).eq.0) then
-      write(6,*) "this atom type didn't found", itype_atom(i)
+      write(6,*) "this atom type didn't found", iatom(i),iat_type(1:ntype)
+      write(6,*) "ntype=",ntype
       stop
       endif
      enddo
 !ccccccccccccccccccccccccccccccccccccccccccc
-
-   
 
 
     call find_neighbore(iatom,natom,xatom,AL,Rc_type,num_neigh,list_neigh, &
@@ -499,6 +447,7 @@ PROGRAM gen_3b_feature
       num_neigh_alltype=0
       max_neigh_M=-1
       num_neigh_alltypeM=0
+
       do iat=1,natom
       list_neigh_alltype(1,iat)=iat
       list_neigh_alltypeM(1,iat)=iat
@@ -529,36 +478,24 @@ PROGRAM gen_3b_feature
       enddo
       enddo
 
+!ccccccccccccccccccccccccccccccccccccccc
+
 
       num_neigh_alltype(iat)=num
       num_neigh_alltypeM(iat)=num_M
       if(num.gt.max_neigh) max_neigh=num
       if(num_M.gt.max_neigh_M) max_neigh_M=num_M
-      enddo
+      enddo  ! iat
 
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 ! This num_neigh_alltype(iat) include itself !
     dfeat=0.d0
     feat=0.d0
-    if(iflag_ftype.eq.1) then
-! iflag_ftype.eq.1, the sin peak span over two grid points
-    call find_feature_3b_type1(natom,itype_atom,Rc_type,Rc2_type,n3b1_type,n3b2_type,num_neigh,  &
-       list_neigh,dR_neigh,iat_neigh,ntype,grid31,grid32, &
-       feat,dfeat,nfeat0m,m_neigh,n3b1m,n3b2m,nfeat_atom)
-    endif
-    if(iflag_ftype.eq.2) then
-!  iflag_ftype.eq.2, the sin peak span over three grid points
-    call find_feature_3b_type2(natom,itype_atom,Rc_type,Rc2_type,n3b1_type,n3b2_type,num_neigh,  &
-       list_neigh,dR_neigh,iat_neigh,ntype,grid31,grid32, &
-       feat,dfeat,nfeat0m,m_neigh,n3b1m,n3b2m,nfeat_atom)
-    endif
-    if(iflag_ftype.eq.3) then
-!  iflag_ftype.eq.3, the sin peak span over the two ends specified by grid31_2,grid32_2
-!  So, there could be many overlaps between different sin peaks
-    call find_feature_3b_type3(natom,itype_atom,Rc_type,Rc2_type,n3b1_type,n3b2_type,num_neigh,  &
-       list_neigh,dR_neigh,iat_neigh,ntype,grid31_2,grid32_2, &
-       feat,dfeat,nfeat0m,m_neigh,n3b1m,n3b2m,nfeat_atom)
-    endif
+    call find_feature_MTP(natom,itype_atom,Rc_type,Rm_type,num_neigh,  &
+       list_neigh,dR_neigh,iat_neigh, &
+       feat,dfeat,nfeat0m,m_neigh,nfeat_atom,  &
+       numCC_type,numT_all,mu_all,rank_all,jmu_b_all,itype_b_all,indi_all,indj_all,ntype)
+
 !cccccccccccccccccccccccccccccccccccccccccccccccccccc
 !cccccccccccccccccccccccccccccccccccccccccccccccccccc
 !cccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -567,7 +504,7 @@ PROGRAM gen_3b_feature
 
     num_tot=num_tot+natom
 
-    open(44,file=inquirepos2,position="append")
+    open(44,file=inquirepos1,position="append")
     Inquire(25,pos=inp)
     write(44,"(A,',',I5,',',I20)") dfeatDir, num_step, inp
     close(44)
@@ -609,13 +546,9 @@ PROGRAM gen_3b_feature
     num_tmp=num_tmp+1
     dfeat_tmp(:,num_tmp)=dfeat(ii_tmp,iat2,jj_tmp,:)
     iat_tmp(num_tmp)=iat2
-
 !    jneigh_tmp(num_tmp)=jj_tmp
 
-
-! store the max neigh list position
     jneigh_tmp(num_tmp)=map2neigh_alltypeM(jj_tmp,iat2)
-
 
     ifeat_tmp(num_tmp)=ii_tmp
     endif
@@ -635,7 +568,7 @@ PROGRAM gen_3b_feature
 
     open(55,file=trainDataDir,position="append")
     do i=1,natom
-    write(55,"(i5,',',i3,',',f12.7,',', i3,<nfeat0m>(',',f15.10))")  &
+    write(55,"(i5,',',i3,',',f12.7,',', i3,<nfeat0m>(',',E15.8))")  &
        i,iatom(i),Eatom(i),nfeat_atom(i),(feat(j,i),j=1,nfeat_atom(i))
     enddo
     close(55)

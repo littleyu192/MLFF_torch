@@ -123,7 +123,6 @@ class MdImage(Atoms,Image):
         
         with open(movementPath,'r') as sourceFile:
             numOfAtoms=int(sourceFile.readline().split()[0])
-        
         with open(movementPath,'r') as sourceFile:
             currentIndex=-1
             while True:

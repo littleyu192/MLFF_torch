@@ -111,7 +111,10 @@ program main_MD
          nfeat_type=nfeat_type_n
          ifeat_type=ifeat_type_n
          endif
-        
+         
+         print *, "nfeat_type_n", nfeat_type_n
+        !  print *, "iatom", iatom
+         print *, "natom", natom
         
          is_reset=.true.
          do kk = 1, nfeat_type

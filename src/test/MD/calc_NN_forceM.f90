@@ -232,6 +232,8 @@ module calc_NN
         do itype=1,ntype
         do ii=1,nlayer
         read(12,*) txt,nodeNN(ii,itype),nodeNN(ii+1,itype)
+        print *, "node NN", nodeNN(1, itype) 
+        print *, "node NN", nfeat1(itype) 
         if(ii.eq.1.and.nodeNN(1,itype).ne.nfeat1(itype)) then
         write(6,*) "nodeNN in Wij.txt not correct",nodeNN(1,itype),nfeat1(itype)
         stop
@@ -270,6 +272,8 @@ module calc_NN
         endif
         do j=1,ntmp
         read(12,*) j1,j2, a_scaler(j,itype)
+        !print *,'a_scale(j,itype) info'
+        !print *, a_scaler(j,itype)
         enddo
         read(12,*) txt,ntmp
         if(ntmp.ne.nfeat1(itype)) then
@@ -278,9 +282,10 @@ module calc_NN
         endif
         do j=1,ntmp
         read(12,*) j1,j2,b_scaler(j,itype)
+        !print *, 'b_scaler info'
+        !print *, b_scaler(j,itype)
         enddo
         enddo
-   
         close(12)
 
 !********************add_force****************
@@ -332,7 +337,6 @@ module calc_NN
         logical,intent(in) :: is_reset
         integer(4) :: image_size
         integer :: natom_tmp
-        
         
         image_size=natom_tmp
         if (is_reset .or. (.not. allocated(iatom)) .or. image_size/=natom) then
@@ -447,7 +451,15 @@ module calc_NN
             itype = iatom_type(i)
             num(itype) = num(itype) + 1
             do j=1,nfeat1(itype)
+            print *, '=======initial feat(j,iat1)======='
+            print * ,feat(j, iat1)
+            print *, 'a_scaler(j,itype) info'
+            print *, a_scaler(j,itype)
+            print *, 'b_scaler(j,itype) info'
+            print *, b_scaler(j,itype)
             feat_type(j,num(itype),itype) = feat(j, iat1)*a_scaler(j,itype)+b_scaler(j,itype)
+            print *, 'feat(j,iat1) after a&b scaling'
+            print * ,feat_type(j,num(itype),itype)
             enddo
          endif
          enddo
@@ -458,6 +470,9 @@ module calc_NN
          do i=1,num(itype)
          do j=1,nodeNN(1,itype)
          f_in(j,i,1)=feat_type(j,i,itype)
+         print *,'********input, f_in(j,i,1), j(nodeNN) && i(type)********'
+         print *, j,i
+         print *, f_in(j,i,1)
          enddo
          enddo
 
@@ -488,8 +503,15 @@ module calc_NN
          enddo
          endif
 
+        print *, 'f_in(1,1,ii+1) = Wij_nn(1,1,ii,itype) * f_out(1,1,ii)'
+        print *, Wij_nn(1,1,ii,itype)
+        print *, '~~~~~~~~'
+        print *, f_out(1,1,ii)
+        print *, '~~~~~~~~'
+        print *, f_in(1,1,ii+1)
          call dgemm('T', 'N', nodeNN(ii+1,itype),num(itype),nodeNN(ii,itype), 1.d0,  &
            Wij_nn(1,1,ii,itype),nodeMM,f_out(1,1,ii),nodeMM,0.d0,f_in(1,1,ii+1),nodeMM)
+        ! f_in = Wij_nn * f_out + f_in 正向
 
          do i=1,num(itype)
          do j=1,nodeNN(ii+1,itype)
@@ -506,17 +528,36 @@ module calc_NN
          do i=1,num(itype)
          do j=1,nodeNN(nlayer,itype)
          f_back(j,i,nlayer)=Wij_nn(j,1,nlayer,itype)*f_d(j,i,nlayer)
+         print *,'f_back(j,i,nlayer)=Wij_nn(j,1,nlayer,itype)*f_d(j,i,nlayer)j(Node)i(type)'
+         print *, Wij_nn(j,1,nlayer,itype)
+         print *, '~~~~~~~~'
+         print *, f_d(j,i,nlayer)
+         print *, '~~~~~~~~'
+         print *, f_back(j,i,nlayer)
          enddo
          enddo
 
          do 200 ii=nlayer,2,-1
          
+         print *, 'f_back(1,1,ii-1)=Wij_nn(1,1,ii-1,itype)*f_back(1,1,ii)'
+         print *, Wij_nn(1,1,ii-1,itype)
+         print *, '~~~~~~~~'
+         print *, f_back(1,1,ii)
+         print *, '~~~~~~~~'
+         print *, f_back(1,1,ii-1)
          call dgemm('N', 'N', nodeNN(ii-1,itype),num(itype),nodeNN(ii,itype), 1.d0,  &
           Wij_nn(1,1,ii-1,itype),nodeMM,f_back(1,1,ii),nodeMM,0.d0,f_back(1,1,ii-1),nodeMM)
+        ! f_back = Wij_nn * f_back + f_back
 
          if(ii-1.ne.1) then
          do i=1,num(itype)
          do j=1,nodeNN(ii-1,itype)
+         print *, 'f_back(j,i,ii-1)=f_back(j,i,ii-1)*f_d(j,i,ii-1)'
+         print *, f_back(j,i,ii-1)
+         print *, '~~~~~~~~'
+         print *, f_d(j,i,ii-1)
+         print *, '~~~~~~~~'
+         print *, f_back(j,i,ii-1)
          f_back(j,i,ii-1)=f_back(j,i,ii-1)*f_d(j,i,ii-1)
          enddo
          enddo
@@ -527,6 +568,8 @@ module calc_NN
 
          do i=1,num(itype)
          do j=1,nfeat1(itype)
+         print *, 'dEdf_type(j,i,itype), j&&i'
+         print *, dEdf_type(j,i,itype), j,i
          dEdf_type(j,i,itype)=f_back(j,i,1)
          enddo
          enddo
@@ -566,7 +609,12 @@ module calc_NN
             sum1=0.d0
             sum2=0.d0
             sum3=0.d0
+            print *, 'dfeat(j,iat1,jj,1),dfeat(j,iat1,jj,2),dfeat(j,iat1,jj,3) range in nfeat'
             do j=1,nfeat1(itype)
+            !print *, '#####a_scaler(j,itype),dEdf_ps=post scaling'
+            !print *, a_scaler(j,itype)
+            
+            print *, dfeat(j,iat1,jj,1),dfeat(j,iat1,jj,2),dfeat(j,iat1,jj,3)
             sum1=sum1+dEdf_type(j,num(itype),itype)*dfeat(j,iat1,jj,1)*a_scaler(j,itype)
             sum2=sum2+dEdf_type(j,num(itype),itype)*dfeat(j,iat1,jj,2)*a_scaler(j,itype)
             sum3=sum3+dEdf_type(j,num(itype),itype)*dfeat(j,iat1,jj,3)*a_scaler(j,itype)
@@ -637,8 +685,12 @@ module calc_NN
        endif
        enddo
 
-
-
+       print *, 'force pred tmp (1,i) info'
+       print *, force_pred_tmp(1,i)
+        print *, 'energy before +dE'
+        print *, energy_pred_tmp(i)
+        print *, 'dE, dFx,dFy,dFz,info'
+        print *, dE, dFx, dFy, dFz
        energy_pred_tmp(i)=energy_pred_tmp(i)+dE
        force_pred_tmp(1,i)=force_pred_tmp(1,i)+dFx   ! Note, assume force=dE/dx, no minus sign
        force_pred_tmp(2,i)=force_pred_tmp(2,i)+dFy
@@ -682,7 +734,8 @@ module calc_NN
 
        call mpi_allreduce(energy_pred_tmp,energy_pred_NN,natom,MPI_REAL8,MPI_SUM,MPI_COMM_WORLD,ierr)
        call mpi_allreduce(force_pred_tmp,force_pred_NN,3*natom,MPI_REAL8,MPI_SUM,MPI_COMM_WORLD,ierr)
-
+        !print *, 'force_pred_tmp'
+        !print *, force_pred_tmp
 
 
        mean=0.0

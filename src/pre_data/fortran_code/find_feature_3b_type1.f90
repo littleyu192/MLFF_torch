@@ -296,6 +296,7 @@
 !  d_ith_feat_of_jth_neigh/d_R(iat)
 !cccccccccccccccccccccccccccccccccccccc
       dfeat_allR=0.d0
+      !dfeat_all=0.d0
 
       do iat=1,natom
       do j=1,num_neigh_alltype(iat)
@@ -313,6 +314,8 @@
  
       do ii_f=1,nfeat_atom(iat)
       dfeat_allR(ii_f,iat2,j2,:)=dfeat_all(ii_f,iat,j,:)
+      !dfeat_all(ii_f,iat,j,:)=dfeat_allR(ii_f,iat2,j2,:)
+
 !ccc Note, dfeat_allR(i,iat2,j2,3), it can have more i then nfeat_atom(iat2), 
 ! since it is the nfeat of j2_neighbore
       enddo

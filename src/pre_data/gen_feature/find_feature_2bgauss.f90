@@ -1,6 +1,6 @@
-      subroutine find_feature_2b_type1(natom,itype_atom,Rc,n2b, &
+      subroutine find_feature_2bgauss(natom,itype_atom,Rc,n2b, &
         num_neigh,list_neigh, &
-        dR_neigh,iat_neigh,ntype,grid2, &
+        dR_neigh,iat_neigh,ntype,grid2,wgauss, &
         feat_all,dfeat_allR,nfeat0m,m_neigh,n2bm,nfeat_atom)
       implicit none
       integer ntype
@@ -17,8 +17,9 @@
       integer iflag,i,j,num,iat,itype
       integer i1,i2,i3,itype1,itype2,j1,j2,iat1,iat2
       real*8 d,dx1,dx2,dx3,dx,dy,dz,dd
-      real*8 grid2(0:n2bm+1,ntype)
+      real*8 grid2(200,50),wgauss(200,50)
       real*8 pi,pi2,x,f1
+      real*8 Rt,f2,ff,dt
       integer iflag_grid
       integer itype0,nfeat0m,n2bm
 
@@ -78,38 +79,31 @@
       dd=dR_neigh(1,j,itype,iat)**2+dR_neigh(2,j,itype,iat)**2+dR_neigh(3,j,itype,iat)**2
       d=dsqrt(dd)
 
+      if(d.gt.Rc(itype0)) goto 1001
 
-      do k=1,n2b(itype0)+1
-      if(grid2(k,itype0).ge.d) exit
-      enddo
-      k=k-1
+      do k=1,n2b(itype0)
 
-      if(k.gt.n2b(itype0))  k=n2b(itype0)
+      Rt=wgauss(k,itype0)
+      dt=grid2(k,itype0)
 
-      if(k.lt.n2b(itype0)) then
-      x=(d-grid2(k,itype0))/(grid2(k+2,itype0)-grid2(k,itype0))
-      y=(x-0.5d0)*pi2
-      f1=0.5d0*(cos(y)+1)
-      feat2(k+1,itype,iat)=feat2(k+1,itype,iat)+f1
-      y2=-pi*sin(y)/(d*(grid2(k+2,itype0)-grid2(k,itype0)))
-      dfeat2(k+1,itype,iat,jj,:)=dfeat2(k+1,itype,iat,jj,:)+y2*dR_neigh(:,j,itype,iat)
-      dfeat2(k+1,itype,iat,1,:)=dfeat2(k+1,itype,iat,1,:)-y2*dR_neigh(:,j,itype,iat)
+
+      f1=exp(-((d-dt)/Rt)**2)
+      x=pi*d/Rc(itype0)
+      f2=0.5*(cos(x)+1)
+      ff=-2*f1*f2/Rt**2*(d-dt)/d  ! derivative on f1
+      ff=ff-0.5*sin(x)*pi/Rc(itype0)*f1/d   ! derivative on f2
+
+      feat2(k,itype,iat)=feat2(k,itype,iat)+f1*f2
+
+      dfeat2(k,itype,iat,jj,:)=dfeat2(k,itype,iat,jj,:)+ff*dR_neigh(:,j,itype,iat)
+      dfeat2(k,itype,iat,1,:)=dfeat2(k,itype,iat,1,:)-ff*dR_neigh(:,j,itype,iat)
 ! Note, (k+1,itype) is the feature inde
-      endif
 
-      if(k.gt.0) then
-      x=(d-grid2(k-1,itype0))/(grid2(k+1,itype0)-grid2(k-1,itype0))
-      y=(x-0.5d0)*pi2
-      f1=0.5d0*(cos(y)+1)
-      feat2(k,itype,iat)=feat2(k,itype,iat)+f1
-      y2=-pi*sin(y)/(d*(grid2(k+1,itype0)-grid2(k-1,itype0)))
-      dfeat2(k,itype,iat,jj,:)=dfeat2(k,itype,iat,jj,:)+y2*dR_neigh(:,j,itype,iat)
-      dfeat2(k,itype,iat,1,:)=dfeat2(k,itype,iat,1,:)-y2*dR_neigh(:,j,itype,iat)
-!cccccccccc jj=1, is itself
-      endif
+      enddo
 
 !cccccccccccc So, one Rij will always have two features k, k+1  (1,2)
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+1001  continue
 1000  continue
 3000  continue
 
@@ -120,7 +114,7 @@
 
 !cccccccccccccccccccccccccccccccccccccccccccccccc
 !cccccccccccccccccccccccccccccccccccccccccccccccc
-!   Now, we collect everything together, collapse the index (k,itype)
+!   Now, we collect every types together, collapse the index (k,itype)
 !   feat2, into a single feature. 
 
       do 5000 iat=1,natom
@@ -183,7 +177,7 @@
 !ccccccccccccccccccccccccccccccccccccc
 
       return
-      end subroutine find_feature_2b_type1
+      end subroutine find_feature_2bgauss
 
 
 
