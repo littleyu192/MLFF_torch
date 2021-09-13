@@ -29,7 +29,7 @@ class MLFF_dmirror(nn.Module):
         super(MLFF_dmirror, self).__init__()
         self.atomType = pm.atomType
         self.natoms = pm.natoms[0]
-        self.net_cfg = pm.MLFF_dmirror_cfg
+        self.net_cfg = pm.MLFF_dmirror_cfg2
         self.dim_feat = pm.nFeatures
         #self.net = dmirror_FC(self.net_cfg, F.softplus, F.sigmoid)
         self.net = dmirror_FC(self.net_cfg, torch.sigmoid, d_sigmoid)
