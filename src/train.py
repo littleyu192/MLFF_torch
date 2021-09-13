@@ -293,13 +293,24 @@ torch_valid_data = get_torch_data(pm.natoms, valid_data_path)
 loader_valid = Data.DataLoader(torch_valid_data, batch_size=1, shuffle=True)
 
 # ==========================part2:指定模型参数==========================
-n_epoch = 2000
-learning_rate = 0.8
+n_epoch = 500
+learning_rate = 0.1
 weight_decay = 1.0
 weight_decay_epoch = 100
 direc = './FC3model_mini_force'
 if not os.path.exists(direc):
     os.makedirs(direc) 
+
+# for Scheduler
+LR_base = 0.8
+LR_gamma = 0.5
+LR_milestones = [1000, 1500, 1700, 1800, 1900, 2000]
+#LR_tmax=200
+#LR_eta_min=0.05
+#LR_factor1 = 1.1
+#LR_max = 0.8
+#LR_steps = 1
+#LR_epochs = 2000
 
 # if torch.cuda.device_count() > 1:
     # model = nn.DataParallel(model)
@@ -384,9 +395,16 @@ if pm.isNNfinetuning == True:
     model = MLFF_dmirror()
     # if torch.cuda.device_count() > 1:
         # model = nn.DataParallel(model)
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-    #optimizer = optim.SGD(model.parameters(), lr=learning_rate)
-    scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=weight_decay)
+    optimizer = optim.Adam(model.parameters(), lr=LR_base)
+    #optimizer = optim.SGD(model.parameters(), lr=LR_base, momentum=0.9)
+    #scheduler = optim.lr_scheduler.OneCycleLR(
+    #                            optimizer, max_lr=LR_max, 
+    #                            steps_per_epoch=LR_steps, epochs=LR_epochs)
+    #scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=LR_factor)
+    #scheduler1 = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', factor=LR_factor1)
+    scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=LR_milestones, gamma=LR_gamma)
+    #scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=LR_tmax, eta_min=LR_eta_min)
+    #scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=LR_gamma)
     start = time.time()
     min_loss = np.inf
     start_epoch=1
@@ -407,33 +425,106 @@ if pm.isNNfinetuning == True:
         # optimizer.load_state_dict(checkpoint['optimizer'])
         start_epoch=checkpoint['epoch']+1
 
-    
-    for epoch in range(start_epoch, n_epoch + 1):
-        print("epoch " + str(epoch))
-        start = time.time()
-        lr = optimizer.param_groups[0]['lr']
-        print("learning rate:" + str(lr))
-        loss_function_err = 0
-        train_epoch_force_loss = 0
-        train_epoch_etot_loss = 0
-        train_epoch_egroup_square_loss = 0
-        train_epoch_force_RMSE_loss = 0
-        train_epoch_etot_RMSE_loss = 0
-        train_epoch_egroup_RMSE_loss = 0
-        for i_batch, sample_batches in enumerate(loader_train):
-            # loss, force_square_loss, etot_square_loss, egroup_square_loss, \
-            # Force_RMSE_error, Force_ABS_error, Force_L2, Etot_RMSE_error, Etot_ABS_error, Etot_L2, \
-            #     Egroup_RMSE_error, Egroup_ABS_error, Egroup_L2 = train(sample_batches, model, optimizer, nn.MSELoss())
-            loss, loss_F, loss_Etot = train(sample_batches, model, optimizer, nn.MSELoss(), learning_rate, lr)
-            # import ipdb; ipdb.set_trace()
-            # Log train/loss to TensorBoard at every iteration
-            n_iter = (epoch - 1) * len(loader_train) + i_batch + 1
-            # writer.add_scalar('Train/loss', Force_RMSE_error, n_iter)
-            loss_function_err += loss
+    with torch.autograd.set_detect_anomaly(True):
+        for epoch in range(start_epoch, n_epoch + 1):
+            print("epoch " + str(epoch))
+            start = time.time()
+            lr = optimizer.param_groups[0]['lr']
+            print("learning rate:" + str(lr))
+            loss_function_err = 0
+            train_epoch_force_square_loss = 0
+            train_epoch_etot_square_loss = 0
+            train_epoch_egroup_square_loss = 0
+            train_epoch_force_RMSE_loss = 0
+            train_epoch_etot_RMSE_loss = 0
+            train_epoch_egroup_RMSE_loss = 0
             
-            if epoch % weight_decay_epoch == 0:   # 学习率衰减
-                scheduler.step()
-                print("eeeeeeeeeeeeeeeeeeee")
+            epoch_loss = 0
+
+            for i_batch, sample_batches in enumerate(loader_train):
+                # loss, force_square_loss, etot_square_loss, egroup_square_loss, \
+                # Force_RMSE_error, Force_ABS_error, Force_L2, Etot_RMSE_error, Etot_ABS_error, Etot_L2, \
+                #     Egroup_RMSE_error, Egroup_ABS_error, Egroup_L2 = train(sample_batches, model, optimizer, nn.MSELoss())
+                loss = train(sample_batches, model, optimizer, nn.MSELoss())
+                epoch_loss += loss
+                # scheduler.step() # for OneCycle scheduler
+                # import ipdb; ipdb.set_trace()
+                # Log train/loss to TensorBoard at every iteration
+                n_iter = (epoch - 1) * len(loader_train) + i_batch + 1
+                # writer.add_scalar('Train/loss', Force_RMSE_error, n_iter)
+                # loss_function_err += loss
+                # import ipdb; ipdb.set_trace()
+                # train_epoch_force_square_loss += force_square_loss
+                # train_epoch_etot_square_loss += etot_square_loss
+                # train_epoch_egroup_square_loss += egroup_square_loss
+
+                # train_epoch_force_RMSE_loss += Force_RMSE_error
+                # train_epoch_etot_RMSE_loss += Etot_RMSE_error
+                # train_epoch_egroup_RMSE_loss += Egroup_RMSE_error
+        
+            #print(epoch_loss)
+            scheduler.step()
+            #scheduler1.step(epoch_loss)
+            # train_function_err_avg = loss_function_err / len(loader_train)
+            # train_epoch_force_square_loss = train_epoch_force_square_loss/len(loader_train)
+            # train_epoch_etot_square_loss = train_epoch_etot_square_loss/len(loader_train)
+            # train_epoch_egroup_square_loss = train_epoch_egroup_square_loss/len(loader_train)
+
+            # train_force_rmse_loss = train_epoch_force_RMSE_loss/len(loader_train)
+            # train_etot_rmse_loss = train_epoch_etot_RMSE_loss/len(loader_train)
+            # train_egroup_rmse_loss = train_epoch_egroup_RMSE_loss/len(loader_train)
+
+            end = time.time()
+            time_cost = sec_to_hms(int(end-start))    #每个epoch的训练时间
+            # print('Finetuning stage: epoch = {}, step = {}, train_function_err_avg = {:.8f}, train_epoch_force_square_loss = {:.8f}, \
+            #     train_epoch_etot_square_loss = {:.8f}, train_epoch_egroup_square_loss = {:.8f}, lr = {}, time cost = {}, \
+            #     training force rmse = {:.8f}, training etot rmse = {:.8f}, training egroup rmse = {:.8f}'.format(epoch, n_iter, \
+            #         train_function_err_avg, train_epoch_force_square_loss, train_epoch_etot_square_loss, train_epoch_egroup_square_loss, \
+            #             lr, time_cost, train_force_rmse_loss, train_etot_rmse_loss, train_egroup_rmse_loss)) 
+            # print("loss :" + )
+
+            # valid_loss_function_err = 0
+            # valid_epoch_force_square_loss = 0
+            # valid_epoch_etot_square_loss = 0
+            # valid_epoch_egroup_square_loss = 0
+
+            # valid_epoch_force_RMSE_loss = 0
+            # valid_epoch_etot_RMSE_loss = 0
+            # valid_epoch_egroup_RMSE_loss = 0
+            
+            # for i_batch, sample_batches in enumerate(loader_valid):
+            #     error, force_square_loss, etot_square_loss, egroup_square_loss, \
+            #     Force_RMSE_error, Force_ABS_error, Force_L2, Etot_RMSE_error, Etot_ABS_error, Etot_L2, \
+            #         Egroup_RMSE_error, Egroup_ABS_error, Egroup_L2 = valid(sample_batches, model, nn.MSELoss())
+            #     n_iter = (epoch - 1) * len(loader_valid) + i_batch + 1
+            #     # writer.add_scalar('Val/loss', square_error, n_iter)
+            #     valid_loss_function_err += error
+            #     valid_epoch_force_square_loss += force_square_loss
+            #     valid_epoch_etot_square_loss += etot_square_loss
+            #     valid_epoch_egroup_square_loss += egroup_square_loss 
+
+            #     valid_epoch_force_RMSE_loss += Force_RMSE_error
+            #     valid_epoch_etot_RMSE_loss += Etot_RMSE_error
+            #     valid_epoch_egroup_RMSE_loss += Egroup_RMSE_error
+
+            # valid_loss_function_err = valid_loss_function_err/len(loader_valid)
+            # valid_epoch_force_square_loss = valid_epoch_force_square_loss/len(loader_valid)
+            # valid_epoch_etot_square_loss = valid_epoch_etot_square_loss/len(loader_valid)
+            # valid_epoch_egroup_square_loss = valid_epoch_egroup_square_loss/len(loader_valid)
+
+            # valid_force_rmse_loss = valid_epoch_force_RMSE_loss/len(loader_valid)
+            # valid_etot_rmse_loss = valid_epoch_etot_RMSE_loss/len(loader_valid)
+            # valid_egroup_rmse_loss = valid_epoch_egroup_RMSE_loss/len(loader_valid)
+
+            # print('valid_loss_function_err = {:.8f}, valid_epoch_force_square_loss = {:.8f}, \
+            #     valid_epoch_etot_square_loss = {:.8f}, valid_epoch_egroup_square_loss = {:.8f}, \
+            #     valid force rmse = {:.8f}, valid etot rmse = {:.8f}, valid egroup rmse = {:.8f}'\
+            #         .format(valid_loss_function_err, valid_epoch_force_square_loss, valid_epoch_etot_square_loss, \
+            #         valid_epoch_egroup_square_loss, valid_force_rmse_loss, valid_etot_rmse_loss, valid_egroup_rmse_loss))
+            
+            #if epoch % weight_decay_epoch == 0:   # 学习率衰减
+            #    scheduler.step()
+            #    print("eeeeeeeeeeeeeeeeeeee")
             # iprint = 1 #隔几个epoch记录一次误差
             # f_err_log=pm.dir_work+'finetuning.dat'
             # if epoch // iprint == 1:
