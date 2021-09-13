@@ -222,6 +222,7 @@ def calFeatGrid():
 #     # feat = df.iloc[:][4:-1].values
 #     engy = engy.reshape([engy.size,1])
 #     return itypes,feat,engy
+
 def r_feat_csv(f_feat):
     """ read feature and energy from pandas data
     """

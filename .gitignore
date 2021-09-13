@@ -13,6 +13,8 @@
 !/zwt/parameters.py
 !/zwt/PWdata/MOVEMENT
 
+/li10
+
 # model file
 *.pt
 *.dat
@@ -30,10 +32,13 @@
 # pytorch run output files
 /data/runs/
 /cu/runs/
+/cu1
 # object file
 *.o
+*.mod
 # exec file
 *.r
+*.x
 # generate file
 *.csv
 *.log
@@ -57,5 +62,3 @@
 
 # log file
 *.log
-
-/src/test

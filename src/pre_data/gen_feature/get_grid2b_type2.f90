@@ -36,8 +36,8 @@ subroutine get_grid2b_type2(trainSetFileDir,sys_num,grid2,Rc,Rm,n2b, &
     real*8 densityI(0:1000),density2I(0:1000)
     integer iat_type(100)
 
-    character(len=80) trainSetFileDir(200)
-    character(len=90) MOVEMENTDir
+    character(len=200) trainSetFileDir(200)
+    character(len=200) MOVEMENTDir
     integer sys_num
 
     integer,allocatable,dimension (:,:,:) :: list_neigh,iat_neigh

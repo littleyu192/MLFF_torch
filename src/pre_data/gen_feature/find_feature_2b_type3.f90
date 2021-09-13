@@ -79,7 +79,6 @@
       d=dsqrt(dd)
 
 
-
       do k=1,n2b(itype0)
 
       if(d.ge.grid2_2(1,k,itype0).and.d.lt.grid2_2(2,k,itype0)) then

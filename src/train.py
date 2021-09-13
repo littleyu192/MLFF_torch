@@ -14,7 +14,7 @@ import torch.optim as optim
 from torch.nn.parameter import Parameter
 from torch.utils.data import Dataset, DataLoader
 from model.FC import preMLFFNet, MLFFNet
-from model.LN import LNNet
+#from model.LN import LNNet
 from model.MLFF_dmirror import MLFF_dmirror
 import torch.utils.data as Data
 from torch.autograd import Variable
@@ -24,10 +24,11 @@ import parameters as pm
 codepath=os.path.abspath(sys.path[0])
 sys.path.append(codepath+'/pre_data')
 from data_loader_2type import MovementDataset, get_torch_data
+from scalers import DataScalers
 from torch.utils.tensorboard import SummaryWriter
 # from tensorboardX import SummaryWriter
-#import torchviz
-
+import torchviz
+import time
 
 
 writer = SummaryWriter()
@@ -73,8 +74,6 @@ def pretrain(sample_batches, premodel, optimizer, criterion):
 def train(sample_batches, model, optimizer, criterion):
     error=0
     Etot_label = Variable(sample_batches['output_energy'][:,:,:].float().to(device))
-    # print("==========Etot==========")
-    # print(Etot_label)
     atom_number = Etot_label.shape[1]
     Etot_label = torch.sum(Etot_label, dim=1)   #[40,108,1]-->[40,1]
     Force_label = Variable(sample_batches['output_force'][:,:,:].float().to(device))   #[40,108,3]
@@ -86,21 +85,17 @@ def train(sample_batches, model, optimizer, criterion):
     ind_img = Variable(sample_batches['ind_image'].int().to(device))
     divider = Variable(sample_batches['input_divider'].float().to(device))
     model = model.to(device)
-    # import ipdb; ipdb.set_trace()
     # model = model.cuda()
     # model = torch.nn.parallel.DistributedDataParallel(model)
     model.train()
     # force_predict, Etot_predict, Ei_predict, Egroup_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
     Etot_predict, force_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
-    # import ipdb; ipdb.set_trace()
     
     optimizer.zero_grad()
     # Egroup_predict = model.get_egroup(Ei_predict, egroup_weight, divider)   #[40,108,1]
-    # print("==========Etot predict==========")
-    # print(Etot_predict)
 
     # Etot_deviation = Etot_predict - Etot_label     # [40,1]
-    #print("etot predict: " + str(Etot_predict[0]) +  "etot label: " + str(Etot_label[0]))
+    print("training stage etot predict: " + str(Etot_predict[0]) +  "etot label: " + str(Etot_label[0]))
     # Etot_square_deviation = Etot_deviation ** 2
     # Etot_shape = Etot_label.shape[0]  #40
     # Etot_ABS_error = Etot_deviation.norm(1) / Etot_shape
@@ -109,7 +104,8 @@ def train(sample_batches, model, optimizer, criterion):
     # Ei_L2 = Etot_L2 / atom_number
 
     # Force_deviation = force_predict - Force_label
-    #print("force predict: " + str(force_predict[0,0]) +  "force label: " + str(Force_label[0,0]))
+    print("training stage force predict: " + str(force_predict[0,0]) +  "force label: " + str(Force_label[0,0]))
+    # import ipdb;ipdb.set_trace()
     # print(force_predict[0,0])
     # print("==========force label==========")
     # print(Force_label[0,0])
@@ -118,7 +114,6 @@ def train(sample_batches, model, optimizer, criterion):
     # Force_ABS_error = Force_deviation.norm(1) / Force_shape
     # Force_RMSE_error = math.sqrt(1/Force_shape) * Force_deviation.norm(2)
     # Force_L2 = (1/Force_shape) * Force_square_deviation.sum()
-    # import ipdb; ipdb.set_trace()
 
     # Egroup_deviation = Egroup_predict - Egroup_label
     # Egroup_square_deviation = Egroup_deviation ** 2
@@ -144,19 +139,32 @@ def train(sample_batches, model, optimizer, criterion):
     
     # ===========loss 选取torch.nn的函数==========
     # loss = pm.rtLossF * criterion(force_predict, Force_label) + pm.rtLossEtot * criterion(Etot_predict, Etot_label) + pm.rtLossE * criterion(Egroup_predict, Egroup_label)
-    loss = criterion(force_predict, Force_label) + criterion(Etot_predict, Etot_label)
-    print("loss: " + str(loss))
-
+    loss_F = criterion(force_predict, Force_label)
+    loss_Etot = criterion(Etot_predict, Etot_label)
+    w_f = loss_Etot / (loss_Etot + loss_F)
+    w_e = 1 - w_f
+    w_f = pm.rtLossF
+    w_e = pm.rtLossE
+    w_f = 0
+    w_e = 1
+    loss = w_e * criterion(Etot_predict, Etot_label) + w_f * criterion(force_predict, Force_label)
+    print('*'*10)
+    print("weighted etot MSE loss: " + str(loss_Etot))
+    print("weighted force MSE loss: " + str(loss_F))
+    
+    # print("weighted loss: " + str(loss))
+    time_start = time.time()
     loss.backward()
     optimizer.step()
+    time_end = time.time()
+    print("update grad time:", time_end - time_start, 's')
+
     # error = error + float(loss.item())
     # return loss, force_square_loss, etot_square_loss, egroup_square_loss, \
     #     Force_RMSE_error, Force_ABS_error, Force_L2, Etot_RMSE_error, Etot_ABS_error, Etot_L2, \
     #          Egroup_RMSE_error, Egroup_ABS_error, Egroup_L2
 
-    # torchviz.make_dot(force_predict.mean(), params=dict(model.named_parameters()), show_attrs=True, show_saved=True)
-    # torchviz.make_dot(Etot_predict.mean(), params=dict(model.named_parameters()), show_attrs=True, show_saved=True)
-    return loss
+    return loss, loss_F, loss_Etot
 
 def valid(sample_batches, model, criterion):
     error=0
@@ -175,9 +183,12 @@ def valid(sample_batches, model, criterion):
     # label = Variable(sample_batches['output_energy'].float().to(device))
     model.to(device)
     model.train()
-    force_predict, Etot_predict, Ei_predict = model(input_data, dfeat, neighbor)
-    Egroup_predict = model.get_egroup(Ei_predict, egroup_weight, divider)
-
+    Etot_predict, force_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
+    # force_predict, Etot_predict, Ei_predict = model(input_data, dfeat, neighbor)
+    # Egroup_predict = model.get_egroup(Ei_predict, egroup_weight, divider)
+    loss_F = criterion(force_predict, Force_label)
+    loss_Etot = criterion(Etot_predict, Etot_label)
+    '''
     Etot_deviation = Etot_predict - Etot_label     # [40,1]
     Etot_square_deviation = Etot_deviation ** 2
     Etot_shape = Etot_label.shape[0]  #40
@@ -202,15 +213,24 @@ def valid(sample_batches, model, criterion):
     force_square_loss = torch.sum(Force_square_deviation) / Force_shape
     etot_square_loss = torch.sum(Etot_square_deviation) / Etot_shape
     egroup_square_loss = torch.sum(Egroup_square_deviation) / Egroup_shape
-    
+    '''
     # loss = pm.rtLossF * force_square_loss + pm.rtLossEtot * etot_square_loss + pm.rtLossE * egroup_square_loss
     # ===========loss 选取torch.nn的函数==========
-    loss = pm.rtLossF * criterion(force_predict, Force_label) + pm.rtLossEtot * criterion(Etot_predict, Etot_label) + pm.rtLossE * criterion(Egroup_predict, Egroup_L2)
+    loss_F = criterion(force_predict, Force_label)
+    loss_Etot = criterion(Etot_predict, Etot_label)
+    w_f = loss_Etot / (loss_Etot + loss_F)
+    w_e = 1 - w_f
+    w_f = pm.rtLossF
+    w_e = pm.rtLossE
+    w_f = 0
+    w_e = 1
+    loss = w_f * criterion(force_predict, Force_label) + w_e * criterion(Etot_predict, Etot_label)
 
     error = error+float(loss.item())
-    return error, force_square_loss, etot_square_loss, egroup_square_loss, \
-        Force_RMSE_error, Force_ABS_error, Force_L2, Etot_RMSE_error, Etot_ABS_error, Etot_L2, \
-            Egroup_RMSE_error, Egroup_ABS_error, Egroup_L2
+    # return error, force_square_loss, etot_square_loss, egroup_square_loss, \
+    #     Force_RMSE_error, Force_ABS_error, Force_L2, Etot_RMSE_error, Etot_ABS_error, Etot_L2, \
+    #         Egroup_RMSE_error, Egroup_ABS_error, Egroup_L2
+    return error, loss_F, loss_Etot
 
 def sec_to_hms(seconds):
     m, s = divmod(seconds, 60)
@@ -222,19 +242,19 @@ def sec_to_hms(seconds):
 batch_size = pm.batch_size   #40
 train_data_path=pm.train_data_path
 torch_train_data = get_torch_data(pm.natoms, train_data_path)
-loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=True)
+loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=False)
 
 valid_data_path=pm.test_data_path
 torch_valid_data = get_torch_data(pm.natoms, valid_data_path)
-loader_valid = Data.DataLoader(torch_valid_data, batch_size=1, shuffle=True)
+loader_valid = Data.DataLoader(torch_valid_data, batch_size=1, shuffle=False)
 
 # ==========================part2:指定模型参数==========================
 
 n_epoch = 500
 learning_rate = 0.1
-weight_decay = 1.0
-weight_decay_epoch = 100
-direc = './FC3model_mini_force'
+weight_decay = 0.9
+weight_decay_epoch = 10
+direc = './FC3model_mini_pm_loss'
 if not os.path.exists(direc):
     os.makedirs(direc) 
 
@@ -326,8 +346,10 @@ if pm.isNNpretrain == True:
 
 # ==========================part4:模型finetuning==========================
 if pm.isNNfinetuning == True:
-    # model = MLFFNet()
-    #model = LNNet()
+    data_scalers = DataScalers(f_ds=pm.f_data_scaler, f_feat=pm.f_train_feat, load=True)
+    # import ipdb; ipdb.set_trace()
+    # model = MLFFNet(data_scalers)
+    # model = LNNet()
     model = MLFF_dmirror()
 
     # if torch.cuda.device_count() > 1:
@@ -362,133 +384,126 @@ if pm.isNNfinetuning == True:
         # optimizer.load_state_dict(checkpoint['optimizer'])
         start_epoch=checkpoint['epoch']+1
 
-    with torch.autograd.set_detect_anomaly(True):
-        for epoch in range(start_epoch, n_epoch + 1):
-            print("epoch " + str(epoch))
-            start = time.time()
-            lr = optimizer.param_groups[0]['lr']
-            print("learning rate:" + str(lr))
-            loss_function_err = 0
-            train_epoch_force_square_loss = 0
-            train_epoch_etot_square_loss = 0
-            train_epoch_egroup_square_loss = 0
-            train_epoch_force_RMSE_loss = 0
-            train_epoch_etot_RMSE_loss = 0
-            train_epoch_egroup_RMSE_loss = 0
+    
+    for epoch in range(start_epoch, n_epoch + 1):
+        print("epoch " + str(epoch))
+        start = time.time()
+        lr = optimizer.param_groups[0]['lr']
+        print("learning rate:" + str(lr))
+        loss_function_err = 0
+        train_epoch_force_square_loss = 0
+        train_epoch_etot_square_loss = 0
+        train_epoch_egroup_square_loss = 0
+        train_epoch_force_RMSE_loss = 0
+        train_epoch_etot_RMSE_loss = 0
+        train_epoch_egroup_RMSE_loss = 0
+        for i_batch, sample_batches in enumerate(loader_train):
+            # loss, force_square_loss, etot_square_loss, egroup_square_loss, \
+            # Force_RMSE_error, Force_ABS_error, Force_L2, Etot_RMSE_error, Etot_ABS_error, Etot_L2, \
+            #     Egroup_RMSE_error, Egroup_ABS_error, Egroup_L2 = train(sample_batches, model, optimizer, nn.MSELoss())
+            loss, loss_F, loss_Etot = train(sample_batches, model, optimizer, nn.MSELoss())
+            # import ipdb; ipdb.set_trace()
+            # Log train/loss to TensorBoard at every iteration
+            n_iter = (epoch - 1) * len(loader_train) + i_batch + 1
+            # writer.add_scalar('Train/loss', Force_RMSE_error, n_iter)
+            loss_function_err += loss
             
-            epoch_loss = 0
+            # train_epoch_force_square_loss += force_square_loss
+            # train_epoch_etot_square_loss += etot_square_loss
+            # train_epoch_egroup_square_loss += egroup_square_loss
 
-            for i_batch, sample_batches in enumerate(loader_train):
-                # loss, force_square_loss, etot_square_loss, egroup_square_loss, \
-                # Force_RMSE_error, Force_ABS_error, Force_L2, Etot_RMSE_error, Etot_ABS_error, Etot_L2, \
-                #     Egroup_RMSE_error, Egroup_ABS_error, Egroup_L2 = train(sample_batches, model, optimizer, nn.MSELoss())
-                loss = train(sample_batches, model, optimizer, nn.MSELoss())
-                epoch_loss += loss
-                # scheduler.step() # for OneCycle scheduler
-                # import ipdb; ipdb.set_trace()
-                # Log train/loss to TensorBoard at every iteration
-                n_iter = (epoch - 1) * len(loader_train) + i_batch + 1
-                # writer.add_scalar('Train/loss', Force_RMSE_error, n_iter)
-                # loss_function_err += loss
-                # import ipdb; ipdb.set_trace()
-                # train_epoch_force_square_loss += force_square_loss
-                # train_epoch_etot_square_loss += etot_square_loss
-                # train_epoch_egroup_square_loss += egroup_square_loss
+            # train_epoch_force_RMSE_loss += Force_RMSE_error
+            # train_epoch_etot_RMSE_loss += Etot_RMSE_error
+            # train_epoch_egroup_RMSE_loss += Egroup_RMSE_error
+    
+        train_function_err_avg = loss_function_err / len(loader_train)
+        # train_epoch_force_square_loss = train_epoch_force_square_loss/len(loader_train)
+        # train_epoch_etot_square_loss = train_epoch_etot_square_loss/len(loader_train)
+        # train_epoch_egroup_square_loss = train_epoch_egroup_square_loss/len(loader_train)
 
-                # train_epoch_force_RMSE_loss += Force_RMSE_error
-                # train_epoch_etot_RMSE_loss += Etot_RMSE_error
-                # train_epoch_egroup_RMSE_loss += Egroup_RMSE_error
+        # train_force_rmse_loss = train_epoch_force_RMSE_loss/len(loader_train)
+        # train_etot_rmse_loss = train_epoch_etot_RMSE_loss/len(loader_train)
+        # train_egroup_rmse_loss = train_epoch_egroup_RMSE_loss/len(loader_train)
+
+        end = time.time()
+        time_cost = sec_to_hms(int(end-start))    #每个epoch的训练时间
+        # print('Finetuning stage: epoch = {}, step = {}, train_function_err_avg = {:.8f}, train_epoch_force_square_loss = {:.8f}, \
+        #     train_epoch_etot_square_loss = {:.8f}, train_epoch_egroup_square_loss = {:.8f}, lr = {}, time cost = {}, \
+        #     training force rmse = {:.8f}, training etot rmse = {:.8f}, training egroup rmse = {:.8f}'.format(epoch, n_iter, \
+        #         train_function_err_avg, train_epoch_force_square_loss, train_epoch_etot_square_loss, train_epoch_egroup_square_loss, \
+        #             lr, time_cost, train_force_rmse_loss, train_etot_rmse_loss, train_egroup_rmse_loss)) 
+        # print("loss :" + )
+
+        valid_loss_function_err = 0
+        # valid_epoch_force_square_loss = 0
+        # valid_epoch_etot_square_loss = 0
+        # valid_epoch_egroup_square_loss = 0
+
+        # valid_epoch_force_RMSE_loss = 0
+        # valid_epoch_etot_RMSE_loss = 0
+        # valid_epoch_egroup_RMSE_loss = 0
         
-            #print(epoch_loss)
+        for i_batch, sample_batches in enumerate(loader_valid):
+            # error, force_square_loss, etot_square_loss, egroup_square_loss, \
+            # Force_RMSE_error, Force_ABS_error, Force_L2, Etot_RMSE_error, Etot_ABS_error, Etot_L2, \
+            #     Egroup_RMSE_error, Egroup_ABS_error, Egroup_L2 = valid(sample_batches, model, nn.MSELoss())
+            error, loss_F, loss_Etot = valid(sample_batches, model, nn.MSELoss())
+            n_iter = (epoch - 1) * len(loader_valid) + i_batch + 1
+            # writer.add_scalar('Val/loss', square_error, n_iter)
+            valid_loss_function_err += error
+        #     valid_epoch_force_square_loss += force_square_loss
+        #     valid_epoch_etot_square_loss += etot_square_loss
+        #     valid_epoch_egroup_square_loss += egroup_square_loss 
+
+        #     valid_epoch_force_RMSE_loss += Force_RMSE_error
+        #     valid_epoch_etot_RMSE_loss += Etot_RMSE_error
+        #     valid_epoch_egroup_RMSE_loss += Egroup_RMSE_error
+
+        valid_loss_function_err = valid_loss_function_err/len(loader_valid)
+        # valid_epoch_force_square_loss = valid_epoch_force_square_loss/len(loader_valid)
+        # valid_epoch_etot_square_loss = valid_epoch_etot_square_loss/len(loader_valid)
+        # valid_epoch_egroup_square_loss = valid_epoch_egroup_square_loss/len(loader_valid)
+
+        # valid_force_rmse_loss = valid_epoch_force_RMSE_loss/len(loader_valid)
+        # valid_etot_rmse_loss = valid_epoch_etot_RMSE_loss/len(loader_valid)
+        # valid_egroup_rmse_loss = valid_epoch_egroup_RMSE_loss/len(loader_valid)
+
+        # print('valid_loss_function_err = {:.8f}, valid_epoch_force_square_loss = {:.8f}, \
+        #     valid_epoch_etot_square_loss = {:.8f}, valid_epoch_egroup_square_loss = {:.8f}, \
+        #     valid force rmse = {:.8f}, valid etot rmse = {:.8f}, valid egroup rmse = {:.8f}'\
+        #         .format(valid_loss_function_err, valid_epoch_force_square_loss, valid_epoch_etot_square_loss, \
+        #         valid_epoch_egroup_square_loss, valid_force_rmse_loss, valid_etot_rmse_loss, valid_egroup_rmse_loss))
+        
+        if epoch > weight_decay_epoch:   # 学习率衰减
             scheduler.step()
-            #scheduler1.step(epoch_loss)
-            # train_function_err_avg = loss_function_err / len(loader_train)
-            # train_epoch_force_square_loss = train_epoch_force_square_loss/len(loader_train)
-            # train_epoch_etot_square_loss = train_epoch_etot_square_loss/len(loader_train)
-            # train_epoch_egroup_square_loss = train_epoch_egroup_square_loss/len(loader_train)
+        iprint = 1 #隔几个epoch记录一次误差
+        f_err_log=pm.dir_work+'mini_pm.dat'
+        if epoch // iprint == 1:
+            fid_err_log = open(f_err_log, 'w')
+        else:
+            fid_err_log = open(f_err_log, 'a')
+        fid_err_log.write('%d %e %e \n'%(epoch, train_function_err_avg, valid_loss_function_err))
+        # fid_err_log.write('%d %e %e %e %e %e %e %e %e %e %e %e %e %e %e %e %s\n'       \
+        # % (epoch, train_function_err_avg, train_epoch_force_square_loss, train_epoch_etot_square_loss, train_epoch_egroup_square_loss, \
+        #     train_force_rmse_loss, train_etot_rmse_loss, train_egroup_rmse_loss, lr, \
+        #     valid_loss_function_err, valid_epoch_force_square_loss, valid_epoch_etot_square_loss, valid_epoch_egroup_square_loss,\
+        #         valid_force_rmse_loss, valid_etot_rmse_loss, valid_egroup_rmse_loss, time_cost))
+        fid_err_log.close()
 
-            # train_force_rmse_loss = train_epoch_force_RMSE_loss/len(loader_train)
-            # train_etot_rmse_loss = train_epoch_etot_RMSE_loss/len(loader_train)
-            # train_egroup_rmse_loss = train_epoch_egroup_RMSE_loss/len(loader_train)
-
-            end = time.time()
-            time_cost = sec_to_hms(int(end-start))    #每个epoch的训练时间
-            # print('Finetuning stage: epoch = {}, step = {}, train_function_err_avg = {:.8f}, train_epoch_force_square_loss = {:.8f}, \
-            #     train_epoch_etot_square_loss = {:.8f}, train_epoch_egroup_square_loss = {:.8f}, lr = {}, time cost = {}, \
-            #     training force rmse = {:.8f}, training etot rmse = {:.8f}, training egroup rmse = {:.8f}'.format(epoch, n_iter, \
-            #         train_function_err_avg, train_epoch_force_square_loss, train_epoch_etot_square_loss, train_epoch_egroup_square_loss, \
-            #             lr, time_cost, train_force_rmse_loss, train_etot_rmse_loss, train_egroup_rmse_loss)) 
-            # print("loss :" + )
-
-            # valid_loss_function_err = 0
-            # valid_epoch_force_square_loss = 0
-            # valid_epoch_etot_square_loss = 0
-            # valid_epoch_egroup_square_loss = 0
-
-            # valid_epoch_force_RMSE_loss = 0
-            # valid_epoch_etot_RMSE_loss = 0
-            # valid_epoch_egroup_RMSE_loss = 0
-            
-            # for i_batch, sample_batches in enumerate(loader_valid):
-            #     error, force_square_loss, etot_square_loss, egroup_square_loss, \
-            #     Force_RMSE_error, Force_ABS_error, Force_L2, Etot_RMSE_error, Etot_ABS_error, Etot_L2, \
-            #         Egroup_RMSE_error, Egroup_ABS_error, Egroup_L2 = valid(sample_batches, model, nn.MSELoss())
-            #     n_iter = (epoch - 1) * len(loader_valid) + i_batch + 1
-            #     # writer.add_scalar('Val/loss', square_error, n_iter)
-            #     valid_loss_function_err += error
-            #     valid_epoch_force_square_loss += force_square_loss
-            #     valid_epoch_etot_square_loss += etot_square_loss
-            #     valid_epoch_egroup_square_loss += egroup_square_loss 
-
-            #     valid_epoch_force_RMSE_loss += Force_RMSE_error
-            #     valid_epoch_etot_RMSE_loss += Etot_RMSE_error
-            #     valid_epoch_egroup_RMSE_loss += Egroup_RMSE_error
-
-            # valid_loss_function_err = valid_loss_function_err/len(loader_valid)
-            # valid_epoch_force_square_loss = valid_epoch_force_square_loss/len(loader_valid)
-            # valid_epoch_etot_square_loss = valid_epoch_etot_square_loss/len(loader_valid)
-            # valid_epoch_egroup_square_loss = valid_epoch_egroup_square_loss/len(loader_valid)
-
-            # valid_force_rmse_loss = valid_epoch_force_RMSE_loss/len(loader_valid)
-            # valid_etot_rmse_loss = valid_epoch_etot_RMSE_loss/len(loader_valid)
-            # valid_egroup_rmse_loss = valid_epoch_egroup_RMSE_loss/len(loader_valid)
-
-            # print('valid_loss_function_err = {:.8f}, valid_epoch_force_square_loss = {:.8f}, \
-            #     valid_epoch_etot_square_loss = {:.8f}, valid_epoch_egroup_square_loss = {:.8f}, \
-            #     valid force rmse = {:.8f}, valid etot rmse = {:.8f}, valid egroup rmse = {:.8f}'\
-            #         .format(valid_loss_function_err, valid_epoch_force_square_loss, valid_epoch_etot_square_loss, \
-            #         valid_epoch_egroup_square_loss, valid_force_rmse_loss, valid_etot_rmse_loss, valid_egroup_rmse_loss))
-            
-            #if epoch % weight_decay_epoch == 0:   # 学习率衰减
-            #    scheduler.step()
-            #    print("eeeeeeeeeeeeeeeeeeee")
-            # iprint = 1 #隔几个epoch记录一次误差
-            # f_err_log=pm.dir_work+'finetuning.dat'
-            # if epoch // iprint == 1:
-            #     fid_err_log = open(f_err_log, 'w')
-            # else:
-            #     fid_err_log = open(f_err_log, 'a')
-            # fid_err_log.write('%d %e %e %e %e %e %e %e %e %e %e %e %e %e %e %e %s\n'       \
-            # % (epoch, train_function_err_avg, train_epoch_force_square_loss, train_epoch_etot_square_loss, train_epoch_egroup_square_loss, \
-            #     train_force_rmse_loss, train_etot_rmse_loss, train_egroup_rmse_loss, lr, \
-            #     valid_loss_function_err, valid_epoch_force_square_loss, valid_epoch_etot_square_loss, valid_epoch_egroup_square_loss,\
-            #         valid_force_rmse_loss, valid_etot_rmse_loss, valid_egroup_rmse_loss, time_cost))
-            # fid_err_log.close()
-
-            # if valid_loss_function_err < min_loss:
-            #     min_loss = valid_loss_function_err
-            #     works_epoch = 0
-            #     name = direc + '/3layers_' + 'MLFFNet_' + str(epoch)+'epoch.pt'
-            #     # state = {'model': model.state_dict(), 'optimizer':optimizer.state_dict(),'epoch': epoch}
-            #     state = {'model': model.state_dict(), 'epoch': epoch}
-            #     torch.save(state, name)
-            #     print('saving model to {}'.format(name))
-            # else:
-            #     works_epoch += 1
-            #     if works_epoch > patience:
-            #         name = direc + '/3layers_' + 'MLFFNet.pt'
-            #         state = {'model': model.state_dict(), 'optimizer':optimizer.state_dict(),'epoch': epoch}
-            #         torch.save(state, name)
-            #         print("Early stopping")
-            #         break
-# writer.close()
+        if valid_loss_function_err < min_loss:
+            min_loss = valid_loss_function_err
+            works_epoch = 0
+            name = direc + '/3layers_' + 'MLFFNet_' + str(epoch)+'epoch.pt'
+            # state = {'model': model.state_dict(), 'optimizer':optimizer.state_dict(),'epoch': epoch}
+            state = {'model': model.state_dict(), 'epoch': epoch}
+            torch.save(state, name)
+            print('saving model to {}'.format(name))
+        else:
+            works_epoch += 1
+            if works_epoch > patience:
+                name = direc + '/3layers_' + 'MLFFNet.pt'
+                state = {'model': model.state_dict(), 'optimizer':optimizer.state_dict(),'epoch': epoch}
+                torch.save(state, name)
+                print("Early stopping")
+                break
+writer.close()

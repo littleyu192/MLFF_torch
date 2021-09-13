@@ -44,6 +44,7 @@ module calc_ftype1
     real*8 Rc_type(100), Rc2_type(100), Rm_type(100),fact_grid_type(100),dR_grid1_type(100),dR_grid2_type(100)
     integer iflag_grid_type(100),n3b1_type(100),n3b2_type(100)
 
+
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
 contains
@@ -57,6 +58,7 @@ contains
         read(10,*) iat_type(i)
         read(10,*) Rc_type(i),Rm_type(i),iflag_grid_type(i),fact_grid_type(i),dR_grid1_type(i)
         read(10,*) n2b_type(i)
+    
          if(Rc_type(i).gt.Rc_M) then
           write(6,*) "Rc_type must be smaller than Rc_M, gen_3b_feature.in",i,Rc_type(i),Rc_M
           stop
@@ -194,11 +196,13 @@ subroutine gen_feature(AL,xatom)
     ! real*8,allocatable,dimension (:,:,:,:) :: dfeat
 !cccccccccccccccccccccccccccccccccccccccccccccccccccc
     if (allocated(dfeat)) then
+        
         deallocate(feat)
         deallocate(dfeat)
         deallocate(list_neigh_alltypeM)
         deallocate(num_neigh_alltypeM)
     endif
+
     allocate(list_neigh(m_neigh,ntype,natom))
     allocate(map2neigh_M(m_neigh,ntype,natom)) ! from list_neigh(of this feature) to list_neigh_all (of Rc_M
     allocate(list_neigh_M(m_neigh,ntype,natom)) ! the neigh list of Rc_M
@@ -208,6 +212,7 @@ subroutine gen_feature(AL,xatom)
     allocate(num_neigh(ntype,natom))
     allocate(list_neigh_alltype(m_neigh,natom))
     allocate(num_neigh_alltype(natom))
+
     allocate(iat_neigh_M(m_neigh,ntype,natom))
     allocate(list_neigh_alltypeM(m_neigh,natom))
     allocate(num_neigh_alltypeM(natom))
@@ -218,6 +223,7 @@ subroutine gen_feature(AL,xatom)
 
     allocate(feat(nfeat0m,natom))
     allocate(dfeat(nfeat0m,natom,m_neigh,3))
+
 !ccccccccccccccccccccccccccccccccccccccccccc
     itype_atom=0
     do i=1,natom
@@ -246,6 +252,7 @@ subroutine gen_feature(AL,xatom)
       max_neigh_M=-1
       num_neigh_alltypeM=0
       list_neigh_alltypeM=0
+
       do iat=1,natom
       list_neigh_alltype(1,iat)=iat
       list_neigh_alltypeM(1,iat)=iat
@@ -264,6 +271,7 @@ subroutine gen_feature(AL,xatom)
       enddo
       enddo
 
+
       num=1
       map2neigh_alltypeM(1,iat)=1
       do  itype=1,ntype
@@ -274,6 +282,7 @@ subroutine gen_feature(AL,xatom)
 ! map2neigh_M(j,itype,iat), maps the jth neigh in list_neigh(Rc) to jth' neigh in list_neigh_M(Rc_M) 
       enddo
       enddo
+
 !ccccccccccccccccccccccccccccccccccccccc
 
 
@@ -282,6 +291,7 @@ subroutine gen_feature(AL,xatom)
       if(num.gt.max_neigh) max_neigh=num
       if(num_M.gt.max_neigh_M) max_neigh_M=num_M
       enddo  ! iat
+
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 ! This num_neigh_alltype(iat) include itself !
     dfeat=0.d0
@@ -306,6 +316,7 @@ subroutine gen_feature(AL,xatom)
        feat,dfeat,nfeat0m,m_neigh,n2bm,nfeat_atom)
     endif
 !cccccccccccccccccccccccccccccccccccccccccccccccccccc
+
 
     deallocate(list_neigh)
     deallocate(iat_neigh)

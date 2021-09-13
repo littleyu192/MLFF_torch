@@ -13,9 +13,9 @@ PROGRAM gen_3b_feature
     integer num_step0,num_step1,natom0,max_neigh
     real*8 Etotp_ave,E_tolerance
     character(len=50) char_tmp(20)
-    character(len=80) trainSetFileDir(200)
-    character(len=80) trainSetDir
-    character(len=90) MOVEMENTDir,dfeatDir,infoDir,trainDataDir,inquirepos2
+    character(len=200) trainSetFileDir(200)
+    character(len=200) trainSetDir
+    character(len=200) MOVEMENTDir,dfeatDir,infoDir,trainDataDir,inquirepos2
     integer(8) inp
     integer sys_num,sys,recalc_grid
 
@@ -106,10 +106,10 @@ PROGRAM gen_3b_feature
     open(13,file="input/location")
     rewind(13)
     read(13,*) sys_num  !,trainSetDir
-    read(13,'(a80)') trainSetDir
+    read(13,'(a200)') trainSetDir
     ! allocate(trainSetFileDir(sys_num))
     do i=1,sys_num
-    read(13,'(a80)') trainSetFileDir(i)    
+    read(13,'(a200)') trainSetFileDir(i)    
     enddo
     close(13)
     trainDataDir=trim(trainSetDir)//"/trainData.txt.Ftype2"
