@@ -215,7 +215,7 @@ def calFeatGrid():
 # def r_feat_csv(f_feat):
 #     """ read feature and energy from pandas data
 #     """
-#     df   = pd.read_csv(f_feat,dtype=pm.tf_dtype)
+#     df   = pd.read_csv(f_feat,dtype=pm.feature_dtype)
 #     itypes = df['Type'].values.astype(int)
 #     engy = df['dE'].values
 #     feat = df.drop(['Type','index','dE','Num','energy'],axis=1).values 
@@ -229,7 +229,7 @@ def r_feat_csv(f_feat):
     # df   = pd.read_csv(f_feat,  encoding= 'unicode_escape')
     # import ipdb;ipdb.set_trace()
 
-    df   = pd.read_csv(f_feat,header=None,index_col=False,dtype=pm.tf_dtype, encoding= 'unicode_escape')
+    df   = pd.read_csv(f_feat,header=None,index_col=False,dtype=pm.feature_dtype, encoding= 'unicode_escape')
     itypes = df[1].values.astype(int)
     engy = df[2].values
     feat = df.drop([0,1,2],axis=1).values 
@@ -239,7 +239,7 @@ def r_feat_csv(f_feat):
 def r_egroup_csv(f_egroup):
     """ read feature and energy from pandas data
     """
-    df   = pd.read_csv(f_egroup,header=None,index_col=False,dtype=pm.tf_dtype)
+    df   = pd.read_csv(f_egroup,header=None,index_col=False,dtype=pm.feature_dtype)
     egroup = df[0].values
     divider = df[1].values
     egroup_weight = df.drop([0,1],axis=1).values 

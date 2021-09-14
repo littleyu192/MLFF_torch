@@ -141,13 +141,27 @@ isMdProfile=False
 
 #-------------------------------------------------------
 #********************* NN_related ***************
-# device related
 
+# dtype definition
+feature_dtype = 'float64'   # how the feature data files are stored
+                            # take effect when you call gen_data.py
+                            
+training_dtype = 'float64'  # 1) feature data are casted to specified dtype
+                            #    during training
+                            # 2) model parameter dtype during training
+                            # take effect when you call train.py
+
+inference_dtype = 'float64' # 1) feature data are casted to specified dtype
+                            #    during inference
+                            # 2) model parameter dtype during inference
+                            #
+                            # NOTE: not implemented yet
+
+
+# device related
 gpu_mem  = 0.9       # tensorflow used gpu memory
 cuda_dev = '0'       # unoccupied gpu, using 'nvidia-smi' cmd
 cupyFeat=True
-torch_dtype = 'float32'
-tf_dtype = 'float32' # dtype of tensorflow trainning, 'float32' faster than 'float64'
 test_ratio = 0.5
 #================================================================================
 # NN model related
