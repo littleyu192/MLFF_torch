@@ -12,12 +12,6 @@ import parameters as pm
 import time
 # import prepare as pp
 # pp.readFeatnum()
-if pm.torch_dtype == 'float32':
-    torch_dtype = torch.float32
-    print('info: torch.dtype = torch.float32 in Pytorch training.')
-else:
-    torch_dtype = torch.float64
-    print('info: torch.dtype = torch.float64 in Pytorch training. (it may be slower)')
 
 
 ################################################################

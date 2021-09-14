@@ -47,6 +47,7 @@ opts,args = getopt.getopt(sys.argv[1:],
 
 for opt_name,opt_value in opts:
     if opt_name in ('-h','--help'):
+        print("")
         print("Available parameters:")
         print("     -h, --help                  :  print help info")
         print("     -v, --verbose               :  verbose output")
@@ -58,6 +59,7 @@ for opt_name,opt_value in opts:
         print("     -a act, --act=act           :  specify activation_type of MLFF_dmirror")
         print("                                    current supported: [sigmoid, softplus]")
         print("     -d dtype, --dtype=dtype     :  specify default dtype: [float64, float32]")
+        print("")
         exit()
     elif opt_name in ('-v','--verbose'):
         opt_verbose = True
