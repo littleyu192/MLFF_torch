@@ -16,12 +16,18 @@ import torch
 from torch.autograd import Variable
 from scalers import DataScalers
 
-if pm.torch_dtype == 'float32':
-    torch_dtype = torch.float32
+#
+# check for feature_dtype, that determins
+# the dtype (and precision) of feature data files
+#
+if (pm.feature_dtype == 'float64'):
+    from convert_dfeat64 import convert_dfeat
+elif (pm.feature_dtype == 'float32'):
     from convert_dfeat import convert_dfeat
 else:
-    torch_dtype = torch.float64
-    from convert_dfeat64 import convert_dfeat
+    raise RuntimeError(
+    "unsupported feature_dtype: %s, check feature_dtype in your parameters.py"
+    %pm.feature_dtype)
 
 
 def process_data(f_train_feat, f_train_dfeat, f_train_natoms, f_train_egroup,
@@ -49,7 +55,7 @@ def process_data(f_train_feat, f_train_dfeat, f_train_natoms, f_train_egroup,
     egroup, divider, egroup_weight = prepare.r_egroup_csv(f_train_egroup)
     if os.path.exists(os.path.join(pm.dir_work, 'weight_for_cases')):
         weight_all = pd.read_csv(os.path.join(pm.dir_work, 'weight_for_cases'),
-                                 header=None, encoding= 'unicode_escape').values[:, 0].astype(pm.torch_dtype).reshape(-1, 1)
+                                 header=None, encoding= 'unicode_escape').values[:, 0].astype(pm.feature_dtype).reshape(-1, 1)
     else:
         weight_all = np.ones((engy_scaled.shape[0], 1))
     nfeat0m = feat_scaled.shape[1]  # 每个原子特征的维度
@@ -86,13 +92,13 @@ def process_data(f_train_feat, f_train_dfeat, f_train_natoms, f_train_egroup,
         for k in dfeatdirs[m]:
             read_allnn.read_dfeat(k, itype_atom, feat_scale_a, nfeat[flag])
             if flag == 0:
-                energy_all[k] = np.array(read_allnn.energy_all).astype(pm.torch_dtype)
-                force_all[k] = np.array(read_allnn.force_all).transpose(1, 0, 2).astype(pm.torch_dtype)
+                energy_all[k] = np.array(read_allnn.energy_all).astype(pm.feature_dtype)
+                force_all[k] = np.array(read_allnn.force_all).transpose(1, 0, 2).astype(pm.feature_dtype)
                 list_neigh_all[k] = np.array(read_allnn.list_neigh_all).transpose(1, 0, 2).astype(int)
                 iatom_all[k] = np.array(read_allnn.iatom)
 
             nfeat[flag+1] = np.array(read_allnn.feat_all).shape[0]
-            dfeat_tmp_all[k] = np.array(read_allnn.dfeat_tmp_all).astype(float)
+            dfeat_tmp_all[k] = np.array(read_allnn.dfeat_tmp_all).astype(pm.feature_dtype)
             num_tmp_all[k] = np.array(read_allnn.num_tmp_all).astype(int)
             iat_tmp_all[k] = np.array(read_allnn.iat_tmp_all).astype(int)
             jneigh_tmp_all[k] = np.array(read_allnn.jneigh_tmp_all).astype(int)
@@ -162,7 +168,7 @@ def process_data(f_train_feat, f_train_dfeat, f_train_natoms, f_train_egroup,
             convert_dfeat.conv_dfeat(image_num[mm],nfeat[kk],indImg[i],num_tmp_all[dfeat_name[mm]][image_num[mm]-1],dfeat_tmp,jneigh_tmp,ifeat_tmp,iat_tmp)
             kk=kk+1
     
-    dfeat_scaled = np.array(convert_dfeat.dfeat).transpose(1,2,0,3).astype(pm.torch_dtype)
+    dfeat_scaled = np.array(convert_dfeat.dfeat).transpose(1,2,0,3).astype(pm.feature_dtype)
     # print("======dfeat_scaled=======")
     # print(dfeat_scaled)
 
@@ -189,8 +195,16 @@ def process_data(f_train_feat, f_train_dfeat, f_train_natoms, f_train_egroup,
     np.save(nn_data_path + "/dfeat_scaled.npy", dfeat_scaled)
     np.save(nn_data_path + "/ind_img.npy", np.array(indImg).reshape(-1))
 
+def color_print(string, fg=31, bg=49):
+    print("\33[0m\33[%d;%dm%s\33[0m" %(fg, bg, string))
+    return 0
 
 def main():
+
+    print("")
+    print("<================ Start of feature data file generation ================>")
+    print("")
+
     # 计算scale变换的参数
     data_scalers = DataScalers(f_ds=pm.f_data_scaler,
                                    f_feat=pm.f_train_feat)
@@ -212,6 +226,29 @@ def main():
                  pm.f_test_egroup,
                  data_scalers,
                  pm.test_data_path)
+
+    print("")
+    print("<=============== Summary of feature data file generation  ===============>")
+    print("")
+    if (pm.feature_dtype == 'float64'):
+        print("feature_dtype = float64, feature data are stored as float64 in files,")
+        print("check above detailed logs to make sure all files are stored in correct dtype")
+        print("")
+        print("you can run high-or-low precision training/inference with these feature data")
+        print("by specify training_dtype and inference_dtype in you parameters.py")
+    elif (pm.feature_dtype == 'float32'):
+        print("feature_dtype = float32, feature data are stored as float32 in files,")
+        print("check above detailed logs to make sure all files are stored in correct dtype")
+        print("")
+        color_print("WARNING: you are generating low-precision feature data file")
+        print("")
+        print("we suggest you generate high-precision feature data file, and specify the")
+        print("precision of training/inference separately, check feature_dtype / ")
+        print("training_dtype / inference_dtype / in your parameters.py")
+    print("")
+    print("<=============== The end of feature data file generation  ===============>")
+    print("")
+        
 
 if __name__ == '__main__':
     main()

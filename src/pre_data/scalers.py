@@ -22,11 +22,17 @@ class MinMaxScaler:
         x = np.atleast_2d(x)
         xmax = x.max(axis=0)
         xmin = x.min(axis=0)
-        self.a = (self.fr[1] - self.fr[0]) / (xmax-xmin)
-        self.a[xmax-xmin <= 0.1] = 10
 
+        # use 'inf' to avoid div-by-zero error
+        x_max_min = xmax - xmin
+        x_max_min[x_max_min == 0] = float('inf')
+
+        # DO NOT change the sequence of following four statements
+        self.a = (self.fr[1] - self.fr[0]) / x_max_min
+        self.a[x_max_min <= 0.1] = 10
         self.a[xmax < 0.01] = 1
         self.a[xmax == xmin] = 0  # important !!!
+
         self.b = self.fr[0] - self.a*xmin
         return self.transform(x)
 
@@ -163,7 +169,7 @@ class DataScalers:
             dsnp.append(np.array(engy_scaler.a).astype("float64"))
             dsnp.append(np.array(engy_scaler.b).astype("float64"))
             dsnp.append(np.array(self.engy_as[itype]))
-        dsnp = np.array(dsnp)
+        dsnp = np.array(dsnp, dtype=object)
         np.save(f_npfile, dsnp)
         print('DataScaler.save2np to', f_npfile, dsnp.dtype, dsnp.shape)
         return
