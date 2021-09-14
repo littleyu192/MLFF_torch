@@ -11,12 +11,6 @@ import parameters as pm
 # pp.readFeatnum()
 from model.dmirror import dmirror_FC
 
-if pm.torch_dtype == 'float32':
-    torch_dtype = torch.float32
-    print('info: torch.dtype = torch.float32 in Pytorch training.')
-else:
-    torch_dtype = torch.float64
-    print('info: torch.dtype = torch.float64 in Pytorch training. (it may be slower)')
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 

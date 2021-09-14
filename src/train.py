@@ -30,15 +30,20 @@ from torch.utils.tensorboard import SummaryWriter
 import time
 import getopt
 
-# output control
-output_verbose = False
-output_summary = False
+# parse optional parameters
+opt_verbose = False
+opt_summary = False
 opt_epochs = 0
 opt_lr = float(0)
 opt_gamma = float(0)
 opt_step = 0
 opt_act = 'sigmoid'
-opts,args = getopt.getopt(sys.argv[1:],'-h-v-s-e:-l:-g:-t:-a:',['help','verbose','summary','epochs=','lr=','gamma=','step=','act='])
+opt_dtype = pm.training_dtype
+
+opts,args = getopt.getopt(sys.argv[1:],
+    '-h-v-s-e:-l:-g:-t:-a:-d:',
+    ['help','verbose','summary','epochs=','lr=','gamma=','step=','act=', 'dtype='])
+
 for opt_name,opt_value in opts:
     if opt_name in ('-h','--help'):
         print("Available parameters:")
@@ -51,21 +56,38 @@ for opt_name,opt_value in opts:
         print("     -t step, --step=step        :  specify step_size of StepLR scheduler")
         print("     -a act, --act=act           :  specify activation_type of MLFF_dmirror")
         print("                                    current supported: [sigmoid, softplus]")
+        print("     -d dtype, --dtype=dtype     :  specify default dtype: [float64, float32]")
         exit()
-    if opt_name in ('-v','--verbose'):
-        output_verbose = True
-    if opt_name in ('-s','--summary'):
-        output_summary = True
-    if opt_name in ('-e','--epochs'):
+    elif opt_name in ('-v','--verbose'):
+        opt_verbose = True
+    elif opt_name in ('-s','--summary'):
+        opt_summary = True
+    elif opt_name in ('-e','--epochs'):
         opt_epochs = int(opt_value)
-    if opt_name in ('-l','--lr'):
+    elif opt_name in ('-l','--lr'):
         opt_lr = float(opt_value)
-    if opt_name in ('-g','--gamma'):
+    elif opt_name in ('-g','--gamma'):
         opt_gamma = float(opt_value)
-    if opt_name in ('-t','--step'):
+    elif opt_name in ('-t','--step'):
         opt_step = int(opt_value)
-    if opt_name in ('-a','--act'):
+    elif opt_name in ('-a','--act'):
         opt_act = opt_value
+    elif opt_name in ('-d','--dtype'):
+        opt_dtype = opt_value
+
+# set default training dtype
+#
+# 1) dtype of model parameters during training
+# 2) feature data will be casted to this dtype before using
+#
+if (opt_dtype == 'float64'):
+    print("Training: set default dtype to float64")
+    torch.set_default_dtype(torch.float64)
+elif (opt_dtype == 'float32'):
+    print("Training: set default dtype to float32")
+    torch.set_default_dtype(torch.float32)
+else:
+    raise RuntimeError("Training: unsupported dtype: %s" %opt_dtype)
     
 
 #writer = SummaryWriter()
@@ -105,13 +127,13 @@ def get_loss_func(start_lr, real_lr, has_fi, lossFi, has_etot, loss_Etot, has_eg
 
 def pretrain(sample_batches, premodel, optimizer, criterion):
     error=0
-    Etot_label = Variable(sample_batches['output_energy'][:,:,:].float().to(device))
+    Etot_label = Variable(sample_batches['output_energy'][:,:,:].double().to(device))
     Etot_label = torch.sum(Etot_label, dim=1)   #[40,108,1]-->[40,1]
     print("==========Etot label==========")
     print(Etot_label[0])
-    input_data = Variable(sample_batches['input_feat'].float().to(device), requires_grad=True)
+    input_data = Variable(sample_batches['input_feat'].double().to(device), requires_grad=True)
     neighbor = Variable(sample_batches['input_nblist'].int().to(device))  # [40,108,100]
-    dfeat = Variable(sample_batches['input_dfeat'].float().to(device))  #[40,108,100,42,3]
+    dfeat = Variable(sample_batches['input_dfeat'].double().to(device))  #[40,108,100,42,3]
    
     optimizer.zero_grad()
     model = premodel.to(device)
@@ -140,20 +162,33 @@ def pretrain(sample_batches, premodel, optimizer, criterion):
 
 def train(sample_batches, model, optimizer, criterion, last_epoch):
     error=0
-    Ei_label = Variable(sample_batches['output_energy'][:,:,:].float().to(device))
-    atom_number = Ei_label.shape[1]
-    Etot_label = torch.sum(Ei_label, dim=1)   #[40,108,1]-->[40,1]
-    Force_label = Variable(sample_batches['output_force'][:,:,:].float().to(device))   #[40,108,3]
-    Egroup_label = Variable(sample_batches['input_egroup'].float().to(device))
-    input_data = Variable(sample_batches['input_feat'].float().to(device), requires_grad=True)
-    input_fdim = input_data.shape[2]
-    print("pm.nFeature should be " + str(input_fdim))
+    # floating part of sample_batches, cast to specified opt_dtype
+    #
+    if (opt_dtype == 'float64'):
+        Etot_label = Variable(sample_batches['output_energy'][:,:,:].double().to(device))
+        Force_label = Variable(sample_batches['output_force'][:,:,:].double().to(device))   #[40,108,3]
+        Egroup_label = Variable(sample_batches['input_egroup'].double().to(device))
+        input_data = Variable(sample_batches['input_feat'].double().to(device), requires_grad=True)
+        dfeat = Variable(sample_batches['input_dfeat'].double().to(device))  #[40,108,100,42,3]
+        egroup_weight = Variable(sample_batches['input_egroup_weight'].double().to(device))
+        divider = Variable(sample_batches['input_divider'].double().to(device))
+    elif (opt_dtype == 'float32'):
+        Etot_label = Variable(sample_batches['output_energy'][:,:,:].float().to(device))
+        Force_label = Variable(sample_batches['output_force'][:,:,:].float().to(device))   #[40,108,3]
+        Egroup_label = Variable(sample_batches['input_egroup'].float().to(device))
+        input_data = Variable(sample_batches['input_feat'].float().to(device), requires_grad=True)
+        dfeat = Variable(sample_batches['input_dfeat'].float().to(device))  #[40,108,100,42,3]
+        egroup_weight = Variable(sample_batches['input_egroup_weight'].float().to(device))
+        divider = Variable(sample_batches['input_divider'].float().to(device))
+    else:
+        raise RuntimeError("train(): unsupported opt_dtype %s" %opt_dtype)
+
+    # non-floating or derived part of sample_batches
+    #
+    atom_number = Etot_label.shape[1]
+    Etot_label = torch.sum(Etot_label, dim=1)   #[40,108,1]-->[40,1]
     neighbor = Variable(sample_batches['input_nblist'].int().to(device))  # [40,108,100]
-    dfeat = Variable(sample_batches['input_dfeat'].float().to(device))  #[40,108,100,42,3]
-    egroup_weight = Variable(sample_batches['input_egroup_weight'].float().to(device))
     ind_img = Variable(sample_batches['ind_image'].int().to(device))
-    divider = Variable(sample_batches['input_divider'].float().to(device))
-    
     model = model.to(device)
     # model = model.cuda()
     # model = torch.nn.parallel.DistributedDataParallel(model)
@@ -165,7 +200,7 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
     # Egroup_predict = model.get_egroup(Ei_predict, egroup_weight, divider)   #[40,108,1]
 
     # Etot_deviation = Etot_predict - Etot_label     # [40,1]
-    if (output_verbose or (output_summary and last_epoch)):
+    if (opt_verbose or (opt_summary and last_epoch)):
         print("etot predict =============================================>")
         print(Etot_predict)
         print("etot label ===============================================>")
@@ -217,10 +252,12 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
     
     # ===========loss 选取torch.nn的函数==========
     #loss = pm.rtLossF * criterion(force_predict, Force_label) + pm.rtLossEtot * criterion(Etot_predict, Etot_label) + pm.rtLossE * criterion(Egroup_predict, Egroup_label)
-    loss = pm.rtLossF * criterion(Force_predict, Force_label) + pm.rtLossEtot * criterion(Etot_predict, Etot_label)
+    #
+    # Etot_label.shape = [batch_size, 1], while Etot_predict.shape = [batch_size], so squeeze Etot_label to match
+    #
+    loss = pm.rtLossF * criterion(Force_predict, Force_label) + pm.rtLossEtot * criterion(Etot_predict, Etot_label.squeeze())
     loss_F = criterion(Force_predict, Force_label)
-    loss_Etot = criterion(Etot_predict, Etot_label)
-
+    loss_Etot = criterion(Etot_predict, Etot_label.squeeze())
     print("loss = %f (loss_etot = %f, loss_force = %f, RMSE_etot = %f, RMSE_force = %f)" %(loss, loss_Etot, loss_F, loss_Etot ** 0.5, loss_F ** 0.5))
     #w_f = loss_Etot / (loss_Etot + loss_F)
     #w_e = 1 - w_f
