@@ -161,19 +161,18 @@ class MLFFNet(nn.Module):
             else:
                 Ei = torch.cat((Ei, predict), dim=1)    #[64,1]
                 dE = torch.cat((dE, grad), dim=1)
-        # de = self.get_de(image, dfeat, neighbor)
-        input_grad_allatoms = dE
+        # de = self.get_de(image, dfeat, neighbor)  #函数的方法计算de
+        input_grad_allatoms = dE     #手动计算的dE
+        
         cal_ei_de = time.time()
         Etot = Ei.sum(dim=1)
         
-        # test = Ei.sum()
-        # test.backward(retain_graph=True)
-        # test_grad = image.grad
-        # import ipdb; ipdb.set_trace()
+        # test = Ei.
+
         # out_sum = Etot.sum()
         # out_sum.backward(retain_graph=True)
         # input_grad_allatoms = input_data.grad
-        
+
         # dfeat = dfeat.transpose(3, 4) # 40 108 100 3 42
         # dE = dE.unsqueeze(2).unsqueeze(2)
         # force_all = dfeat * dE
@@ -215,7 +214,7 @@ class MLFFNet(nn.Module):
         end = time.time()
         # print("cal ei de time:", cal_ei_de - start, 's')
         # print("cal force time:", end - cal_ei_de, 's')
-        return Etot, force
+        return Etot, force, Ei, Egroup
 
     def get_egroup(self, Ei, Egroup_weight, divider):
         batch_size = Ei.shape[0]
@@ -233,27 +232,38 @@ class MLFFNet(nn.Module):
         atom_type_num = len(self.atomType)
         for i in range(atom_type_num):
             model_weight = self.models[i].state_dict()
+            layer_name = []
+            for weight_name in model_weight.keys():
+                layer_name.append(weight_name)
+            layers = int(len(layer_name)/2)
             W = []
             B = []
             L = []
             dL = []
-            W.append(model_weight['fc0.weight'].transpose(0, 1))            
-            B.append(model_weight['fc0.bias'])            
-            dL.append(dACTIVE(torch.matmul(image, W[0]) + B[0]))
-            L.append(ACTIVE(torch.matmul(image, W[0]) + B[0]))
+            # W.append(model_weight['fc0.weight'].transpose(0, 1))            
+            # B.append(model_weight['fc0.bias'])   
+            W.append(model_weight[layer_name[0]])            
+            B.append(model_weight[layer_name[layers]])       
+            dL.append(dACTIVE(torch.matmul(image, W[0].T) + B[0]))
+            L.append(ACTIVE(torch.matmul(image, W[0].T) + B[0]))
             for ilayer in range(1, pm.nLayers-1):
-                W.append(model_weight['fc' + str(ilayer) + '.weight'].transpose(0, 1))            
-                B.append(model_weight['fc' + str(ilayer) + '.bias'])            
-                dL.append(dACTIVE(torch.matmul(L[ilayer-1], W[ilayer]) + B[ilayer]))
-                L.append(ACTIVE(torch.matmul(L[ilayer-1], W[ilayer]) + B[ilayer]))
+                # W.append(model_weight['fc' + str(ilayer) + '.weight'].transpose(0, 1))            
+                # B.append(model_weight['fc' + str(ilayer) + '.bias'])   
+                W.append(model_weight[layer_name[ilayer]])            
+                B.append(model_weight[layer_name[layers + ilayer]])         
+                dL.append(dACTIVE(torch.matmul(L[ilayer-1], W[ilayer].T) + B[ilayer]))
+                L.append(ACTIVE(torch.matmul(L[ilayer-1], W[ilayer].T) + B[ilayer]))
             ilayer += 1
-            W.append(model_weight['output.weight'].transpose(0, 1))            
-            B.append(model_weight['output.bias'])            
-            res = W[ilayer].transpose(0, 1)
+            # W.append(model_weight['output.weight'].transpose(0, 1))            
+            # B.append(model_weight['output.bias']) 
+            W.append(model_weight[layer_name[ilayer]])            
+            B.append(model_weight[layer_name[layers + ilayer]])           
+            # res = W[ilayer].transpose(0, 1)  
+            res = W[ilayer]
             ilayer -= 1
             while ilayer >= 0:
                 res = dL[ilayer] * res   #(2,108,30)*(1,30)-->(2,108,30)
-                res = res.unsqueeze(2) * W[ilayer]  #(2,108,1,30)*(60,30)-->(2,108,60,30)
+                res = res.unsqueeze(2) * W[ilayer].T  #(2,108,1,30)*(60,30)-->(2,108,60,30)
                 res = res.sum(axis=-1)  #(2,108,60,30)-->(2,108,60)
                 ilayer -= 1
             return res
