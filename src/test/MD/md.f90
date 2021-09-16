@@ -77,7 +77,6 @@ subroutine molecular_dynamics_kernel(Etot,fatom,e_stress)
         ! Etot=2.d0
         AL_tmp=MCTRL_AL*A_AU_1   ! convert to A
         call MF_FF_EF(Etot,fatom,MCTRL_xatom,AL_tmp,MCTRL_natom)
-        print *, "hartree_ev", Hartree_eV
         Etot=Etot/Hartree_eV  ! convert back to Hartree
         e_stress=0.d0
         fatom(:,1:natom)=fatom(:,1:natom)*A_AU_1/Hartree_eV  ! convert to Hatree/Bohr
@@ -87,7 +86,7 @@ subroutine molecular_dynamics_kernel(Etot,fatom,e_stress)
         if(inode .eq. 1) then
             print*, '***********************************************'
             print*, '*                                             *' 
-            print*, '*               MD starts Now!                *' 
+            print*, '*         MD/MD100 starts Now!                *' 
             print*, '*                                             *' 
             print*, '***********************************************'
         endif

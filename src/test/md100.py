@@ -326,7 +326,7 @@ def run_md100(imodel=1, atom_type=[16], num_process=1):
     subprocess.run(command, shell=True)
     
     # create md.input
-    f = open('md.input', 'w')
+    f = open('MD.input', 'w')
     f.write('xatom.config\n')
     f.write('100, 1000, 1.0, 600, 600\n') # only the first 100 used in md100
     f.write('F\n')
@@ -351,4 +351,4 @@ def run_md100(imodel=1, atom_type=[16], num_process=1):
     print('running-shell-command: ' + command)
     subprocess.run(command, shell=True)
     # calculate rmse and plot
-    calc_inference_rmse()
+    # calc_inference_rmse()

@@ -24,11 +24,19 @@ def pt2npy(pt_file):
         layer_name.append(weight_name)
         # print(weight_name)
         # print(weights[weight_name].shape)
+    layers = int(len(layer_name)/2)
+    layer_W = layer_name[:layers]
+    layer_b = layer_name[layers:]
+    tmp = []
+    for i in range(layers):
+        tmp.append(layer_W[i])
+        tmp.append(layer_b[i])
+    layer_name = tmp
 
     wij = []
     for i in range(len(layer_name)):
         model_w = weights[layer_name[i]].cpu().numpy()
-        if model_w.ndim == 2:
+        if model_w.ndim == 2:  #wij
             wij.append(model_w.T)
         elif model_w.ndim == 1:
             wij.append(np.expand_dims(model_w.T,0))

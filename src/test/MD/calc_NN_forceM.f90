@@ -451,12 +451,12 @@ module calc_NN
             itype = iatom_type(i)
             num(itype) = num(itype) + 1
             do j=1,nfeat1(itype)
-            print *, '=======initial feat(j,iat1)======='
-            print * ,feat(j, iat1)
-            print *, 'a_scaler(j,itype) info'
-            print *, a_scaler(j,itype)
-            print *, 'b_scaler(j,itype) info'
-            print *, b_scaler(j,itype)
+            !print *, '=======initial feat(j,iat1)======='
+            !print * ,feat(j, iat1)
+            !print *, 'a_scaler(j,itype) info'
+            !print *, a_scaler(j,itype)
+            !print *, 'b_scaler(j,itype) info'
+            !print *, b_scaler(j,itype)
             feat_type(j,num(itype),itype) = feat(j, iat1)*a_scaler(j,itype)+b_scaler(j,itype)
             print *, 'feat(j,iat1) after a&b scaling'
             print * ,feat_type(j,num(itype),itype)
@@ -470,9 +470,6 @@ module calc_NN
          do i=1,num(itype)
          do j=1,nodeNN(1,itype)
          f_in(j,i,1)=feat_type(j,i,itype)
-         print *,'********input, f_in(j,i,1), j(nodeNN) && i(type)********'
-         print *, j,i
-         print *, f_in(j,i,1)
          enddo
          enddo
 

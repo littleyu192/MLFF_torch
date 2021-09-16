@@ -502,7 +502,15 @@ contains
               read(188,*) MCTRL_MDstep,MCTRL_nskip_begin_AL,MCTRL_nskip_AL_x, MCTRL_nskip_x_end,MCTRL_jump100
               read(188,'(A200)') MCTRL_md100_movement
               close(188)
+                if(inode .eq. 1) then                                        
+                    print*, '***********************************************'
+                    print*, '*                                             *'
+                    print*, '*   RUNNING MD100 (MLFF Inference)            *'
+                    print*, '*                                             *'
+                    print*, '***********************************************'
+                endif                                                        
 
+              ! MD/MOVEMENT  input file.
               open(88,file=MCTRL_md100_movement)
               rewind(88)
               ! keep this file open
