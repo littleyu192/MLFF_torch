@@ -39,6 +39,8 @@ def process_data(f_train_feat, f_train_dfeat, f_train_natoms, f_train_egroup,
     itypes, feat, engy = prepare.r_feat_csv(f_train_feat)
     feat_scaled = scalers.pre_feat(feat, itypes)
     engy_scaled = scalers.pre_engy(engy, itypes)
+    
+    import ipdb;ipdb.set_trace()
     # feat_scaled = pre_feat(scalers, feat, itypes)
     # engy_scaled = engy
     egroup, divider, egroup_weight = prepare.r_egroup_csv(f_train_egroup)
@@ -161,7 +163,6 @@ def process_data(f_train_feat, f_train_dfeat, f_train_natoms, f_train_egroup,
     dfeat_scaled = np.array(convert_dfeat.dfeat).transpose(1,2,0,3).astype(pm.torch_dtype)
     # print("======dfeat_scaled=======")
     # print(dfeat_scaled)
-
 
     convert_dfeat.deallo()
     print("feat_scaled shape" + str(feat_scaled.shape))

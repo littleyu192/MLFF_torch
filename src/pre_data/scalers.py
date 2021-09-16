@@ -32,7 +32,7 @@ class MinMaxScaler:
 
     def transform(self, x):
         x = np.atleast_2d(x)
-        return self.a*x + self.b
+        return self.a.astype("float64")*x+self.b.astype("float64")
 
     def inverse_transform(self, y):
         y = np.atleast_2d(y)
@@ -126,6 +126,8 @@ class DataScalers:
         return engy
 
     def pre_feat(self, feat, itypes):
+        # print(feat)
+        # import ipdb;ipdb.set_trace
         feat_scaled = np.zeros(feat.shape)
         for i in range(pm.ntypes):
             itype = pm.atomType[i]
