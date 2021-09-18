@@ -40,10 +40,11 @@ opt_gamma = float(0)
 opt_step = 0
 opt_act = 'sigmoid'
 opt_dtype = pm.training_dtype
+opt_net_cfg = 'default'
 
 opts,args = getopt.getopt(sys.argv[1:],
-    '-h-v-s-e:-l:-g:-t:-a:-d:',
-    ['help','verbose','summary','epochs=','lr=','gamma=','step=','act=', 'dtype='])
+    '-h-v-s-e:-l:-g:-t:-a:-d:-n:',
+    ['help','verbose','summary','epochs=','lr=','gamma=','step=','act=', 'dtype=', 'net_cfg='])
 
 for opt_name,opt_value in opts:
     if opt_name in ('-h','--help'):
@@ -59,6 +60,8 @@ for opt_name,opt_value in opts:
         print("     -a act, --act=act           :  specify activation_type of MLFF_dmirror")
         print("                                    current supported: [sigmoid, softplus]")
         print("     -d dtype, --dtype=dtype     :  specify default dtype: [float64, float32]")
+        print("     -n cfg, --net_cfg=cfg       :  specify network cfg variable in parameters.py")
+        print("                                    eg: -n MLFF_dmirror_cfg1")
         print("")
         exit()
     elif opt_name in ('-v','--verbose'):
@@ -77,6 +80,8 @@ for opt_name,opt_value in opts:
         opt_act = opt_value
     elif opt_name in ('-d','--dtype'):
         opt_dtype = opt_value
+    elif opt_name in ('-n','--net_cfg'):
+        opt_net_cfg = opt_value
 
 # set default training dtype
 #
@@ -91,7 +96,7 @@ elif (opt_dtype == 'float32'):
     torch.set_default_dtype(torch.float32)
 else:
     raise RuntimeError("Training: unsupported dtype: %s" %opt_dtype)
-    
+
 
 #writer = SummaryWriter()
 torch.manual_seed(2021)
@@ -368,7 +373,6 @@ print("Training: LR_base = %f" %LR_base)
 print("Training: LR_gamma = %f" %LR_gamma)
 print("Training: LR_step = %d" %LR_step)
 
-
 #LR_milestones = [1000, 1500, 1700, 1800, 1900, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000]
 #LR_tmax=200
 #LR_eta_min=0.05
@@ -453,12 +457,19 @@ if pm.isNNpretrain == True:
 
 
 # ==========================part4:模型finetuning==========================
+
+# implement a linear scheduler
+def LinearLR(optimizer, lr, total_epoch, cur_epoch):
+    lr *= (1.0 - (float(cur_epoch) / float(total_epoch)))
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
+
 if pm.isNNfinetuning == True:
     data_scalers = DataScalers(f_ds=pm.f_data_scaler, f_feat=pm.f_train_feat, load=True)
     # import ipdb; ipdb.set_trace()
     # model = MLFFNet(data_scalers)
     # model = LNNet()
-    model = MLFF_dmirror(opt_act)
+    model = MLFF_dmirror(opt_net_cfg, opt_act)
 
     # if torch.cuda.device_count() > 1:
         # model = nn.DataParallel(model)
@@ -554,7 +565,9 @@ if pm.isNNfinetuning == True:
         # valid_epoch_force_RMSE_loss = 0
         # valid_epoch_etot_RMSE_loss = 0
         # valid_epoch_egroup_RMSE_loss = 0
-        scheduler.step()
+
+        #scheduler.step()
+        LinearLR(optimizer=optimizer, lr=learning_rate, total_epoch=n_epoch, cur_epoch=epoch)
         
         """
         for i_batch, sample_batches in enumerate(loader_valid):

@@ -170,6 +170,12 @@ class dmirror_FC(nn.Module):
         self.mirror_net = nn.Sequential(
             collections.OrderedDict(reversed(self.layers))
         )
+        print("dmirror_FC: start of network instance dump ==============>")
+        print("<----------------------- base_net ----------------------->")
+        print(self.base_net)
+        print("<---------------------- mirror_net ---------------------->")
+        print(self.mirror_net)
+        print("dmirror_FC: end of network instance dump ================>")
 
     # we can't call forward() of sequentialized module, since
     # we extened the param list of the layers' forward()
