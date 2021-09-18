@@ -49,6 +49,8 @@
 # exec file
 *.r
 *.x
+# lib file
+*.a
 # model file
 *.pt
 *.dat
