@@ -19,32 +19,40 @@ def d_sigmoid(x):
     return torch.sigmoid(x) * (1 - torch.sigmoid(x))
 
 class MLFF_dmirror(nn.Module):
-    def __init__(self, activation_type):
+    def __init__(self, net_cfg, activation_type):
         super(MLFF_dmirror, self).__init__()
         self.atomType = pm.atomType
         self.natoms = pm.natoms[0]
-        self.net_cfg = pm.MLFF_dmirror_cfg2
+        if (net_cfg == 'default'):
+            self.net_cfg = pm.MLFF_dmirror_cfg
+            print("MLFF_dmirror: using default net_cfg: pm.MLFF_dmirror_cfg")
+            print(self.net_cfg)
+        else:
+            net_cfg = 'pm.' + net_cfg
+            self.net_cfg = eval(net_cfg)
+            print("MLFF_dmirror: using specified net_cfg: %s" %net_cfg)
+            print(self.net_cfg)
         self.dim_feat = pm.nFeatures
         if (activation_type == 'sigmoid'):
             self.activation_type = 'sigmoid'
-            self.net = dmirror_FC(self.net_cfg, torch.sigmoid, d_sigmoid)
             print("MLFF_dmirror: using sigmod activation")
+            self.net = dmirror_FC(self.net_cfg, torch.sigmoid, d_sigmoid)
         elif (activation_type == 'softplus'):
             self.activation_type = 'softplus'
-            self.net = dmirror_FC(self.net_cfg, F.softplus, F.sigmoid)
             print("MLFF_dmirror: using softplus activation")
+            self.net = dmirror_FC(self.net_cfg, F.softplus, F.sigmoid)
         else:
             raise RuntimeError("MLFF_dmirror: unsupported activation_type: %s" %activation_type)
         #print(self.natoms)
         #print("111111111111111111")
 
     def forward(self, image, dfeat, neighbor, Egroup_weight, divider):
-        #print("defat.shape= ", dfeat.shape)
-        #print("neighbor.shape = ", neighbor.shape)
-        #print("dump dfeat ------------------->")
-        #print(dfeat)
-        #print("dump neighbor ------------------->")
-        #print(neighbor)
+        print("defat.shape= ", dfeat.shape)
+        print("neighbor.shape = ", neighbor.shape)
+        print("dump dfeat ------------------->")
+        print(dfeat)
+        print("dump neighbor ------------------->")
+        print(neighbor)
         #print("2222222222222222222")
         batch_size = image.shape[0]
         #print(batch_size)
