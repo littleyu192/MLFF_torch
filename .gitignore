@@ -30,12 +30,12 @@
 ##
 # for running intermediate directories
 #
-*/PWdata/*
-!*/PWdata/MOVEMENT
-*/fread_dfeat/
-*/input/
-*/output/
-*/runs/
+**/PWdata/*
+!**/PWdata/MOVEMENT
+**/fread_dfeat/
+**/input/
+**/output/
+**/runs/
 
 # NOTE: for all other directories and files, one
 # should carefully select which directory and
