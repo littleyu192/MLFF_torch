@@ -87,7 +87,7 @@ class dmirror_linear(nn.Module):
         self.bias = bias
         self.w = nn.Parameter(torch.randn(out_dim, in_dim), requires_grad=True)
         if (self.bias == True):
-            self.b = nn.Parameter(torch.randn(1), requires_grad=True)
+            self.b = nn.Parameter(torch.randn(out_dim), requires_grad=True)
 
     def forward(self, x, d_order=0):
         if (d_order == 0):
