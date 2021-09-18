@@ -77,6 +77,6 @@ mods: mod_parameter.mod mod_mpi.mod calc_lin.mod calc_nn.mod calc_vv.mod\
 	 calc_2bgauss_feature.mod calc_3bcos_feature.mod calc_ftype2.mod calc_deepmd1_feature.mod calc_deepmd2_feature.mod calc_mtp_feature.mod calc_snap_feature.mod\
 	 mod_control.mod mod_data.mod mod_md.mod
 clean:
-	#make clean -C iotk
+	make clean -C iotk
 	rm -f *.a *.o *.mod *.x 
 
