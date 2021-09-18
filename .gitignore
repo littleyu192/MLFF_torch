@@ -42,32 +42,47 @@
 /data/runs/
 /cu/runs/
 /cu1
+
 # object file
 *.o
 *.mod
 # exec file
 *.r
 *.x
-# generate file
+# model file
+*.pt
+*.dat
+# generated file
+*.npy
 *.csv
 *.log
-# vscode config file
-/.vscode/
+# python intermediate files
+*.py[cod]
+*__pycache__/
+*pytest_cache/
 
-# generate data file 
-/data/train_data/*
-!/data/train_data/MOVEMENT
-/data/input/*
-/data/output/*
-/data/fread_dfeat/*
+##
+# for directories that should compile on oneself's
+# local environment
+# 
+/src/bin/
+/src/lib/
 
-# exec files
-/src/bin
-# lib file
-/src/lib
+##
+# for running intermediate directories
+#
+*/PWdata/*
+!*/PWdata/MOVEMENT
+*/fread_dfeat/
+*/input/
+*/output/
+*/runs/
 
-# npy file
-*.npy
+# NOTE: for all other directories and files, one
+# should carefully select which directory and
+# what files are needed to be add to the repo.
+#
+# for most intermediate directories, there is no
+# need to add them to repo, just leave them in
+# your local environment
 
-# log file
-*.log
