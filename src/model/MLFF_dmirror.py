@@ -47,16 +47,7 @@ class MLFF_dmirror(nn.Module):
         #print("111111111111111111")
 
     def forward(self, image, dfeat, neighbor, Egroup_weight, divider):
-        print("defat.shape= ", dfeat.shape)
-        print("neighbor.shape = ", neighbor.shape)
-        print("dump dfeat ------------------->")
-        print(dfeat)
-        print("dump neighbor ------------------->")
-        print(neighbor)
-        #print("2222222222222222222")
         batch_size = image.shape[0]
-        #print(batch_size)
-        #print("3333333333333333333")
         result_Ei = torch.zeros(
             (batch_size, self.natoms)
         ).to(device)
