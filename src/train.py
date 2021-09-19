@@ -413,8 +413,8 @@ if (opt_step != 0):
     LR_step = opt_step
 
 print("Training: n_epoch = %d" %n_epoch)
-print("Training: LR_base = %f" %LR_base)
-print("Training: LR_gamma = %f" %LR_gamma)
+print("Training: LR_base = %.16f" %LR_base)
+print("Training: LR_gamma = %.16f" %LR_gamma)
 print("Training: LR_step = %d" %LR_step)
 
 #LR_milestones = [1000, 1500, 1700, 1800, 1900, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000]
@@ -520,8 +520,8 @@ if pm.isNNfinetuning == True:
     model = MLFF_dmirror()
     # if torch.cuda.device_count() > 1:
         # model = nn.DataParallel(model)
-    optimizer = optim.Adam(model.parameters(), lr=LR_base)
-    #optimizer = optim.SGD(model.parameters(), lr=LR_base, momentum=0.9)
+    #optimizer = optim.Adam(model.parameters(), lr=LR_base)
+    optimizer = optim.SGD(model.parameters(), lr=LR_base, momentum=0.9)
     #scheduler = optim.lr_scheduler.OneCycleLR(
     #                            optimizer, max_lr=LR_max, 
     #                            steps_per_epoch=LR_steps, epochs=LR_epochs)
@@ -557,7 +557,7 @@ if pm.isNNfinetuning == True:
         else:
             last_epoch = False
         lr = optimizer.param_groups[0]['lr']
-        print("\n<-------------------------  epoch %d (lr=%f) ------------------------->" %(epoch, lr))
+        print("\n<-------------------------  epoch %d (lr=%.16f) ------------------------->" %(epoch, lr))
         start = time.time()
         loss_function_err = 0
         train_epoch_force_square_loss = 0
@@ -613,7 +613,7 @@ if pm.isNNfinetuning == True:
         # valid_epoch_egroup_RMSE_loss = 0
 
         #scheduler.step()
-        LinearLR(optimizer=optimizer, lr=learning_rate, total_epoch=n_epoch, cur_epoch=epoch)
+        LinearLR(optimizer=optimizer, lr=LR_base, total_epoch=n_epoch, cur_epoch=epoch)
         
         """
         for i_batch, sample_batches in enumerate(loader_valid):
