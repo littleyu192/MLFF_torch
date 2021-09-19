@@ -12,7 +12,8 @@ import parameters as pm
 from model.dmirror import dmirror_FC
 
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+#device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cpu')
 
 
 def d_sigmoid(x):
