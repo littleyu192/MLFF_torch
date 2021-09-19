@@ -1,6 +1,8 @@
 #!/bin/bash
 
-cd pre_data/gen_feature
+cd bin
+rm -rf *.r *.x
+cd ../pre_data/gen_feature
 make clean
 cd ../fit
 make clean
