@@ -169,6 +169,16 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
     neighbor = Variable(sample_batches['input_nblist'].int().to(device))  # [40,108,100]
     ind_img = Variable(sample_batches['ind_image'].int().to(device))
 
+    # dumping what you want here
+    #
+    if (opt_verbose == True):
+        print("defat.shape= ", dfeat.shape)
+        print("neighbor.shape = ", neighbor.shape)
+        print("dump dfeat ------------------->")
+        print(dfeat)
+        print("dump neighbor ------------------->")
+        print(neighbor)
+
     model = model.to(device)
     # model = model.cuda()
     # model = torch.nn.parallel.DistributedDataParallel(model)
