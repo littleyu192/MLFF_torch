@@ -101,7 +101,8 @@ else:
 #writer = SummaryWriter()
 torch.manual_seed(2021)
 torch.cuda.manual_seed(2021)
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+#device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cpu')
 
 def pretrain(sample_batches, premodel, optimizer, criterion):
     error=0
@@ -484,7 +485,7 @@ if pm.isNNfinetuning == True:
     # if torch.cuda.device_count() > 1:
         # model = nn.DataParallel(model)
     #optimizer = optim.Adam(model.parameters(), lr=LR_base)
-    optimizer = optim.SGD(model.parameters(), lr=LR_base, momentum=0.9)
+    optimizer = optim.SGD(model.parameters(), lr=LR_base, momentum=0.5)
     #scheduler = optim.lr_scheduler.OneCycleLR(
     #                            optimizer, max_lr=LR_max, 
     #                            steps_per_epoch=LR_steps, epochs=LR_epochs)
