@@ -425,6 +425,7 @@ if (opt_step != 0):
     LR_step = opt_step
 
 # for Regularization
+REGULAR_wd = 0.0000001
 REGULAR_wd = 0.
 if (opt_regular_wd != 0.):
     REGULAR_wd = opt_regular_wd
