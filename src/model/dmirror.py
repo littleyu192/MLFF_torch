@@ -84,20 +84,19 @@ import collections
 class dmirror_linear(nn.Module):
     def __init__(self, in_dim, out_dim, bias=True):
         super(dmirror_linear, self).__init__()
-        self.bias = bias
-        self.w = nn.Parameter(torch.randn(out_dim, in_dim), requires_grad=True)
-        if (self.bias == True):
-            self.b = nn.Parameter(torch.randn(out_dim), requires_grad=True)
+        self.weight = nn.Parameter(torch.randn(out_dim, in_dim), requires_grad=True)
+        if (bias == True):
+            self.bias = nn.Parameter(torch.randn(out_dim), requires_grad=True)
 
     def forward(self, x, d_order=0):
         if (d_order == 0):
-            res = torch.mv(self.w, x)
-            if (self.bias == True):
-                return res + self.b
+            res = torch.mv(self.weight, x)
+            if (self.bias is not None):
+                return res + self.bias
             else:
                 return res
         elif (d_order == 1):
-            return torch.mv(self.w.t(), x)
+            return torch.mv(self.weight.t(), x)
         else:
             raise RuntimeError(
                 "Notimplemented for d_order = %s" %(d_order)
