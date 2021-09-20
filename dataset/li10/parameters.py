@@ -26,8 +26,8 @@ genFeatDir = r'./gen_feature'
 mdImageFileDir=r'./MD'                              #设置md的初始image的文件所在的文件夹  default:'.'
 
 #训练时需要打开
-#isCalcFeat=True
-isFitLinModel=True
+isCalcFeat=True
+#isFitLinModel=True
 
 #isClassify=True
 #isRunMd=True                                   #是否训练运行md  default:False

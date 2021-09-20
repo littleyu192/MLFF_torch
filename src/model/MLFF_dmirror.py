@@ -12,18 +12,17 @@ import parameters as pm
 from model.dmirror import dmirror_FC
 
 
-#device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-device = torch.device('cpu')
-
-
 def d_sigmoid(x):
     return torch.sigmoid(x) * (1 - torch.sigmoid(x))
 
 class MLFF_dmirror(nn.Module):
-    def __init__(self, net_cfg, activation_type):
+    def __init__(self, net_cfg, activation_type, device):
         super(MLFF_dmirror, self).__init__()
+        # config parameters
         self.atomType = pm.atomType
         self.natoms = pm.natoms[0]
+        self.device = device
+        # network
         if (net_cfg == 'default'):
             self.net_cfg = pm.MLFF_dmirror_cfg
             print("MLFF_dmirror: using default net_cfg: pm.MLFF_dmirror_cfg")
@@ -49,10 +48,10 @@ class MLFF_dmirror(nn.Module):
         batch_size = image.shape[0]
         result_Ei = torch.zeros(
             (batch_size, self.natoms)
-        ).to(device)
+        ).to(self.device)
         result_dEi_dFeat = torch.zeros(
             (batch_size, self.natoms, self.dim_feat)
-        ).to(device)
+        ).to(self.device)
 
         # FIXME: loops should be eliminated by matmul style network impl
         for batch_idx in range(batch_size):
@@ -62,7 +61,7 @@ class MLFF_dmirror(nn.Module):
                 result_dEi_dFeat[batch_idx, i, :] = dEi_dFeat
 
         Etot = torch.sum(result_Ei, 1)
-        Force = torch.zeros((batch_size, self.natoms, 3)).to(device)
+        Force = torch.zeros((batch_size, self.natoms, 3)).to(self.device)
 
         # here we use the infinite cell (in Rcut) view to calc F_atom_i
         # the formula is: sum dE(all neighbor atoms in Rcut)/dR_(this atom)

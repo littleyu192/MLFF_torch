@@ -33,7 +33,7 @@ isCalcFeat=True
 #isRunMd=True                                   #是否训练运行md  default:False
 #isRunMd_nn=True
 #isFollowMd=True                                #是否是接续上次的md继续运行  default:False
-isFitVdw=True
+#isFitVdw=True
 
 #NN预测时需要打开
 #isRunMd100_nn=True
@@ -44,7 +44,7 @@ isFitVdw=True
 #********* for gen_feature.in *********************
 atomType=[29]                                  #铜有29个同位素,相当于29个种类的cu
 maxNeighborNum=100
-natoms=[108]
+#natoms=[108]
 
 
 iflag_PCA=0
@@ -100,8 +100,8 @@ ClusterNum=[3,2]
 
 fortranFitAtomRepulsingEnergies=[0.000,0.000]            #fortran fitting时对每种原子设置的排斥能量的大小，此值必须设置，无default值！(list_like)
 fortranFitAtomRadii=[2.83]                        #fortran fitting时对每种原子设置的半径大小，此值必须设置，无default值！(list_like)
-fortranFitWeightOfEnergy=0.8                    #fortran fitting时最后fit时各个原子能量所占的权重(linear和grr公用参数)  default:0.9
-fortranFitWeightOfEtot=0.0                      #fortran fitting时最后fit时Image总能量所占的权重(linear和grr公用参数)  default:0.0
+fortranFitWeightOfEnergy=0.0                    #fortran fitting时最后fit时各个原子能量所占的权重(linear和grr公用参数)  default:0.9
+fortranFitWeightOfEtot=0.8                      #fortran fitting时最后fit时Image总能量所占的权重(linear和grr公用参数)  default:0.0
 fortranFitWeightOfForce=0.2                     #fortran fitting时最后fit时各个原子所受力所占的权重(linear和grr公用参数)  default:0.1
 fortranFitRidgePenaltyTerm=0.0001               #fortran fitting时最后岭回归时所加的对角penalty项的大小(linear和grr公用参数)  default:0.0001
 fortranFitDwidth=3.0
@@ -140,14 +140,29 @@ isMdProfile=False
 
 #-------------------------------------------------------
 #********************* NN_related ***************
+
+# dtype definition
+feature_dtype = 'float64'   # how the feature data files are stored
+                            # take effect when you call gen_data.py
+                            
+training_dtype = 'float64'  # 1) feature data are casted to specified dtype
+                            #    during training
+                            # 2) model parameter dtype during training
+                            # take effect when you call train.py
+
+inference_dtype = 'float64' # 1) feature data are casted to specified dtype
+                            #    during inference
+                            # 2) model parameter dtype during inference
+                            #
+                            # NOTE: not implemented yet
+
+
 # device related
 
 gpu_mem  = 0.9       # tensorflow used gpu memory
 cuda_dev = '0'       # unoccupied gpu, using 'nvidia-smi' cmd
 cupyFeat=True
-torch_dtype = 'float32'
-tf_dtype = 'float32' # dtype of tensorflow trainning, 'float32' faster than 'float64'
-test_ratio = 0.2
+test_ratio = 0.01
 #================================================================================
 # NN model related
 activation_func='softplus'     # could choose 'softplus' and 'elup1' now
@@ -164,6 +179,31 @@ b_init=np.array([166.3969])      # energy of one atom, for different types, just
 isNNpretrain = False
 isNNfinetuning = True
 
+# MLFF_dmirror configurations
+MLFF_dmirror_cfg = [
+                        ('linear', 42, 1, True),
+                   ]
+
+MLFF_dmirror_cfg1 = [
+                        ('linear', 42, 30, True),
+                        ('activation',),
+                        ('linear', 30, 60, True),
+                        ('activation',),
+                        ('linear', 60, 1, True)
+                   ]
+MLFF_dmirror_cfg2 = [
+                        ('linear', 42, 1, True),
+                        ('activation',),
+                        ('linear', 1, 1, True)
+                   ]
+MLFF_dmirror_cfg3 = [
+                        ('linear', 42, 10, True),
+                        ('activation',),
+                        ('linear', 10, 3, True),
+                        ('activation',),
+                        ('linear', 3, 1, True)
+                   ]
+
 #================================================================================
 # training 
 train_continue = False     #是否接着训练
@@ -174,9 +214,9 @@ train_verb = 0
 
 learning_rate= 1e-3
 batch_size = 2        
-rtLossE      = 0.8     # weight for energy, NN fitting 各个原子能量所占的权重
+rtLossE      = 0.0     # weight for energy, NN fitting 各个原子能量所占的权重
 rtLossF      = 0.2     # weight for force, NN fitting 各个原子所受力所占的权重
-rtLossEtot   = 0.0
+rtLossEtot   = 0.8
 bias_corr = True
 epochs_alltrain = 6000     # energy 训练循环次数
 epochs_Fi_train = 1000       # force+energy 训练循环次数 1000个epoch效果较好
