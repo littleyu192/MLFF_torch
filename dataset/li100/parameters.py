@@ -203,6 +203,15 @@ MLFF_dmirror_cfg3 = [
                         ('activation',),
                         ('linear', 3, 1, True)
                    ]
+MLFF_dmirror_cfg4 = [
+                        ('linear', 42, 80, True),
+                        ('activation',),
+                        ('linear', 80, 40, True),
+                        ('activation',),
+                        ('linear', 40, 20, True),
+                        ('activation',),
+                        ('linear', 20, 1, True)
+                   ]
 
 #================================================================================
 # training 
