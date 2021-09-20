@@ -41,10 +41,11 @@ opt_step = 0
 opt_act = 'sigmoid'
 opt_dtype = pm.training_dtype
 opt_net_cfg = 'default'
+opt_regular_wd = float(0)
 
 opts,args = getopt.getopt(sys.argv[1:],
-    '-h-v-s-e:-l:-g:-t:-a:-d:-n:',
-    ['help','verbose','summary','epochs=','lr=','gamma=','step=','act=', 'dtype=', 'net_cfg='])
+    '-h-v-s-e:-l:-g:-t:-a:-d:-n:-w:',
+    ['help','verbose','summary','epochs=','lr=','gamma=','step=','act=', 'dtype=', 'net_cfg=', 'weight_decay='])
 
 for opt_name,opt_value in opts:
     if opt_name in ('-h','--help'):
@@ -62,6 +63,7 @@ for opt_name,opt_value in opts:
         print("     -d dtype, --dtype=dtype     :  specify default dtype: [float64, float32]")
         print("     -n cfg, --net_cfg=cfg       :  specify network cfg variable in parameters.py")
         print("                                    eg: -n MLFF_dmirror_cfg1")
+        print("     -w val, --weight_decay=val  :  specify weight decay regularization value")
         print("")
         exit()
     elif opt_name in ('-v','--verbose'):
@@ -82,6 +84,8 @@ for opt_name,opt_value in opts:
         opt_dtype = opt_value
     elif opt_name in ('-n','--net_cfg'):
         opt_net_cfg = opt_value
+    elif opt_name in ('-w','--weight_decay'):
+        opt_regular_wd = float(opt_value)
 
 # set default training dtype
 #
@@ -175,10 +179,12 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
     if (opt_verbose == True):
         print("defat.shape= ", dfeat.shape)
         print("neighbor.shape = ", neighbor.shape)
+        #torch.set_printoptions(profile="full")
         print("dump dfeat ------------------->")
         print(dfeat)
         print("dump neighbor ------------------->")
         print(neighbor)
+        #torch.set_printoptions(profile="default")
 
     model = model.to(device)
     # model = model.cuda()
@@ -246,6 +252,11 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
     #
     # Etot_label.shape = [batch_size, 1], while Etot_predict.shape = [batch_size], so squeeze Etot_label to match
     #
+    if (opt_verbose or (opt_summary and last_epoch)):
+        for name, parameter in model.named_parameters():
+            print("dump model parameter (%s : %s) -------->" %(name, parameter.size()))
+            print(parameter)
+
     loss = pm.rtLossF * criterion(Force_predict, Force_label) + pm.rtLossEtot * criterion(Etot_predict, Etot_label.squeeze())
     loss_F = criterion(Force_predict, Force_label)
     loss_Etot = criterion(Etot_predict, Etot_label.squeeze())
@@ -379,10 +390,16 @@ LR_step = 100
 if (opt_step != 0):
     LR_step = opt_step
 
+# for Regularization
+REGULAR_wd = 0.
+if (opt_regular_wd != 0.):
+    REGULAR_wd = opt_regular_wd
+
 print("Training: n_epoch = %d" %n_epoch)
 print("Training: LR_base = %.16f" %LR_base)
 print("Training: LR_gamma = %.16f" %LR_gamma)
 print("Training: LR_step = %d" %LR_step)
+print("Training: REGULAR_wd = %.16f" %REGULAR_wd)
 
 #LR_milestones = [1000, 1500, 1700, 1800, 1900, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000]
 #LR_tmax=200
@@ -484,8 +501,13 @@ if pm.isNNfinetuning == True:
 
     # if torch.cuda.device_count() > 1:
         # model = nn.DataParallel(model)
-    #optimizer = optim.Adam(model.parameters(), lr=LR_base)
-    optimizer = optim.SGD(model.parameters(), lr=LR_base, momentum=0.5)
+    optimizer = optim.Adam(
+                [
+                    {'params': (p for name, p in model.named_parameters() if 'bias' not in name)},
+                    {'params': (p for name, p in model.named_parameters() if 'bias' in name), 'weight_decay': 0.}
+                ],
+                lr=LR_base, weight_decay = REGULAR_wd)
+    #optimizer = optim.SGD(model.parameters(), lr=LR_base, momentum=0.5)
     #scheduler = optim.lr_scheduler.OneCycleLR(
     #                            optimizer, max_lr=LR_max, 
     #                            steps_per_epoch=LR_steps, epochs=LR_epochs)

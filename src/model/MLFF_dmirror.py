@@ -44,8 +44,6 @@ class MLFF_dmirror(nn.Module):
             self.net = dmirror_FC(self.net_cfg, F.softplus, F.sigmoid)
         else:
             raise RuntimeError("MLFF_dmirror: unsupported activation_type: %s" %activation_type)
-        #print(self.natoms)
-        #print("111111111111111111")
 
     def forward(self, image, dfeat, neighbor, Egroup_weight, divider):
         batch_size = image.shape[0]
@@ -56,6 +54,7 @@ class MLFF_dmirror(nn.Module):
             (batch_size, self.natoms, self.dim_feat)
         ).to(device)
 
+        # FIXME: loops should be eliminated by matmul style network impl
         for batch_idx in range(batch_size):
             for i in range(self.natoms):
                 Ei, dEi_dFeat = self.net(image[batch_idx, i, :])
@@ -64,16 +63,31 @@ class MLFF_dmirror(nn.Module):
 
         Etot = torch.sum(result_Ei, 1)
         Force = torch.zeros((batch_size, self.natoms, 3)).to(device)
-        result_dEtot_dFeat = result_dEi_dFeat.view(
-            [batch_size, self.natoms * self.dim_feat]
-        )
 
+        # here we use the infinite cell (in Rcut) view to calc F_atom_i
+        # the formula is: sum dE(all neighbor atoms in Rcut)/dR_(this atom)
+        #
+        # for all infinite cells, the calculate of dE(atom)/dFeat is same as
+        # the central unit cell, since they are just duplicates of unit cell,
+        # but each cell should has its' own version of dFeat/dRi_(unit_cell),
+        # so we will have
+        #
+        # atom_idx     :  to index dE(atom)/dFeat
+        # neighbor_idx :  to index dFeat/dRi_(unit_cell)
+        #
         for batch_idx in range(batch_size):
             for i in range(self.natoms):
-                a = result_dEtot_dFeat[batch_idx].unsqueeze(0)
-                b0 = dfeat[batch_idx, i, :self.natoms]  # FIXME: this is fool?
-                b = b0.view([self.natoms * self.dim_feat, 3])
-                Force[batch_idx, i, :] = torch.mm(a, b)
+                # get atom_idx & neighbor_idx
+                my_neighbor = neighbor[batch_idx, i]
+                neighbor_idx = my_neighbor.nonzero().squeeze().type(torch.int64)
+                atom_idx = my_neighbor[neighbor_idx].type(torch.int64) - 1
+                # calculate Force
+                #   a.shape = [neighbor_num, 1, self.dim_feat]
+                #   b.shape = [neighbor_num, self.dim_feat, 3]
+                #   Force.shape = [batch_size, self.natoms, 3]
+                a = result_dEi_dFeat[batch_idx, atom_idx].unsqueeze(1)
+                b = dfeat[batch_idx, i, neighbor_idx]
+                Force[batch_idx, i, :] = torch.matmul(a, b).sum([0, 1])
 
         return Etot, Force
 
