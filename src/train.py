@@ -33,6 +33,7 @@ import getopt
 # parse optional parameters
 opt_verbose = False
 opt_summary = False
+opt_force_cpu = False
 opt_epochs = 0
 opt_lr = float(0)
 opt_gamma = float(0)
@@ -41,10 +42,13 @@ opt_act = 'sigmoid'
 opt_dtype = pm.training_dtype
 opt_net_cfg = 'default'
 opt_regular_wd = float(0)
+opt_rseed = 2021
+opt_batch_size = pm.batch_size
 
 opts,args = getopt.getopt(sys.argv[1:],
-    '-h-v-s-e:-l:-g:-t:-a:-d:-n:-w:',
-    ['help','verbose','summary','epochs=','lr=','gamma=','step=','act=', 'dtype=', 'net_cfg=', 'weight_decay='])
+    '-h-v-s-c-e:-l:-g:-t:-a:-d:-n:-w:-r:-b:',
+    ['help','verbose','summary','cpu','epochs=','lr=','gamma=',
+     'step=','act=','dtype=','net_cfg=','weight_decay=','rseed=','batch_size='])
 
 for opt_name,opt_value in opts:
     if opt_name in ('-h','--help'):
@@ -53,6 +57,7 @@ for opt_name,opt_value in opts:
         print("     -h, --help                  :  print help info")
         print("     -v, --verbose               :  verbose output")
         print("     -s, --summary               :  output summary when training finish")
+        print("     -c, --cpu                   :  force training run on cpu")
         print("     -e epochs, --epochs=epochs  :  specify training epochs")
         print("     -l lr, --lr=lr              :  specify initial training lr")
         print("     -g gamma, --gamma=gamma     :  specify gamma of StepLR scheduler")
@@ -63,12 +68,16 @@ for opt_name,opt_value in opts:
         print("     -n cfg, --net_cfg=cfg       :  specify network cfg variable in parameters.py")
         print("                                    eg: -n MLFF_dmirror_cfg1")
         print("     -w val, --weight_decay=val  :  specify weight decay regularization value")
+        print("     -r seed, --rseed=seed       :  specify random seed used in training")
+        print("     -b size, --batch_size=size  :  specify batch size")
         print("")
         exit()
     elif opt_name in ('-v','--verbose'):
         opt_verbose = True
     elif opt_name in ('-s','--summary'):
         opt_summary = True
+    elif opt_name in ('-c','--cpu'):
+        opt_force_cpu = True
     elif opt_name in ('-e','--epochs'):
         opt_epochs = int(opt_value)
     elif opt_name in ('-l','--lr'):
@@ -85,6 +94,10 @@ for opt_name,opt_value in opts:
         opt_net_cfg = opt_value
     elif opt_name in ('-w','--weight_decay'):
         opt_regular_wd = float(opt_value)
+    elif opt_name in ('-r','--rseed'):
+        opt_rseed = int(opt_value)
+    elif opt_name in ('-b','--batch_size'):
+        opt_batch_size = int(opt_value)
 
 # set default training dtype
 #
@@ -100,12 +113,18 @@ elif (opt_dtype == 'float32'):
 else:
     raise RuntimeError("Training: unsupported dtype: %s" %opt_dtype)
 
+# set rseed & device
+torch.manual_seed(opt_rseed)
+torch.cuda.manual_seed(opt_rseed)
+if (opt_force_cpu == True):
+    device = torch.device('cpu')
+else:
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print("Training: rseed = ", opt_rseed)
+print("Training: device = ", device)
 
 #writer = SummaryWriter()
-torch.manual_seed(2021)
-torch.cuda.manual_seed(2021)
-#device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-device = torch.device('cpu')
+
 
 def get_loss_func(start_lr, real_lr, has_fi, lossFi, has_etot, loss_Etot, has_egroup, loss_Egroup, has_ei, loss_Ei):
     start_pref_egroup = 0.02
@@ -392,7 +411,7 @@ def sec_to_hms(seconds):
 
 
 # ==========================part1:数据读取==========================
-batch_size = pm.batch_size   #40
+batch_size = opt_batch_size 
 train_data_path=pm.train_data_path
 torch_train_data = get_torch_data(pm.natoms, train_data_path)
 loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=True)
@@ -430,6 +449,7 @@ REGULAR_wd = 0.
 if (opt_regular_wd != 0.):
     REGULAR_wd = opt_regular_wd
 
+print("Training: batch_size = %d" %batch_size)
 print("Training: n_epoch = %d" %n_epoch)
 print("Training: LR_base = %.16f" %LR_base)
 print("Training: LR_gamma = %.16f" %LR_gamma)
@@ -532,7 +552,7 @@ if pm.isNNfinetuning == True:
     # import ipdb; ipdb.set_trace()
     # model = MLFFNet(data_scalers)
     # model = LNNet()
-    model = MLFF_dmirror(opt_net_cfg, opt_act)
+    model = MLFF_dmirror(opt_net_cfg, opt_act, device)
 
     # model = MLFFNet()
     #model = LNNet()

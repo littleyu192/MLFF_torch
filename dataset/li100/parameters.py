@@ -43,8 +43,9 @@ isFitLinModel=True
 #add_force=True     # for NN md
 #********* for gen_feature.in *********************
 atomType=[3]                                  # MOVEMENT of Li, from Zhang WenTao
-maxNeighborNum=100
 natoms=[2]
+maxNeighborNum=27
+maxNeighborNum=100
 
 
 iflag_PCA=0
@@ -140,14 +141,28 @@ isMdProfile=False
 
 #-------------------------------------------------------
 #********************* NN_related ***************
-# device related
 
+# dtype definition
+feature_dtype = 'float64'   # how the feature data files are stored
+                            # take effect when you call gen_data.py
+                            
+training_dtype = 'float64'  # 1) feature data are casted to specified dtype
+                            #    during training
+                            # 2) model parameter dtype during training
+                            # take effect when you call train.py
+
+inference_dtype = 'float64' # 1) feature data are casted to specified dtype
+                            #    during inference
+                            # 2) model parameter dtype during inference
+                            #
+                            # NOTE: not implemented yet
+
+
+# device related
 gpu_mem  = 0.9       # tensorflow used gpu memory
 cuda_dev = '0'       # unoccupied gpu, using 'nvidia-smi' cmd
 cupyFeat=True
-torch_dtype = 'float32'
-tf_dtype = 'float32' # dtype of tensorflow trainning, 'float32' faster than 'float64'
-test_ratio = 0.2
+test_ratio = 0.5
 #================================================================================
 # NN model related
 activation_func='softplus'     # could choose 'softplus' and 'elup1' now
@@ -164,6 +179,31 @@ b_init=np.array([166.3969])      # energy of one atom, for different types, just
 isNNpretrain = False
 isNNfinetuning = True
 
+# MLFF_dmirror configurations
+MLFF_dmirror_cfg = [
+                        ('linear', 42, 1, True),
+                   ]
+
+MLFF_dmirror_cfg1 = [
+                        ('linear', 42, 30, True),
+                        ('activation',),
+                        ('linear', 30, 60, True),
+                        ('activation',),
+                        ('linear', 60, 1, True)
+                   ]
+MLFF_dmirror_cfg2 = [
+                        ('linear', 42, 1, True),
+                        ('activation',),
+                        ('linear', 1, 1, True)
+                   ]
+MLFF_dmirror_cfg3 = [
+                        ('linear', 42, 10, True),
+                        ('activation',),
+                        ('linear', 10, 3, True),
+                        ('activation',),
+                        ('linear', 3, 1, True)
+                   ]
+
 #================================================================================
 # training 
 train_continue = False     #是否接着训练
@@ -173,7 +213,7 @@ train_stage = 2      # only 1 or 2, 1 is begining training from energy and then 
 train_verb = 0       
 
 learning_rate= 1e-3
-batch_size = 2        
+batch_size = 100      
 rtLossE      = 0.0     # weight for energy, NN fitting 各个原子能量所占的权重
 rtLossF      = 0.2     # weight for force, NN fitting 各个原子所受力所占的权重
 rtLossEtot   = 0.8
