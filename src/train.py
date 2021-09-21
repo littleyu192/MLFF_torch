@@ -34,6 +34,7 @@ import getopt
 opt_verbose = False
 opt_summary = False
 opt_force_cpu = False
+opt_magic = False
 opt_epochs = 0
 opt_lr = float(0)
 opt_gamma = float(0)
@@ -46,8 +47,8 @@ opt_rseed = 2021
 opt_batch_size = pm.batch_size
 
 opts,args = getopt.getopt(sys.argv[1:],
-    '-h-v-s-c-e:-l:-g:-t:-a:-d:-n:-w:-r:-b:',
-    ['help','verbose','summary','cpu','epochs=','lr=','gamma=',
+    '-h-v-s-c-m-e:-l:-g:-t:-a:-d:-n:-w:-r:-b:',
+    ['help','verbose','summary','cpu','magic','epochs=','lr=','gamma=',
      'step=','act=','dtype=','net_cfg=','weight_decay=','rseed=','batch_size='])
 
 for opt_name,opt_value in opts:
@@ -58,6 +59,7 @@ for opt_name,opt_value in opts:
         print("     -v, --verbose               :  verbose output")
         print("     -s, --summary               :  output summary when training finish")
         print("     -c, --cpu                   :  force training run on cpu")
+        print("     -m, --magic                 :  a magic flag for your testing code")
         print("     -e epochs, --epochs=epochs  :  specify training epochs")
         print("     -l lr, --lr=lr              :  specify initial training lr")
         print("     -g gamma, --gamma=gamma     :  specify gamma of StepLR scheduler")
@@ -78,6 +80,8 @@ for opt_name,opt_value in opts:
         opt_summary = True
     elif opt_name in ('-c','--cpu'):
         opt_force_cpu = True
+    elif opt_name in ('-m','--magic'):
+        opt_magic = True
     elif opt_name in ('-e','--epochs'):
         opt_epochs = int(opt_value)
     elif opt_name in ('-l','--lr'):
@@ -222,14 +226,14 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
     ind_img = Variable(sample_batches['ind_image'].int().to(device))
     # dumping what you want here
     #
-    if (opt_verbose == True):
-        print("defat.shape= ", dfeat.shape)
-        print("neighbor.shape = ", neighbor.shape)
-        #torch.set_printoptions(profile="full")
-        print("dump dfeat ------------------->")
-        print(dfeat)
-        print("dump neighbor ------------------->")
-        print(neighbor)
+    #if (opt_verbose == True):
+        #print("defat.shape= ", dfeat.shape)
+        #print("neighbor.shape = ", neighbor.shape)
+        ##torch.set_printoptions(profile="full")
+        #print("dump dfeat ------------------->")
+        #print(dfeat)
+        #print("dump neighbor ------------------->")
+        #print(neighbor)
         #torch.set_printoptions(profile="default")
 
     model = model.to(device)
@@ -552,7 +556,7 @@ if pm.isNNfinetuning == True:
     # import ipdb; ipdb.set_trace()
     # model = MLFFNet(data_scalers)
     # model = LNNet()
-    model = MLFF_dmirror(opt_net_cfg, opt_act, device)
+    model = MLFF_dmirror(opt_net_cfg, opt_act, device, opt_magic)
 
     # model = MLFFNet()
     #model = LNNet()
