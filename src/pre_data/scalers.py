@@ -32,6 +32,7 @@ class MinMaxScaler:
 
     def transform(self, x):
         x = np.atleast_2d(x)
+        # import ipdb; ipdb.set_trace()
         return self.a.astype("float64")*x+self.b.astype("float64")
 
     def inverse_transform(self, y):
@@ -154,13 +155,13 @@ class DataScalers:
             itype = pm.atomType[i]
             feat_scaler = self.scalers[itype].feat_scaler
             engy_scaler = self.scalers[itype].engy_scaler
-            dsnp.append(np.array(feat_scaler.fr))
-            dsnp.append(np.array(feat_scaler.a))
-            dsnp.append(np.array(feat_scaler.b))
+            dsnp.append(np.array(feat_scaler.fr).astype("float64"))
+            dsnp.append(np.array(feat_scaler.a).astype("float64"))
+            dsnp.append(np.array(feat_scaler.b).astype("float64"))
             dsnp.append(np.array(self.feat_as[itype]))   # 这个值不就是feat_scaler.a  多此一举？
-            dsnp.append(np.array(engy_scaler.fr))
-            dsnp.append(np.array(engy_scaler.a))
-            dsnp.append(np.array(engy_scaler.b))
+            dsnp.append(np.array(engy_scaler.fr).astype("float64"))
+            dsnp.append(np.array(engy_scaler.a).astype("float64"))
+            dsnp.append(np.array(engy_scaler.b).astype("float64"))
             dsnp.append(np.array(self.engy_as[itype]))
         dsnp = np.array(dsnp)
         np.save(f_npfile, dsnp)

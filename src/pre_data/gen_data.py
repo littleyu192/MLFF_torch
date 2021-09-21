@@ -36,11 +36,14 @@ def process_data(f_train_feat, f_train_dfeat, f_train_natoms, f_train_egroup,
     for i in range(nImg):
         indImg[i+1] = indImg[i] + natoms[i, 0]
 
+    # 设置打印时显示方式：输出数组的时候完全输出
+    np.set_printoptions(threshold=np.inf)
+    # pd.set_option('display.float_format',lambda x : '%.15f' % x)
+    pd.options.display.float_format = '${:,.15f}'.format
     itypes, feat, engy = prepare.r_feat_csv(f_train_feat)
     feat_scaled = scalers.pre_feat(feat, itypes)
     engy_scaled = scalers.pre_engy(engy, itypes)
     
-    import ipdb;ipdb.set_trace()
     # feat_scaled = pre_feat(scalers, feat, itypes)
     # engy_scaled = engy
     egroup, divider, egroup_weight = prepare.r_egroup_csv(f_train_egroup)
@@ -57,9 +60,10 @@ def process_data(f_train_feat, f_train_dfeat, f_train_natoms, f_train_egroup,
         itype = pm.atomType[i]
         feat_scale_a[:, i] = scalers.scalers[itype].feat_scaler.a
     feat_scale_a = np.asfortranarray(feat_scale_a)  # scaler 的 a参数
-    # feat_scale_a=np.ones((nfeat0m,pm.ntypes))   #如果不做scale，赋值为1
+    # feat_scale_a=np.ones((nfeat0m,pm.ntypes))   #如果不做scale，赋值为1?
     # feat_scale_a = np.asfortranarray(feat_scale_a)
     init = pm.use_Ftype[0]
+    
 
     dfeatdirs = {}
     energy_all = {}
@@ -101,9 +105,7 @@ def process_data(f_train_feat, f_train_dfeat, f_train_natoms, f_train_egroup,
     #     dfeat_tmp_all_1.append(k)
     # dfeat = np.array(dfeat_tmp_all_1)
 
-    # 设置打印时显示方式：输出数组的时候完全输出
-    np.set_printoptions(threshold=np.inf)
-    print("========dfeat_tmp_all========")
+    # print("========dfeat_tmp_all========")
     # print(dfeat_tmp_all)
 
     

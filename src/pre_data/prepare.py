@@ -3,6 +3,27 @@ import parameters as pm
 import numpy as np
 import numpy as cp
 import pandas as pd
+import re
+
+
+def pdFloatFormat(x):
+    li1=re.split('E+', str(x),flags=re.IGNORECASE)
+    li2=re.split('E-', str(x),flags=re.IGNORECASE)
+    if len(li1)>1 or len(li2)>1:        
+        if len(li1)>1:            
+            n1=len(li1[0].replace('.',''))-1
+            n2=int(li1[1])
+            nx=n2-n1
+            n=0 if nx>0 else nx
+        else:
+            n1=len(li2[0].replace('.',''))-1   
+            n2=int(li2[1])
+            n=n1+n2
+        print(x,n)
+        x2=('{:.'+str(n)+'f}').format(x)
+    else:
+        x2=str(x)
+    return x2
 
 def collectAllSourceFiles(workDir=pm.trainSetDir,sourceFileName='MOVEMENT'):
     '''
@@ -227,13 +248,13 @@ def r_feat_csv(f_feat):
     """ read feature and energy from pandas data
     """
     # df   = pd.read_csv(f_feat,  encoding= 'unicode_escape')
-    # import ipdb;ipdb.set_trace()
-
-    df   = pd.read_csv(f_feat,header=None,index_col=False,dtype=pm.tf_dtype, encoding= 'unicode_escape')
+    np.set_printoptions(threshold=np.inf)
+    df = pd.read_csv(f_feat,header=None,index_col=False,dtype=pm.tf_dtype, encoding= 'unicode_escape', float_precision='round_trip')
     itypes = df[1].values.astype(int)
     engy = df[2].values
-    feat = df.drop([0,1,2],axis=1).values 
+    feat = df.drop([0,1,2],axis=1).values.astype("float64")
     engy = engy.reshape([engy.size,1])
+
     return itypes,feat,engy
 
 def r_egroup_csv(f_egroup):
