@@ -338,7 +338,7 @@ def run_md100(imodel=1, atom_type=[16], num_process=1):
     f.close()
 
     # create md100.input
-    f = open('md100.input', 'w')
+    f = open('MD100.input', 'w')
     f.write('%d %d %d %d %d\n' % (nimage, nskip1, nskip2, nskip3, njump))
     f.write(in_movement)
     f.write('\n')
