@@ -16,7 +16,7 @@ def d_sigmoid(x):
     return torch.sigmoid(x) * (1 - torch.sigmoid(x))
 
 class MLFF_dmirror(nn.Module):
-    def __init__(self, net_cfg, activation_type, device):
+    def __init__(self, net_cfg, activation_type, device, magic=False):
         super(MLFF_dmirror, self).__init__()
         # config parameters
         self.atomType = pm.atomType
@@ -36,11 +36,11 @@ class MLFF_dmirror(nn.Module):
         if (activation_type == 'sigmoid'):
             self.activation_type = 'sigmoid'
             print("MLFF_dmirror: using sigmoid activation")
-            self.net = dmirror_FC(self.net_cfg, torch.sigmoid, d_sigmoid)
+            self.net = dmirror_FC(self.net_cfg, torch.sigmoid, d_sigmoid, magic)
         elif (activation_type == 'softplus'):
             self.activation_type = 'softplus'
             print("MLFF_dmirror: using softplus activation")
-            self.net = dmirror_FC(self.net_cfg, F.softplus, F.sigmoid)
+            self.net = dmirror_FC(self.net_cfg, F.softplus, F.sigmoid, magic)
         else:
             raise RuntimeError("MLFF_dmirror: unsupported activation_type: %s" %activation_type)
 

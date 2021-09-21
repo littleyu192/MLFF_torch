@@ -82,11 +82,42 @@ import collections
 #
 
 class dmirror_linear(nn.Module):
-    def __init__(self, in_dim, out_dim, bias=True):
+    def __init__(self, in_dim, out_dim, bias=True, magic=False):
         super(dmirror_linear, self).__init__()
-        self.weight = nn.Parameter(torch.randn(out_dim, in_dim), requires_grad=True)
-        if (bias == True):
-            self.bias = nn.Parameter(torch.randn(out_dim), requires_grad=True)
+
+        # for pesudo random number generator for float64/float32 precision test
+        self.rand_a = 25214903917
+        self.rand_c = 11
+        self.rand_p = 2021
+
+        if (magic == False):
+            self.weight = nn.Parameter(torch.randn(out_dim, in_dim), requires_grad=True)
+            if (bias == True):
+                self.bias = nn.Parameter(torch.randn(out_dim), requires_grad=True)
+        else:
+            warmup_my_rand = self.my_rand_2d(out_dim, in_dim)
+            self.weight = nn.Parameter(self.my_rand_2d(out_dim, in_dim), requires_grad=True)
+            if (bias == True):
+                self.bias = nn.Parameter(self.my_rand_1d(out_dim), requires_grad=True)
+
+    # random number generator, maybe their better place is train.py
+    def my_rand_core(self):
+        r = (self.rand_a * self.rand_p + self.rand_c) % 10000
+        self.rand_p = r
+        return r
+
+    def my_rand_2d(self, m, n):
+        res = torch.randn(m, n)
+        for i in range(m):
+            for j in range(n):
+                res[i, j] = float(self.my_rand_core() / 10000.0)
+        return res
+
+    def my_rand_1d(self, m):
+        res = torch.randn(m)
+        for i in range(m):
+            res[i] = float(self.my_rand_core() / 10000.0)
+        return res
 
     def forward(self, x, d_order=0):
         if (d_order == 0):
@@ -123,7 +154,7 @@ class dmirror_activation(nn.Module):
 
 
 class dmirror_FC(nn.Module):
-    def __init__(self, cfg, act_func, d_act_func):
+    def __init__(self, cfg, act_func, d_act_func, magic=False):
         super(dmirror_FC, self).__init__()
         self.cfg = cfg
         self.act_func = act_func
@@ -142,7 +173,7 @@ class dmirror_FC(nn.Module):
                 bias = item[3]
                 self.layers.append((
                     'dmirror_linear_'+str(idx_linear),
-                    dmirror_linear(in_dim, out_dim, bias)
+                    dmirror_linear(in_dim, out_dim, bias, magic)
                 ))
                 idx_linear += 1
             elif (layer_type == 'activation'):
