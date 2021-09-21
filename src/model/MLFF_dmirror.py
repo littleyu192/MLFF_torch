@@ -35,7 +35,7 @@ class MLFF_dmirror(nn.Module):
         self.dim_feat = pm.nFeatures
         if (activation_type == 'sigmoid'):
             self.activation_type = 'sigmoid'
-            print("MLFF_dmirror: using sigmod activation")
+            print("MLFF_dmirror: using sigmoid activation")
             self.net = dmirror_FC(self.net_cfg, torch.sigmoid, d_sigmoid)
         elif (activation_type == 'softplus'):
             self.activation_type = 'softplus'
