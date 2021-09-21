@@ -26,7 +26,6 @@ from data_loader_2type import MovementDataset, get_torch_data
 from scalers import DataScalers
 from torch.utils.tensorboard import SummaryWriter
 # from tensorboardX import SummaryWriter
-import torchviz
 import time
 
 
@@ -150,7 +149,7 @@ def train(sample_batches, model, optimizer, criterion):
     w_f = 1
     w_e = 0
     w_eg = 1
-    w_ei = 1
+    w_ei = 0
     loss = w_e * loss_Etot + w_f * loss_F + w_eg * loss_Egroup + w_ei * loss_Ei
     print('*'*10)
     print("weighted etot MSE loss: " + str(loss_Etot))
@@ -232,7 +231,7 @@ def valid(sample_batches, model, criterion):
     w_f = 1
     w_e = 0
     w_eg = 1
-    w_ei = 1
+    w_ei = 0
     loss = w_e * loss_Etot + w_f * loss_F + w_eg * loss_Egroup + w_ei * loss_Ei
 
     error = error+float(loss.item())
@@ -263,7 +262,7 @@ n_epoch = 2000
 learning_rate = 0.1
 weight_decay = 0.9
 weight_decay_epoch = 50
-direc = './FC3model_mini_1_0_1_1'
+direc = './FC3model_mini_1_0_1_0_no_act'
 if not os.path.exists(direc):
     os.makedirs(direc) 
 
@@ -363,9 +362,9 @@ if pm.isNNfinetuning == True:
         # optimizer.load_state_dict(checkpoint['optimizer'])
         start_epoch=checkpoint['epoch']+1
 
-    resume = False   #模型中断时重新训练
+    resume = True  #模型中断时重新训练
     if resume:
-        path=r"./FC3model_mini_force/3layers_MLFFNet.pt"
+        path=r"./FC3model_mini_1_0_1_0_no_act/3layers_MLFFNet_56epoch.pt"
         checkpoint = torch.load(path, map_location={'cpu':'cuda:0'})
         model.load_state_dict(checkpoint['model'])
         # optimizer.load_state_dict(checkpoint['optimizer'])
@@ -464,7 +463,7 @@ if pm.isNNfinetuning == True:
         if epoch > weight_decay_epoch:   # 学习率衰减
             scheduler.step()
         iprint = 1 #隔几个epoch记录一次误差
-        f_err_log=pm.dir_work+'mini_1_0_1_1.dat'
+        f_err_log=pm.dir_work+'mini_1_0_1_0_no_act.dat'
         if epoch // iprint == 1:
             fid_err_log = open(f_err_log, 'w')
         else:

@@ -35,8 +35,37 @@ else:
  
 # dACTIVE = dsigmoid
 
-ACTIVE = F.softplus
-dACTIVE = torch.sigmoid
+# ACTIVE = F.softplus
+# dACTIVE = torch.sigmoid
+
+# ACTIVE = torch.tanh
+# def dtanh(x):
+#     return 1-torch.tanh(x)**2
+# dACTIVE = dtanh
+
+# ACTIVE = torch.relu
+# def drelu(x):
+#     res = torch.zeros_like(x)
+#     mask = x > 0
+#     res[mask] = 1
+#     return res
+# dACTIVE = drelu
+
+def no_act(x):
+    return x
+def no_dact(x):
+    return torch.ones_like(x)
+ACTIVE = no_act
+dACTIVE = no_dact
+
+# ACTIVE = torch.nn.LeakyReLU(negative_slope=0.01, inplace=False)
+# def dLeakyReLU(x):
+#     res = torch.ones_like(x)
+#     mask = x < 0
+#     res[mask] = 0.01
+#     return res
+# dACTIVE = dLeakyReLU
+
 
 B_INIT= -0.2
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -166,8 +195,10 @@ class MLFFNet(nn.Module):
         
         cal_ei_de = time.time()
         Etot = Ei.sum(dim=1)
-        
-        # test = Ei.
+
+        # test = Ei.sum()
+        # test.backward(retain_graph=True)
+        # dE = image.grad
 
         # out_sum = Etot.sum()
         # out_sum.backward(retain_graph=True)
