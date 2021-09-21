@@ -14,7 +14,8 @@
 !/zwt/PWdata/MOVEMENT
 
 /li10
-
+/Li
+/dataMD
 # model file
 *.pt
 *.dat

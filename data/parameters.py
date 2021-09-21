@@ -95,6 +95,78 @@ Ftype2_para={
     'dR2':[0.5,0.5],
     'iflag_ftype':3   # same value for different types, iflag_ftype:1,2,3 when 3, iflag_grid must be 3
 }
+Ftype3_para={           # 2bgauss
+    'Rc':[5.4 for tmp in range(10)],     # number of elements in Rc = num atom type
+    'n2b':[6 for tmp in range(10)],       # number of elements in n2b = num atom type
+    'r':[ [1.0, 1.0, 1.0, 1.5, 1.5, 1.5, 2.0, 2.0, 2.0, 2.5, 2.5, 2.5, 3.0, 3.0, 3.0,
+           3.5, 3.5, 3.5, 5.0, 5.0, 5.0, 4.5, 4.5, 4.5, 5.0, 5.0, 5.0, 5.5, 5.5, 5.5,
+        ] for tmp in range(10) ],
+    'w':[ [1.0, 2.0, 3.0, 1.0, 2.0, 3.0, 1.0, 2.0, 3.0, 1.0, 2.0, 3.0, 1.0, 2.0, 3.0,
+           1.0, 2.0, 3.0, 1.0, 2.0, 3.0, 1.0, 2.0, 3.0, 1.0, 2.0, 3.0, 1.0, 2.0, 3.0,
+          ] for tmp in range(10) ]
+}
+Ftype4_para={           # 3bcos
+    'Rc':[5.4 for tmp in range(10)],     # number of elements in Rc = num atom type
+    'n3b':[20 for tmp in range(10)],       # number of elements in n2b = num atom type
+    'eta':   [ [1.0/1.0, 1.0/2.0, 1.0/4.0, 1.0/8.0, 1.0/16.0, 1.0/32.0, 1.0/1.0, 1.0/2.0, 1.0/4.0, 1.0/8.0, 1.0/16.0, 1.0/32.0,
+                1.0/1.0, 1.0/2.0, 1.0/4.0, 1.0/8.0, 1.0/16.0, 1.0/32.0, 1.0/1.0, 1.0/2.0, 1.0/4.0, 1.0/8.0, 1.0/16.0, 1.0/32.0, 
+                1.0/1.0, 1.0/2.0, 1.0/4.0, 1.0/8.0, 1.0/16.0, 1.0/32.0, 1.0/1.0, 1.0/2.0, 1.0/4.0, 1.0/8.0, 1.0/16.0, 1.0/32.0, 
+                1.0/1.0, 1.0/2.0, 1.0/4.0, 1.0/8.0, 1.0/16.0, 1.0/32.0, 1.0/1.0, 1.0/2.0, 1.0/4.0, 1.0/8.0, 1.0/16.0, 1.0/32.0, 
+             ] for tmp in range(10)],
+    'w':     [ [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0,
+                5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 6.0, 6.0, 6.0, 6.0, 6.0, 6.0, 7.0, 7.0, 7.0, 7.0, 7.0, 7.0, 8.0, 8.0, 8.0, 8.0, 8.0, 8.0,
+             ] for tmp in range(10)],
+    # w is the \ksi in formula
+    'lambda':[ [1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0,
+                1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0,
+                1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0,
+               ] for tmp in range(10)],
+}
+Ftype5_para={           # MTP
+    'Rc':[5.4 for tmp in range(10)],     # number of elements in Rc = num atom type
+    'Rm':[0.5  for tmp in range(10)],     # number of elements in Rc = num atom type
+    'n_MTP_line': [5 for tmp in range(10)], # 5~11
+    'tensors':[
+                [
+                  '1, 4, 0, ( )                              ',
+                  '2, 3,3, 0,0, ( ), ( )                     ',
+                  '2, 3,3, 1,1, ( 21 ), ( 11 )               ',
+                  '2, 3,3, 2,2, ( 21, 22 ), ( 11, 12 )       ',
+                  '3, 2,2,2, 2,1,1 ( 21, 31 ), ( 11 ), ( 12 )',
+                  '3, 2,2,2, 3,2,1 ( 21, 22, 31 ), ( 11, 12 ), ( 13 )',
+                  '3, 2,2,2, 4,2,2 ( 21, 22, 31, 32 ), ( 11, 12 ), ( 13, 14 )',
+                  '4, 2,2,2,2 3,1,1,1 ( 21, 31, 41 ), ( 11 ), ( 12 ), ( 13 )',
+                  '4, 2,2,2,2 4,2,1,1 ( 21, 22, 31, 41 ), ( 11, 12 ), ( 13 ), ( 14 )',
+                  '4, 2,2,2,2 5,2,2,1 ( 21, 22, 31, 32, 41 ), ( 11, 12 ), ( 13, 14 ), ( 15 )',
+                ] for tmp in range(10)
+              ],
+    }
+Ftype6_para={
+    'Rc':[5.4 for tmp in range(10)],     # number of elements in Rc = num atom type
+    'J' :[3.0 for tmp in range(10)],
+    'n_w_line': [2 for tmp in range(10)],
+    'w1':[ [0.9, 0.1, 0.8, 0.2, 0.7, 0.3, 0.6, 0.4]  for tmp in range(10)],  # shape(w1) = (ntype, n_w_line)
+    'w2':[ [0.1, 0.9, 0.2, 0.8, 0.3, 0.7, 0.4, 0.6]  for tmp in range(10) ],
+    }
+Ftype7_para={
+    'Rc':[5.4  for tmp in range(10)],     # number of elements in Rc = num atom type
+    'Rc2':[3.0  for tmp in range(10)],
+    'Rm':[1.0  for tmp in range(10)],
+    'M': [4  for tmp in range(10)],
+    'weight_r': [1.0  for tmp in range(10)],
+    }
+Ftype8_para={
+    'Rc':[5.4  for tmp in range(10)],     # number of elements in Rc = num atom type
+    'M':[8  for tmp in range(10)],
+    'weight_r':[1.0  for tmp in range(10)],
+    'rg':[
+            [1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 3.0, 3.0, 3.0, 3.0, 4.0, 4.0, 4.0, 4.0, 5.0, 5.0, 5.0, 5.0]  for tmp in range(10)
+         ],
+    'w':[
+            [1.0, 1.5, 2.0, 2.5, 1.0, 1.5, 2.0, 2.5, 1.0, 1.5, 2.0, 2.5, 1.0, 1.5, 2.0, 2.5, 1.0, 1.5, 2.0, 2.5]  for tmp in range(10)
+        ]
+    }
+
 nFeatures=42
 
 
@@ -173,11 +245,9 @@ activation_func='softplus'     # could choose 'softplus' and 'elup1' now
 ntypes=len(atomType)
 nLayers = 3
 nNodes = np.array([[60,60],[30,30],[1,1]])
-# nLayers=5
-# nNodes = np.array([[256,256],[256,256],[256,256],[64,64],[1,1]])
+#nLayers=5
+#nNodes = np.array([[256,256],[256,256],[256,256],[64,64],[1,1]])
 b_init=np.array([166.3969])      # energy of one atom, for different types, just a rough value
-#nLayers = 4
-#nNodes = np.array([[16,],[64,],[32,],[1,]])
 
 #================================================================================
 # training 
