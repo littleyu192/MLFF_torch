@@ -319,7 +319,7 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
     
     # print("weighted loss: " + str(loss))
     #time_start = time.time()
-    loss.backward()
+    loss.backward()                             # FIXME: need to try grad normalization with minibatch size
     optimizer.step()
     #time_end = time.time()
     #print("update grad time:", time_end - time_start, 's')

@@ -65,7 +65,7 @@ isNNfinetuning=True
 #********* for gen_feature.in *********************
 atomType=[29]                                  #铜有29个同位素,相当于29个种类的cu
 maxNeighborNum=100
-#natoms=[108]
+natoms=[108]
 
 iflag_PCA=0
 Rc_M=5.5                     # max of Rcut
@@ -261,7 +261,7 @@ inference_dtype = 'float64' # 1) feature data are casted to specified dtype
 gpu_mem  = 0.9       # tensorflow used gpu memory
 cuda_dev = '0'       # unoccupied gpu, using 'nvidia-smi' cmd
 cupyFeat=True
-test_ratio = 0.01
+test_ratio = 0.2
 #================================================================================
 # NN model related
 activation_func='softplus'     # could choose 'softplus' and 'elup1' now
