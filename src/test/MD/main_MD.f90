@@ -42,7 +42,7 @@ program main_MD
         write(6,*) "TEST1.1 nodes=",nnodes
 
         
-        open(9,file="md.input")
+        open(9,file="MD.input")
         rewind(9)
         read(9,*) f_xatom
         read(9,*)iMD,MDstep,dtMD,Temperature1,Temperature2
