@@ -7,16 +7,6 @@
 # a hidden style weight & variable sharing, we just need to describe
 # the network and all the sharing issues will be done automaticlly
 #
-# To implement the bi-direction operation, a d_order parameter is
-# introduced to forward() method of dmirror layers
-#   d_order=0:  0 order derivative (normal forward)
-#   d_order=1:  1st order derivative (d_forward)
-#   d_order=n:  nth order derivative (not implemented)
-#
-# A network module based on dmirror layers should correctly handle
-# the d_order of it's layers, and it's best not to expose d_order
-# related issues to higher level modules or callers.
-#
 # Basic dmirror layers:
 #
 #   dmirror_linear(self, in_dim, out_dim, bias=True)
@@ -138,19 +128,14 @@ class dmirror_linear(nn.Module):
             res[i] = float(self.my_rand_core() / 10000.0)
         return res
 
-    def forward(self, x, d_order=0):
-        if (d_order == 0):
-            res = torch.mv(self.weight, x)
-            if (self.bias is not None):
-                return res + self.bias
-            else:
-                return res
-        elif (d_order == 1):
-            return torch.mv(self.weight.t(), x)
+    def forward(self, x):
+        if (self.bias is not None):
+            return torch.matmul(x, self.weight.t()) + self.bias
         else:
-            raise RuntimeError(
-                "Notimplemented for d_order = %s" %(d_order)
-            )
+            return torch.matmul(x, self.weight.t())
+
+    def forward_r(self, x):
+        return torch.matmul(x, self.weight)
 
 
 class dmirror_activation(nn.Module):
@@ -160,16 +145,12 @@ class dmirror_activation(nn.Module):
         self.d_func = d_func
         self.k = torch.tensor([])
 
-    def forward(self, x, d_order=0):
-        if (d_order == 0):
-            self.k = x
-            return self.func(x)
-        elif (d_order == 1):
-            return x * self.d_func(self.k)
-        else:
-            raise RuntimeError(
-                "Notimplemented for d_order = %s" %(d_order)
-            )
+    def forward(self, x):
+        self.k = x
+        return self.func(x)
+
+    def forward_r(self, x):
+        return x * self.d_func(self.k)
 
 
 class dmirror_FC(nn.Module):
@@ -179,6 +160,7 @@ class dmirror_FC(nn.Module):
         self.act_func = act_func
         self.d_act_func = d_act_func
         self.layers = []
+        self.layers_r = []
 
         # parse cfg & generating layers
         #
@@ -209,6 +191,7 @@ class dmirror_FC(nn.Module):
                 raise ValueError(
                     "Invalid for layer_type = %s" %(layer_type)
                 )
+        self.layers_r = list(reversed(self.layers))
 
         # the layer parameters will be registered to nn Module,
         # so optimizer can update the layer parameters.
@@ -217,7 +200,7 @@ class dmirror_FC(nn.Module):
             collections.OrderedDict(self.layers)
         )
         self.mirror_net = nn.Sequential(
-            collections.OrderedDict(reversed(self.layers))
+            collections.OrderedDict(self.layers_r)
         )
         info("dmirror_FC: start of network instance dump ==============>")
         info("<----------------------- base_net ----------------------->")
@@ -231,12 +214,12 @@ class dmirror_FC(nn.Module):
     #
     def forward(self, x):
         for name, obj in (self.layers):
-            x = obj.forward(x, 0)
+            x = obj.forward(x)
         res0 = x
 
         x = torch.ones_like(res0)
-        for name, obj in (reversed(self.layers)):
-            x = obj.forward(x, 1)
+        for name, obj in (self.layers_r):
+            x = obj.forward_r(x)
         res1 = x
 
         return res0, res1
