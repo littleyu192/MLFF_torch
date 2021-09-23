@@ -11,7 +11,29 @@ import parameters as pm
 # pp.readFeatnum()
 from model.dmirror import dmirror_FC
 
+# logging and our extension
+import logging
+logging_level_DUMP = 5
+logging_level_SUMMARY = 15
 
+# setup logging module
+logger = logging.getLogger('train.MLFF_dmirror')
+
+def dump(msg, *args, **kwargs):
+    logger.log(logging_level_DUMP, msg, *args, **kwargs)
+def debug(msg, *args, **kwargs):
+    logger.debug(msg, *args, **kwargs)
+def summary(msg, *args, **kwargs):
+    logger.log(logging_level_SUMMARY, msg, *args, **kwargs)
+def info(msg, *args, **kwargs):
+    logger.info(msg, *args, **kwargs)
+def warning(msg, *args, **kwargs):
+    logger.warning(msg, *args, **kwargs)
+def error(msg, *args, **kwargs):
+    logger.error(msg, *args, **kwargs, exc_info=True)
+
+# MLFF_dmirror implementation
+#
 def d_sigmoid(x):
     return torch.sigmoid(x) * (1 - torch.sigmoid(x))
 
@@ -25,23 +47,24 @@ class MLFF_dmirror(nn.Module):
         # network
         if (net_cfg == 'default'):
             self.net_cfg = pm.MLFF_dmirror_cfg
-            print("MLFF_dmirror: using default net_cfg: pm.MLFF_dmirror_cfg")
-            print(self.net_cfg)
+            info("MLFF_dmirror: using default net_cfg: pm.MLFF_dmirror_cfg")
+            info(self.net_cfg)
         else:
             net_cfg = 'pm.' + net_cfg
             self.net_cfg = eval(net_cfg)
-            print("MLFF_dmirror: using specified net_cfg: %s" %net_cfg)
-            print(self.net_cfg)
+            info("MLFF_dmirror: using specified net_cfg: %s" %net_cfg)
+            info(self.net_cfg)
         self.dim_feat = pm.nFeatures
         if (activation_type == 'sigmoid'):
             self.activation_type = 'sigmoid'
-            print("MLFF_dmirror: using sigmoid activation")
+            info("MLFF_dmirror: using sigmoid activation")
             self.net = dmirror_FC(self.net_cfg, torch.sigmoid, d_sigmoid, magic)
         elif (activation_type == 'softplus'):
             self.activation_type = 'softplus'
-            print("MLFF_dmirror: using softplus activation")
+            info("MLFF_dmirror: using softplus activation")
             self.net = dmirror_FC(self.net_cfg, F.softplus, F.sigmoid, magic)
         else:
+            error("MLFF_dmirror: unsupported activation_type: %s" %activation_type)
             raise RuntimeError("MLFF_dmirror: unsupported activation_type: %s" %activation_type)
 
     def forward(self, image, dfeat, neighbor, Egroup_weight, divider):
