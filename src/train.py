@@ -389,9 +389,9 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
     #
     # Etot_label.shape = [batch_size, 1], while Etot_predict.shape = [batch_size], so squeeze Etot_label to match
     #
-    loss = pm.rtLossF * criterion(Force_predict, Force_label) + pm.rtLossEtot * criterion(Etot_predict, Etot_label.squeeze())
+    loss = pm.rtLossF * criterion(Force_predict, Force_label) + pm.rtLossEtot * criterion(Etot_predict, Etot_label)
     loss_F = criterion(Force_predict, Force_label)
-    loss_Etot = criterion(Etot_predict, Etot_label.squeeze())
+    loss_Etot = criterion(Etot_predict, Etot_label)
     loss_Egroup = 0
     info("loss = %f (loss_etot = %f, loss_force = %f, RMSE_etot = %f, RMSE_force = %f)" %(loss, loss_Etot, loss_F, loss_Etot ** 0.5, loss_F ** 0.5))
     #w_f = loss_Etot / (loss_Etot + loss_F)

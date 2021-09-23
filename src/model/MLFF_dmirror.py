@@ -76,12 +76,7 @@ class MLFF_dmirror(nn.Module):
             (batch_size, self.natoms, self.dim_feat)
         ).to(self.device)
 
-        # FIXME: loops should be eliminated by matmul style network impl
-        for batch_idx in range(batch_size):
-            for i in range(self.natoms):
-                Ei, dEi_dFeat = self.net(image[batch_idx, i, :])
-                result_Ei[batch_idx, i] = Ei
-                result_dEi_dFeat[batch_idx, i, :] = dEi_dFeat
+        result_Ei, result_dEi_dFeat = self.net(image)
 
         Etot = torch.sum(result_Ei, 1)
         Force = torch.zeros((batch_size, self.natoms, 3)).to(self.device)
