@@ -29,6 +29,7 @@ from torch.utils.tensorboard import SummaryWriter
 # from tensorboardX import SummaryWriter
 import time
 import getopt
+import logging
 
 # parse optional parameters
 opt_verbose = False
@@ -45,18 +46,21 @@ opt_net_cfg = 'default'
 opt_regular_wd = float(0)
 opt_rseed = 2021
 opt_batch_size = pm.batch_size
+opt_log_level = logging.INFO
+opt_log_file = ''
+opt_file_log_level = logging.DEBUG
 
 opts,args = getopt.getopt(sys.argv[1:],
-    '-h-v-s-c-m-e:-l:-g:-t:-a:-d:-n:-w:-r:-b:',
-    ['help','verbose','summary','cpu','magic','epochs=','lr=','gamma=',
-     'step=','act=','dtype=','net_cfg=','weight_decay=','rseed=','batch_size='])
+    '-h-s-c-m-e:-l:-g:-t:-a:-d:-n:-w:-r:-b:-o:-f:-i:',
+    ['help','summary','cpu','magic','epochs=','lr=','gamma=',
+     'step=','act=','dtype=','net_cfg=','weight_decay=','rseed=','batch_size=',
+     'log_level=','log_file=', 'log_level_file='])
 
 for opt_name,opt_value in opts:
     if opt_name in ('-h','--help'):
         print("")
         print("Available parameters:")
         print("     -h, --help                  :  print help info")
-        print("     -v, --verbose               :  verbose output")
         print("     -s, --summary               :  output summary when training finish")
         print("     -c, --cpu                   :  force training run on cpu")
         print("     -m, --magic                 :  a magic flag for your testing code")
@@ -72,10 +76,15 @@ for opt_name,opt_value in opts:
         print("     -w val, --weight_decay=val  :  specify weight decay regularization value")
         print("     -r seed, --rseed=seed       :  specify random seed used in training")
         print("     -b size, --batch_size=size  :  specify batch size")
+        print("     -o level, --log_level=level :  specify logging level of console")
+        print("                                    available: DUMP < DEBUG < [INFO] < WARNING < ERROR")
+        print("                                    logging msg with level >= logging_level will be displayed")
+        print("     -f file, --log_file=file    :  specify the file to store a duplication of logging msg")
+        print("     -i L, --log_file_level=L    :  specify logging level of log file")
+        print("                                    available: DUMP < [DEBUG] < INFO < WARNING < ERROR")
+        print("                                    logging msg with level >= logging_level will be recoreded")
         print("")
         exit()
-    elif opt_name in ('-v','--verbose'):
-        opt_verbose = True
     elif opt_name in ('-s','--summary'):
         opt_summary = True
     elif opt_name in ('-c','--cpu'):
@@ -102,6 +111,55 @@ for opt_name,opt_value in opts:
         opt_rseed = int(opt_value)
     elif opt_name in ('-b','--batch_size'):
         opt_batch_size = int(opt_value)
+    elif opt_name in ('-o','--log_level'):
+        if (opt_value == 'DUMP'):
+            opt_log_level = 5
+        else:
+            opt_log_level = 'logging.'+opt_value
+            opt_log_level = eval(opt_log_level)
+    elif opt_name in ('-f','--log_file'):
+        opt_log_file = opt_value
+    elif opt_name in ('-i','--log_level_file'):
+        if (opt_value == 'DUMP'):
+            opt_file_log_level = 5
+        else:
+            opt_file_log_level = 'logging.'+opt_value
+            opt_file_log_level = eval(opt_file_log_level)
+
+# setup logging module
+logging.addLevelName(5, 'DUMP')
+logger = logging.getLogger('train_logger')
+logger.setLevel(5)
+
+CUR_GREEN = '\033[92m'
+CUR_YELLOW = '\033[93m'
+CUR_RED= '\033[91m'
+CUR_RESET= '\033[0m'
+
+formatter = logging.Formatter("%(message)s")
+handler1 = logging.StreamHandler()
+handler1.setLevel(opt_log_level)
+handler1.setFormatter(formatter)
+logger.addHandler(handler1)
+
+if (opt_log_file != ''):
+    formatter = logging.Formatter("\33[0m\33[32;49m[%(asctime)s]\33[0m.\33[34;49m[%(name)s]\33[0m.\33[33;49m[%(levelname)s]\33[0m: %(message)s")
+    handler2 = logging.FileHandler(filename = opt_log_file)
+    handler2.setLevel(opt_file_log_level)
+    handler2.setFormatter(formatter)
+    logger.addHandler(handler2)
+
+def dump(msg, *args, **kwargs):
+    logger.log(5, msg, *args, **kwargs)
+def debug(msg, *args, **kwargs):
+    logger.debug(msg, *args, **kwargs)
+def info(msg, *args, **kwargs):
+    logger.info(msg, *args, **kwargs)
+def warning(msg, *args, **kwargs):
+    logger.warning(msg, *args, **kwargs)
+def error(msg, *args, **kwargs):
+    logger.error(msg, *args, **kwargs)
+
 
 # set default training dtype
 #
