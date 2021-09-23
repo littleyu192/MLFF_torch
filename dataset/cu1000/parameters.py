@@ -40,10 +40,9 @@ genFeatDir = r'./gen_feature'
 mdImageFileDir=r'./MD'                              #设置md的初始image的文件所在的文件夹  default:'.'
 
 #训练时需要打开
-isCalcFeat=True
+
+#isCalcFeat=True
 isFitLinModel=True
-isNNpretrain=False
-isNNfinetuning=True
 
 #isClassify=True
 #isRunMd=True                                   #是否训练运行md  default:False
@@ -261,7 +260,7 @@ inference_dtype = 'float64' # 1) feature data are casted to specified dtype
 gpu_mem  = 0.9       # tensorflow used gpu memory
 cuda_dev = '0'       # unoccupied gpu, using 'nvidia-smi' cmd
 cupyFeat=True
-test_ratio = 0.2
+test_ratio = 0.898
 #================================================================================
 # NN model related
 activation_func='softplus'     # could choose 'softplus' and 'elup1' now

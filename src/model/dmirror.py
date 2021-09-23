@@ -77,10 +77,29 @@ import torch
 import torch.nn as nn
 import collections
 
-# TODO: 1) expand to higher than 1-dimensional input
-#       2) make sure the code can running on GPU
-#
+# logging and our extension
+import logging
+logging_level_DUMP = 5
+logging_level_SUMMARY = 15
 
+# setup logging module
+logger = logging.getLogger('train.dmirror')
+
+def dump(msg, *args, **kwargs):
+    logger.log(logging_level_DUMP, msg, *args, **kwargs)
+def debug(msg, *args, **kwargs):
+    logger.debug(msg, *args, **kwargs)
+def summary(msg, *args, **kwargs):
+    logger.log(logging_level_SUMMARY, msg, *args, **kwargs)
+def info(msg, *args, **kwargs):
+    logger.info(msg, *args, **kwargs)
+def warning(msg, *args, **kwargs):
+    logger.warning(msg, *args, **kwargs)
+def error(msg, *args, **kwargs):
+    logger.error(msg, *args, **kwargs, exc_info=True)
+
+# dmirror implementation
+#
 class dmirror_linear(nn.Module):
     def __init__(self, in_dim, out_dim, bias=True, magic=False):
         super(dmirror_linear, self).__init__()
@@ -200,12 +219,12 @@ class dmirror_FC(nn.Module):
         self.mirror_net = nn.Sequential(
             collections.OrderedDict(reversed(self.layers))
         )
-        print("dmirror_FC: start of network instance dump ==============>")
-        print("<----------------------- base_net ----------------------->")
-        print(self.base_net)
-        print("<---------------------- mirror_net ---------------------->")
-        print(self.mirror_net)
-        print("dmirror_FC: end of network instance dump ================>")
+        info("dmirror_FC: start of network instance dump ==============>")
+        info("<----------------------- base_net ----------------------->")
+        info(self.base_net)
+        info("<---------------------- mirror_net ---------------------->")
+        info(self.mirror_net)
+        info("dmirror_FC: end of network instance dump ================>")
 
     # we can't call forward() of sequentialized module, since
     # we extened the param list of the layers' forward()

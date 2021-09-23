@@ -27,13 +27,16 @@ from data_loader_2type import MovementDataset, get_torch_data
 from scalers import DataScalers
 from torch.utils.tensorboard import SummaryWriter
 # from tensorboardX import SummaryWriter
+import torchviz
 import time
 import getopt
+
+# logging and our extension
 import logging
+logging_level_DUMP = 5
+logging_level_SUMMARY = 15
 
 # parse optional parameters
-opt_verbose = False
-opt_summary = False
 opt_force_cpu = False
 opt_magic = False
 opt_epochs = 0
@@ -47,21 +50,24 @@ opt_regular_wd = float(0)
 opt_rseed = 2021
 opt_batch_size = pm.batch_size
 opt_log_level = logging.INFO
-opt_log_file = ''
 opt_file_log_level = logging.DEBUG
+# session related options
+opt_session_name = ''
+opt_session_dir = ''
+opt_logging_file = ''
+opt_tensorboard_dir = ''
 
 opts,args = getopt.getopt(sys.argv[1:],
-    '-h-s-c-m-e:-l:-g:-t:-a:-d:-n:-w:-r:-b:-o:-f:-i:',
-    ['help','summary','cpu','magic','epochs=','lr=','gamma=',
+    '-h-c-m-e:-l:-g:-t:-a:-d:-n:-w:-r:-b:-s:-o:-i:',
+    ['help','cpu','magic','epochs=','lr=','gamma=',
      'step=','act=','dtype=','net_cfg=','weight_decay=','rseed=','batch_size=',
-     'log_level=','log_file=', 'file_log_level='])
+     'session=', 'log_level=', 'file_log_level='])
 
 for opt_name,opt_value in opts:
     if opt_name in ('-h','--help'):
         print("")
         print("Available parameters:")
         print("     -h, --help                  :  print help info")
-        print("     -s, --summary               :  output summary when training finish")
         print("     -c, --cpu                   :  force training run on cpu")
         print("     -m, --magic                 :  a magic flag for your testing code")
         print("     -e epochs, --epochs=epochs  :  specify training epochs")
@@ -76,17 +82,16 @@ for opt_name,opt_value in opts:
         print("     -w val, --weight_decay=val  :  specify weight decay regularization value")
         print("     -r seed, --rseed=seed       :  specify random seed used in training")
         print("     -b size, --batch_size=size  :  specify batch size")
+        print("     -s name, --session=name     :  specify the session name, log files, tensorboards and models")
+        print("                                    will be saved to subdirectory named by this session name")
         print("     -o level, --log_level=level :  specify logging level of console")
-        print("                                    available: DUMP < DEBUG < [INFO] < WARNING < ERROR")
+        print("                                    available: DUMP < DEBUG < SUMMARY < [INFO] < WARNING < ERROR")
         print("                                    logging msg with level >= logging_level will be displayed")
-        print("     -f file, --log_file=file    :  specify the file to store a duplication of logging msg")
         print("     -i L, --file_log_level=L    :  specify logging level of log file")
-        print("                                    available: DUMP < [DEBUG] < INFO < WARNING < ERROR")
+        print("                                    available: DUMP < [DEBUG] < SUMMARY < INFO < WARNING < ERROR")
         print("                                    logging msg with level >= logging_level will be recoreded")
         print("")
         exit()
-    elif opt_name in ('-s','--summary'):
-        opt_summary = True
     elif opt_name in ('-c','--cpu'):
         opt_force_cpu = True
     elif opt_name in ('-m','--magic'):
@@ -111,54 +116,63 @@ for opt_name,opt_value in opts:
         opt_rseed = int(opt_value)
     elif opt_name in ('-b','--batch_size'):
         opt_batch_size = int(opt_value)
+    elif opt_name in ('-s','--session'):
+        opt_session_name = opt_value
+        opt_session_dir = './'+opt_session_name+'/'
+        opt_logging_file = opt_session_dir+'train.log'
+        opt_tensorboard_dir = opt_session_dir+'/tensorboard/'
+        if not os.path.exists(opt_session_dir):
+            os.makedirs(opt_session_dir) 
+        if not os.path.exists(opt_tensorboard_dir):
+            os.makedirs(opt_tensorboard_dir) 
     elif opt_name in ('-o','--log_level'):
         if (opt_value == 'DUMP'):
-            opt_log_level = 5
+            opt_log_level = logging_level_DUMP
+        elif (opt_value == 'SUMMARY'):
+            opt_log_level = logging_level_SUMMARY
         else:
             opt_log_level = 'logging.'+opt_value
             opt_log_level = eval(opt_log_level)
-    elif opt_name in ('-f','--log_file'):
-        opt_log_file = opt_value
     elif opt_name in ('-i','--file_log_level'):
         if (opt_value == 'DUMP'):
-            opt_file_log_level = 5
+            opt_file_log_level = logging_level_DUMP
+        elif (opt_value == 'SUMMARY'):
+            opt_file_log_level = logging_level_SUMMARY
         else:
             opt_file_log_level = 'logging.'+opt_value
             opt_file_log_level = eval(opt_file_log_level)
 
 # setup logging module
-logging.addLevelName(5, 'DUMP')
-logger = logging.getLogger('train_logger')
-logger.setLevel(5)
+logging.addLevelName(logging_level_DUMP, 'DUMP')
+logging.addLevelName(logging_level_SUMMARY, 'SUMMARY')
+logger = logging.getLogger('train')
+logger.setLevel(logging_level_DUMP)
 
-CUR_GREEN = '\033[92m'
-CUR_YELLOW = '\033[93m'
-CUR_RED= '\033[91m'
-CUR_RESET= '\033[0m'
-
-formatter = logging.Formatter("%(message)s")
+formatter = logging.Formatter("\33[0m\33[34;49m[%(name)s]\33[0m.\33[33;49m[%(levelname)s]\33[0m: %(message)s")
 handler1 = logging.StreamHandler()
 handler1.setLevel(opt_log_level)
 handler1.setFormatter(formatter)
 logger.addHandler(handler1)
 
-if (opt_log_file != ''):
+if (opt_logging_file != ''):
     formatter = logging.Formatter("\33[0m\33[32;49m[%(asctime)s]\33[0m.\33[34;49m[%(name)s]\33[0m.\33[33;49m[%(levelname)s]\33[0m: %(message)s")
-    handler2 = logging.FileHandler(filename = opt_log_file)
+    handler2 = logging.FileHandler(filename = opt_logging_file)
     handler2.setLevel(opt_file_log_level)
     handler2.setFormatter(formatter)
     logger.addHandler(handler2)
 
 def dump(msg, *args, **kwargs):
-    logger.log(5, msg, *args, **kwargs)
+    logger.log(logging_level_DUMP, msg, *args, **kwargs)
 def debug(msg, *args, **kwargs):
     logger.debug(msg, *args, **kwargs)
+def summary(msg, *args, **kwargs):
+    logger.log(logging_level_SUMMARY, msg, *args, **kwargs)
 def info(msg, *args, **kwargs):
     logger.info(msg, *args, **kwargs)
 def warning(msg, *args, **kwargs):
     logger.warning(msg, *args, **kwargs)
 def error(msg, *args, **kwargs):
-    logger.error(msg, *args, **kwargs)
+    logger.error(msg, *args, **kwargs, exc_info=True)
 
 
 # set default training dtype
@@ -167,25 +181,33 @@ def error(msg, *args, **kwargs):
 # 2) feature data will be casted to this dtype before using
 #
 if (opt_dtype == 'float64'):
-    print("Training: set default dtype to float64")
+    info("Training: set default dtype to float64")
     torch.set_default_dtype(torch.float64)
 elif (opt_dtype == 'float32'):
-    print("Training: set default dtype to float32")
+    info("Training: set default dtype to float32")
     torch.set_default_dtype(torch.float32)
 else:
+    error("Training: unsupported dtype: %s" %opt_dtype)
     raise RuntimeError("Training: unsupported dtype: %s" %opt_dtype)
 
-# set rseed & device
-torch.manual_seed(opt_rseed)
-torch.cuda.manual_seed(opt_rseed)
+# set training device
 if (opt_force_cpu == True):
     device = torch.device('cpu')
 else:
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-print("Training: rseed = ", opt_rseed)
-print("Training: device = ", device)
+info("Training: device = %s" %device)
 
-#writer = SummaryWriter()
+# set random seed
+torch.manual_seed(opt_rseed)
+torch.cuda.manual_seed(opt_rseed)
+info("Training: rseed = %s" %opt_rseed)
+
+# set print precision
+torch.set_printoptions(precision = 16)
+
+# set tensorboard
+if (opt_tensorboard_dir != ''):
+    writer = SummaryWriter(opt_tensorboard_dir)
 
 
 def get_loss_func(start_lr, real_lr, has_fi, lossFi, has_etot, loss_Etot, has_egroup, loss_Egroup, has_ei, loss_Ei):
@@ -222,8 +244,8 @@ def pretrain(sample_batches, premodel, optimizer, criterion):
     error=0
     Etot_label = Variable(sample_batches['output_energy'][:,:,:].double().to(device))
     Etot_label = torch.sum(Etot_label, dim=1)   #[40,108,1]-->[40,1]
-    print("==========Etot label==========")
-    print(Etot_label[0])
+    dump("==========Etot label==========")
+    dump(Etot_label[0])
     input_data = Variable(sample_batches['input_feat'].double().to(device), requires_grad=True)
     neighbor = Variable(sample_batches['input_nblist'].int().to(device))  # [40,108,100]
     dfeat = Variable(sample_batches['input_dfeat'].double().to(device))  #[40,108,100,42,3]
@@ -232,8 +254,8 @@ def pretrain(sample_batches, premodel, optimizer, criterion):
     model = premodel.to(device)
     model.train()
     Etot_predict, Ei_predict = model(input_data, dfeat, neighbor)
-    print("==========Etot predict==========")
-    print(Etot_predict[0])
+    dump("==========Etot predict==========")
+    dump(Etot_predict[0])
     Etot_deviation = Etot_predict - Etot_label     # [40,1]
     Etot_square_deviation = Etot_deviation ** 2
     Etot_shape = Etot_label.shape[0]  #40
@@ -274,6 +296,7 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
         egroup_weight = Variable(sample_batches['input_egroup_weight'].float().to(device))
         divider = Variable(sample_batches['input_divider'].float().to(device))
     else:
+        error("train(): unsupported opt_dtype %s" %opt_dtype)
         raise RuntimeError("train(): unsupported opt_dtype %s" %opt_dtype)
 
     # non-floating or derived part of sample_batches
@@ -284,15 +307,12 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
     ind_img = Variable(sample_batches['ind_image'].int().to(device))
     # dumping what you want here
     #
-    #if (opt_verbose == True):
-        #print("defat.shape= ", dfeat.shape)
-        #print("neighbor.shape = ", neighbor.shape)
-        ##torch.set_printoptions(profile="full")
-        #print("dump dfeat ------------------->")
-        #print(dfeat)
-        #print("dump neighbor ------------------->")
-        #print(neighbor)
-        #torch.set_printoptions(profile="default")
+    dump("defat.shape= %s" %(dfeat.shape,))
+    dump("neighbor.shape = %s" %(neighbor.shape,))
+    dump("dump dfeat ------------------->")
+    dump(dfeat)
+    dump("dump neighbor ------------------->")
+    dump(neighbor)
 
     model = model.to(device)
     # model = model.cuda()
@@ -305,15 +325,24 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
     # Egroup_predict = model.get_egroup(Ei_predict, egroup_weight, divider)   #[40,108,1]
 
     # Etot_deviation = Etot_predict - Etot_label     # [40,1]
-    if (opt_verbose or (opt_summary and last_epoch)):
-        print("etot predict =============================================>")
-        print(Etot_predict)
-        print("etot label ===============================================>")
-        print(Etot_label)
-        print("force predict ============================================>")
-        print(Force_predict)
-        print("force label ==============================================>")
-        print(Force_label)
+    dump("etot predict =============================================>")
+    dump(Etot_predict)
+    dump("etot label ===============================================>")
+    dump(Etot_label)
+    dump("force predict ============================================>")
+    dump(Force_predict)
+    dump("force label ==============================================>")
+    dump(Force_label)
+
+    if (last_epoch):
+        summary("etot predict =============================================>")
+        summary(Etot_predict)
+        summary("etot label ===============================================>")
+        summary(Etot_label)
+        summary("force predict ============================================>")
+        summary(Force_predict)
+        summary("force label ==============================================>")
+        summary(Force_label)
 
     # Etot_square_deviation = Etot_deviation ** 2
     # Etot_shape = Etot_label.shape[0]  #40
@@ -360,15 +389,11 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
     #
     # Etot_label.shape = [batch_size, 1], while Etot_predict.shape = [batch_size], so squeeze Etot_label to match
     #
-    if (opt_verbose or (opt_summary and last_epoch)):
-        for name, parameter in model.named_parameters():
-            print("dump model parameter (%s : %s) -------->" %(name, parameter.size()))
-            print(parameter)
-
     loss = pm.rtLossF * criterion(Force_predict, Force_label) + pm.rtLossEtot * criterion(Etot_predict, Etot_label.squeeze())
     loss_F = criterion(Force_predict, Force_label)
     loss_Etot = criterion(Etot_predict, Etot_label.squeeze())
-    print("loss = %f (loss_etot = %f, loss_force = %f, RMSE_etot = %f, RMSE_force = %f)" %(loss, loss_Etot, loss_F, loss_Etot ** 0.5, loss_F ** 0.5))
+    loss_Egroup = 0
+    info("loss = %f (loss_etot = %f, loss_force = %f, RMSE_etot = %f, RMSE_force = %f)" %(loss, loss_Etot, loss_F, loss_Etot ** 0.5, loss_F ** 0.5))
     #w_f = loss_Etot / (loss_Etot + loss_F)
     #w_e = 1 - w_f
     #w_f = pm.rtLossF
@@ -382,6 +407,18 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
     # print("weighted loss: " + str(loss))
     #time_start = time.time()
     loss.backward()                             # FIXME: need to try grad normalization with minibatch size
+
+    for name, parameter in model.named_parameters():
+        dump("dump model parameter (%s : %s) ------------------------>" %(name, parameter.size()))
+        dump(parameter)
+        dump("dump grad of model parameter (%s : %s) (not applied)--->" %(name, parameter.size()))
+        dump(parameter.grad)
+        if (last_epoch):
+            summary("dump model parameter (%s : %s) ------------------------>" %(name, parameter.size()))
+            summary(parameter)
+            summary("dump grad of model parameter (%s : %s) (not applied)--->" %(name, parameter.size()))
+            summary(parameter.grad)
+
     optimizer.step()
     #time_end = time.time()
     #print("update grad time:", time_end - time_start, 's')
@@ -391,7 +428,7 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
     #     Force_RMSE_error, Force_ABS_error, Force_L2, Etot_RMSE_error, Etot_ABS_error, Etot_L2, \
     #          Egroup_RMSE_error, Egroup_ABS_error, Egroup_L2
 
-    return loss
+    return loss, loss_Etot, loss_Egroup, loss_F
 
 def valid(sample_batches, model, criterion, start_lr, real_lr):
     error=0
@@ -511,12 +548,12 @@ REGULAR_wd = 0.
 if (opt_regular_wd != 0.):
     REGULAR_wd = opt_regular_wd
 
-print("Training: batch_size = %d" %batch_size)
-print("Training: n_epoch = %d" %n_epoch)
-print("Training: LR_base = %.16f" %LR_base)
-print("Training: LR_gamma = %.16f" %LR_gamma)
-print("Training: LR_step = %d" %LR_step)
-print("Training: REGULAR_wd = %.16f" %REGULAR_wd)
+info("Training: batch_size = %d" %batch_size)
+info("Training: n_epoch = %d" %n_epoch)
+info("Training: LR_base = %.16f" %LR_base)
+info("Training: LR_gamma = %.16f" %LR_gamma)
+info("Training: LR_step = %d" %LR_step)
+info("Training: REGULAR_wd = %.16f" %REGULAR_wd)
 
 #LR_milestones = [1000, 1500, 1700, 1800, 1900, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000]
 #LR_tmax=200
@@ -663,45 +700,42 @@ if pm.isNNfinetuning == True:
         else:
             last_epoch = False
         lr = optimizer.param_groups[0]['lr']
-        print("\n<-------------------------  epoch %d (lr=%.16f) ------------------------->" %(epoch, lr))
-        start = time.time()
-        loss_function_err = 0
-        train_epoch_force_square_loss = 0
-        train_epoch_etot_square_loss = 0
-        train_epoch_egroup_square_loss = 0
-        train_epoch_force_RMSE_loss = 0
-        train_epoch_etot_RMSE_loss = 0
-        train_epoch_egroup_RMSE_loss = 0
+        info("<-------------------------  epoch %d (lr=%.16f) ------------------------->" %(epoch, lr))
+        nr_total_sample = 0
+        loss = 0.
+        loss_Etot = 0.
+        loss_Egroup = 0.
+        loss_F = 0.
         for i_batch, sample_batches in enumerate(loader_train):
-            # loss, force_square_loss, etot_square_loss, egroup_square_loss, \
-            # Force_RMSE_error, Force_ABS_error, Force_L2, Etot_RMSE_error, Etot_ABS_error, Etot_L2, \
-            #     Egroup_RMSE_error, Egroup_ABS_error, Egroup_L2 = train(sample_batches, model, optimizer, nn.MSELoss())
-            loss = train(sample_batches, model, optimizer, nn.MSELoss(), last_epoch)
-            # import ipdb; ipdb.set_trace()
-            # Log train/loss to TensorBoard at every iteration
-            n_iter = (epoch - 1) * len(loader_train) + i_batch + 1
-            # writer.add_scalar('Train/loss', Force_RMSE_error, n_iter)
-            loss_function_err += loss
+            batch_loss, batch_loss_Etot, batch_loss_Egroup, batch_loss_F = \
+                train(sample_batches, model, optimizer, nn.MSELoss(), last_epoch)
+            nr_batch_sample = sample_batches['input_feat'].shape[0]
+            debug("nr_batch_sample = %s" %nr_batch_sample)
+            loss += batch_loss * nr_batch_sample
+            loss_Etot += batch_loss_Etot * nr_batch_sample
+            loss_Egroup += batch_loss_Egroup * nr_batch_sample
+            loss_F += batch_loss_F * nr_batch_sample
+            nr_total_sample += nr_batch_sample
+
+        # epoch loss update
+        loss /= nr_total_sample
+        loss_Etot /= nr_total_sample
+        loss_Egroup /= nr_total_sample
+        loss_F /= nr_total_sample
+        RMSE_Etot = loss_Etot ** 0.5
+        RMSE_Egroup = loss_Egroup ** 0.5
+        RMSE_F = loss_F ** 0.5
+        info("epoch_loss = %f (loss_Etot = %f, loss_F = %f, RMSE_Etot = %f, RMSE_F = %f)" %(loss, loss_Etot, loss_F, RMSE_Etot, RMSE_F))
+        # update tensorboard
+        if (writer is not None):
+            writer.add_scalar('train_loss', loss, epoch)
+            writer.add_scalar('train_loss_Etot', loss_Etot, epoch)
+            writer.add_scalar('train_loss_Egroup', loss_Egroup, epoch)
+            writer.add_scalar('train_loss_F', loss_F, epoch)
+            writer.add_scalar('train_RMSE_Etot', RMSE_Etot, epoch)
+            writer.add_scalar('train_RMSE_Egroup', RMSE_Egroup, epoch)
+            writer.add_scalar('train_RMSE_F', RMSE_F, epoch)
             
-            # train_epoch_force_square_loss += force_square_loss
-            # train_epoch_etot_square_loss += etot_square_loss
-            # train_epoch_egroup_square_loss += egroup_square_loss
-
-            # train_epoch_force_RMSE_loss += Force_RMSE_error
-            # train_epoch_etot_RMSE_loss += Etot_RMSE_error
-            # train_epoch_egroup_RMSE_loss += Egroup_RMSE_error
-    
-        train_function_err_avg = loss_function_err / len(loader_train)
-        # train_epoch_force_square_loss = train_epoch_force_square_loss/len(loader_train)
-        # train_epoch_etot_square_loss = train_epoch_etot_square_loss/len(loader_train)
-        # train_epoch_egroup_square_loss = train_epoch_egroup_square_loss/len(loader_train)
-
-        # train_force_rmse_loss = train_epoch_force_RMSE_loss/len(loader_train)
-        # train_etot_rmse_loss = train_epoch_etot_RMSE_loss/len(loader_train)
-        # train_egroup_rmse_loss = train_epoch_egroup_RMSE_loss/len(loader_train)
-
-        end = time.time()
-        time_cost = sec_to_hms(int(end-start))    #每个epoch的训练时间
         # print('Finetuning stage: epoch = {}, step = {}, train_function_err_avg = {:.8f}, train_epoch_force_square_loss = {:.8f}, \
         #     train_epoch_etot_square_loss = {:.8f}, train_epoch_egroup_square_loss = {:.8f}, lr = {}, time cost = {}, \
         #     training force rmse = {:.8f}, training etot rmse = {:.8f}, training egroup rmse = {:.8f}'.format(epoch, n_iter, \
@@ -709,7 +743,7 @@ if pm.isNNfinetuning == True:
         #             lr, time_cost, train_force_rmse_loss, train_etot_rmse_loss, train_egroup_rmse_loss)) 
         # print("loss :" + )
 
-        valid_loss_function_err = 0
+        #valid_loss_function_err = 0
         # valid_epoch_force_square_loss = 0
         # valid_epoch_etot_square_loss = 0
         # valid_epoch_egroup_square_loss = 0
@@ -786,5 +820,6 @@ if pm.isNNfinetuning == True:
                 torch.save(state, name)
                 print("Early stopping")
                 break
-writer.close()
 """
+if (writer is not None):
+    writer.close()
