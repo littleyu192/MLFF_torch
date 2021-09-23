@@ -55,7 +55,7 @@ opts,args = getopt.getopt(sys.argv[1:],
     '-h-s-c-m-e:-l:-g:-t:-a:-d:-n:-w:-r:-b:-o:-f:-i:',
     ['help','summary','cpu','magic','epochs=','lr=','gamma=',
      'step=','act=','dtype=','net_cfg=','weight_decay=','rseed=','batch_size=',
-     'log_level=','log_file=', 'log_level_file='])
+     'log_level=','log_file=', 'file_log_level='])
 
 for opt_name,opt_value in opts:
     if opt_name in ('-h','--help'):
@@ -81,7 +81,7 @@ for opt_name,opt_value in opts:
         print("                                    available: DUMP < DEBUG < [INFO] < WARNING < ERROR")
         print("                                    logging msg with level >= logging_level will be displayed")
         print("     -f file, --log_file=file    :  specify the file to store a duplication of logging msg")
-        print("     -i L, --log_file_level=L    :  specify logging level of log file")
+        print("     -i L, --file_log_level=L    :  specify logging level of log file")
         print("                                    available: DUMP < [DEBUG] < INFO < WARNING < ERROR")
         print("                                    logging msg with level >= logging_level will be recoreded")
         print("")
@@ -120,7 +120,7 @@ for opt_name,opt_value in opts:
             opt_log_level = eval(opt_log_level)
     elif opt_name in ('-f','--log_file'):
         opt_log_file = opt_value
-    elif opt_name in ('-i','--log_level_file'):
+    elif opt_name in ('-i','--file_log_level'):
         if (opt_value == 'DUMP'):
             opt_file_log_level = 5
         else:
