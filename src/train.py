@@ -174,6 +174,19 @@ def warning(msg, *args, **kwargs):
 def error(msg, *args, **kwargs):
     logger.error(msg, *args, **kwargs, exc_info=True)
 
+# show start logging banner to logging file
+#
+summary("")
+summary("#########################################################################################")
+summary("#            ___          __                         __      __  ___       __  ___      #")
+summary("#      |\ | |__  |  |    |__) |  | |\ | |\ | | |\ | / _`    /__`  |   /\  |__)  |       #")
+summary("#      | \| |___ |/\|    |  \ \__/ | \| | \| | | \| \__>    .__/  |  /~~\ |  \  |       #")
+summary("#                                                                                       #")
+summary("#########################################################################################")
+summary("")
+summary(' '.join(sys.argv))
+summary("")
+
 
 # set default training dtype
 #
@@ -525,11 +538,10 @@ n_epoch = 25
 if (opt_epochs != 0):
     n_epoch = opt_epochs
 learning_rate = 0.1
-weight_decay = 1.0
-weight_decay_epoch = 100
-direc = './FC3model_mini_force'
-if not os.path.exists(direc):
-    os.makedirs(direc) 
+
+weight_decay = 0.9
+weight_decay_epoch = 10
+direc = './FC3model_mini_pm_loss'
 
 # for Scheduler
 LR_base = 0.1
