@@ -38,49 +38,77 @@ logging_level_SUMMARY = 15
 # parse optional parameters
 opt_force_cpu = False
 opt_magic = False
-opt_epochs = 0
-opt_lr = float(0)
-opt_gamma = float(0)
-opt_step = 0
-opt_act = 'sigmoid'
-opt_dtype = pm.training_dtype
 opt_net_cfg = 'default'
+opt_act = 'sigmoid'
+opt_optimizer = 'ADAM'
+opt_momentum = float(0)
 opt_regular_wd = float(0)
-opt_rseed = 2021
+otp_scheduler = 'STEP'
+opt_epochs = 1000
+opt_lr = float(0.1)
+opt_gamma = float(0.9)
+opt_step = 100
 opt_batch_size = pm.batch_size
-opt_log_level = logging.INFO
-opt_file_log_level = logging.DEBUG
-# session related options
+opt_dtype = pm.training_dtype
+opt_rseed = 2021
+# session and related options
 opt_session_name = ''
 opt_session_dir = ''
 opt_logging_file = ''
 opt_tensorboard_dir = ''
+# end session
+opt_log_level = logging.INFO
+opt_file_log_level = logging.DEBUG
+
+# scheduler specific options
+opt_LR_milestones = None
+opt_LR_patience = 0
+opt_LR_cooldown = 0
+opt_LR_total_steps = None
+opt_LR_max_lr = 1.
+opt_LR_min_lr = 0.
+opt_LR_T_max = None
 
 opts,args = getopt.getopt(sys.argv[1:],
-    '-h-c-m-e:-l:-g:-t:-a:-d:-n:-w:-r:-b:-s:-o:-i:',
-    ['help','cpu','magic','epochs=','lr=','gamma=',
-     'step=','act=','dtype=','net_cfg=','weight_decay=','rseed=','batch_size=',
-     'session=', 'log_level=', 'file_log_level='])
+    '-h-c-m-n:-a:-z:-v:-w:-u:-e:-l:-g:-t:-b:-d:-r:-s:-o:-i:',
+    ['help','cpu','magic','net_cfg=','act=','optimizer=','momentum',
+     'weight_decay=','scheduler=','epochs=','lr=','gamma=','step=',
+     'batch_size=','dtype=','rseed=','session=','log_level=',
+     'file_log_level=',
+     'milestones=','patience=','cooldown=','eps=','total_steps=',
+     'max_lr=','min_lr=','T_max='])
 
 for opt_name,opt_value in opts:
     if opt_name in ('-h','--help'):
         print("")
-        print("Available parameters:")
+        print("Generic parameters:")
         print("     -h, --help                  :  print help info")
         print("     -c, --cpu                   :  force training run on cpu")
         print("     -m, --magic                 :  a magic flag for your testing code")
+        print("     -n cfg, --net_cfg=cfg       :  specify network cfg variable in parameters.py")
+        print("                                    eg: -n MLFF_dmirror_cfg1")
+        print("     -a act, --act=act           :  specify activation_type of MLFF_dmirror")
+        print("                                    current supported: [sigmoid, softplus]")
+        print("     -z name, --optimizer=name   :  specify optimizer")
+        print("                                    available : SGD ASGD RPROP RMSPROP ADAG")
+        print("                                                ADAD ADAM ADAMW ADAMAX LBFGS")
+        print("     -v val, --momentum=val      :  specify momentum parameter for optimizer")
+        print("     -w val, --weight_decay=val  :  specify weight decay regularization value")
+        print("     -u name, --scheduler=name   :  specify learning rate scheduler")
+        print("                                    available  : LAMBDA STEP MSTEP EXP COS PLAT OC LR_INC LR_DEC")
+        print("                                    LAMBDA     : lambda scheduler")
+        print("                                    STEP/MSTEP : Step/MultiStep scheduler")
+        print("                                    EXP/COS    : Exponential/CosineAnnealing") 
+        print("                                    PLAT/OC/LR : ReduceLROnPlateau/OneCycle")
+        print("                                    LR_INC     : linearly increase to max_lr")
+        print("                                    LR_DEC     : linearly decrease to min_lr")
         print("     -e epochs, --epochs=epochs  :  specify training epochs")
         print("     -l lr, --lr=lr              :  specify initial training lr")
         print("     -g gamma, --gamma=gamma     :  specify gamma of StepLR scheduler")
         print("     -t step, --step=step        :  specify step_size of StepLR scheduler")
-        print("     -a act, --act=act           :  specify activation_type of MLFF_dmirror")
-        print("                                    current supported: [sigmoid, softplus]")
-        print("     -d dtype, --dtype=dtype     :  specify default dtype: [float64, float32]")
-        print("     -n cfg, --net_cfg=cfg       :  specify network cfg variable in parameters.py")
-        print("                                    eg: -n MLFF_dmirror_cfg1")
-        print("     -w val, --weight_decay=val  :  specify weight decay regularization value")
-        print("     -r seed, --rseed=seed       :  specify random seed used in training")
         print("     -b size, --batch_size=size  :  specify batch size")
+        print("     -d dtype, --dtype=dtype     :  specify default dtype: [float64, float32]")
+        print("     -r seed, --rseed=seed       :  specify random seed used in training")
         print("     -s name, --session=name     :  specify the session name, log files, tensorboards and models")
         print("                                    will be saved to subdirectory named by this session name")
         print("     -o level, --log_level=level :  specify logging level of console")
@@ -90,11 +118,32 @@ for opt_name,opt_value in opts:
         print("                                    available: DUMP < [DEBUG] < SUMMARY < INFO < WARNING < ERROR")
         print("                                    logging msg with level >= logging_level will be recoreded")
         print("")
+        print("scheduler specific parameters:")
+        print("     --milestones=int_list       :  milestones for MultiStep scheduler")
+        print("     --patience=int_val          :  patience for ReduceLROnPlateau")
+        print("     --cooldown=int_val          :  cooldown for ReduceLROnPlateau")
+        print("     --total_steps=int_val       :  total_steps for OneCycle scheduler")
+        print("     --max_lr=float_val          :  max learning rate for OneCycle scheduler")
+        print("     --min_lr=float_val          :  min learning rate for CosineAnnealing/ReduceLROnPlateau")
+        print("     --T_max=int_val             :  T_max for CosineAnnealing scheduler")
+        print("")
         exit()
     elif opt_name in ('-c','--cpu'):
         opt_force_cpu = True
     elif opt_name in ('-m','--magic'):
         opt_magic = True
+    elif opt_name in ('-n','--net_cfg'):
+        opt_net_cfg = opt_value
+    elif opt_name in ('-a','--act'):
+        opt_act = opt_value
+    elif opt_name in ('-z','--optimizer'):
+        opt_optimizer = opt_value
+    elif opt_name in ('-v','--momentum'):
+        opt_momentum = float(opt_value)
+    elif opt_name in ('-w','--weight_decay'):
+        opt_regular_wd = float(opt_value)
+    elif opt_name in ('-u','--scheduler'):
+        opt_scheduler = opt_value
     elif opt_name in ('-e','--epochs'):
         opt_epochs = int(opt_value)
     elif opt_name in ('-l','--lr'):
@@ -103,18 +152,12 @@ for opt_name,opt_value in opts:
         opt_gamma = float(opt_value)
     elif opt_name in ('-t','--step'):
         opt_step = int(opt_value)
-    elif opt_name in ('-a','--act'):
-        opt_act = opt_value
-    elif opt_name in ('-d','--dtype'):
-        opt_dtype = opt_value
-    elif opt_name in ('-n','--net_cfg'):
-        opt_net_cfg = opt_value
-    elif opt_name in ('-w','--weight_decay'):
-        opt_regular_wd = float(opt_value)
-    elif opt_name in ('-r','--rseed'):
-        opt_rseed = int(opt_value)
     elif opt_name in ('-b','--batch_size'):
         opt_batch_size = int(opt_value)
+    elif opt_name in ('-d','--dtype'):
+        opt_dtype = opt_value
+    elif opt_name in ('-r','--rseed'):
+        opt_rseed = int(opt_value)
     elif opt_name in ('-s','--session'):
         opt_session_name = opt_value
         opt_session_dir = './'+opt_session_name+'/'
@@ -140,6 +183,21 @@ for opt_name,opt_value in opts:
         else:
             opt_file_log_level = 'logging.'+opt_value
             opt_file_log_level = eval(opt_file_log_level)
+    elif opt_name in ('--milestones'):
+        opt_LR_milestones = list(map(int, opt_value.split(',')))
+    elif opt_name in ('--patience'):
+        opt_LR_patience = int(opt_value)
+    elif opt_name in ('--cooldown'):
+        opt_LR_cooldown = int(opt_value)
+    elif opt_name in ('--total_steps'):
+        opt_LR_total_steps = int(opt_value)
+    elif opt_name in ('--max_lr'):
+        opt_LR_max_lr = float(opt_value)
+    elif opt_name in ('--min_lr'):
+        opt_LR_min_lr = float(opt_value)
+    elif opt_name in ('--T_max'):
+        opt_LR_T_max = int(opt_value)
+
 
 # setup logging module
 logging.addLevelName(logging_level_DUMP, 'DUMP')
@@ -379,7 +437,7 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
     loss_F = criterion(Force_predict, Force_label)
     loss_Etot = criterion(Etot_predict, Etot_label)
     loss_Egroup = 0
-    info("loss = %f (loss_etot = %f, loss_force = %f, RMSE_etot = %f, RMSE_force = %f)" %(loss, loss_Etot, loss_F, loss_Etot ** 0.5, loss_F ** 0.5))
+    info("loss = %.16f (loss_etot = %.16f, loss_force = %.16f, RMSE_etot = %.16f, RMSE_force = %.16f)" %(loss, loss_Etot, loss_F, loss_Etot ** 0.5, loss_F ** 0.5))
     #w_f = loss_Etot / (loss_Etot + loss_F)
     #w_e = 1 - w_f
     #w_f = pm.rtLossF
@@ -488,8 +546,38 @@ def sec_to_hms(seconds):
     return "%02d:%02d:%02d" % (h, m, s)
 
 
+# ==========================part2:指定模型参数==========================
 # ==========================part1:数据读取==========================
+
+momentum = opt_momentum
+REGULAR_wd = opt_regular_wd
+n_epoch = opt_epochs
+LR_base = opt_lr
+LR_gamma = opt_gamma
+LR_step = opt_step
 batch_size = opt_batch_size 
+
+info("Training: network = %s" %opt_net_cfg)
+info("Training: activation = %s" %opt_act)
+info("Training: optimizer = %s" %opt_optimizer)
+info("Training: momentum = %.16f" %momentum)
+info("Training: REGULAR_wd = %.16f" %REGULAR_wd)
+info("Training: scheduler = %s" %opt_scheduler)
+info("Training: n_epoch = %d" %n_epoch)
+info("Training: LR_base = %.16f" %LR_base)
+info("Training: LR_gamma = %.16f" %LR_gamma)
+info("Training: LR_step = %d" %LR_step)
+info("Training: batch_size = %d" %batch_size)
+
+# scheduler specific options
+info("Scheduler: opt_LR_milestones = %s" %opt_LR_milestones)
+info("Scheduler: opt_LR_patience = %s" %opt_LR_patience)
+info("Scheduler: opt_LR_cooldown = %s" %opt_LR_cooldown)
+info("Scheduler: opt_LR_total_steps = %s" %opt_LR_total_steps)
+info("Scheduler: opt_LR_max_lr = %s" %opt_LR_max_lr)
+info("Scheduler: opt_LR_min_lr = %s" %opt_LR_min_lr)
+info("Scheduler: opt_LR_T_max = %s" %opt_LR_T_max)
+
 train_data_path=pm.train_data_path
 torch_train_data = get_torch_data(pm.natoms, train_data_path)
 loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=False)
@@ -498,48 +586,6 @@ valid_data_path=pm.test_data_path
 torch_valid_data = get_torch_data(pm.natoms, valid_data_path)
 loader_valid = Data.DataLoader(torch_valid_data, batch_size=1, shuffle=False)
 
-# ==========================part2:指定模型参数==========================
-
-n_epoch = 25
-if (opt_epochs != 0):
-    n_epoch = opt_epochs
-learning_rate = 0.1
-weight_decay = 0.9
-weight_decay_epoch = 10
-direc = './FC3model_mini_pm_loss'
-
-# for Scheduler
-LR_base = 0.1
-if (opt_lr != 0.):
-    LR_base = opt_lr
-LR_gamma = 0.9
-if (opt_gamma != 0.):
-    LR_gamma = opt_gamma
-LR_step = 100
-if (opt_step != 0):
-    LR_step = opt_step
-
-# for Regularization
-REGULAR_wd = 0.0000001
-REGULAR_wd = 0.
-if (opt_regular_wd != 0.):
-    REGULAR_wd = opt_regular_wd
-
-info("Training: batch_size = %d" %batch_size)
-info("Training: n_epoch = %d" %n_epoch)
-info("Training: LR_base = %.16f" %LR_base)
-info("Training: LR_gamma = %.16f" %LR_gamma)
-info("Training: LR_step = %d" %LR_step)
-info("Training: REGULAR_wd = %.16f" %REGULAR_wd)
-
-#LR_milestones = [1000, 1500, 1700, 1800, 1900, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000]
-#LR_tmax=200
-#LR_eta_min=0.05
-#LR_factor1 = 1.1
-#LR_max = 0.8
-#LR_steps = 1
-#LR_epochs = 2000
-
 # if torch.cuda.device_count() > 1:
     # model = nn.DataParallel(model)
 
@@ -547,7 +593,7 @@ info("Training: REGULAR_wd = %.16f" %REGULAR_wd)
 if pm.isNNpretrain == True:
     premodel = preMLFFNet()           #预训练
     optimizer = optim.Adam(premodel.parameters(), lr=learning_rate)
-    scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=weight_decay)
+    scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=opt_REGULAR)
     start = time.time()
     min_loss = np.inf
     start_epoch=1
@@ -598,7 +644,7 @@ if pm.isNNpretrain == True:
         if train_function_err_avg < min_loss:
             min_loss = train_function_err_avg
             works_epoch = 0
-            name = direc + '/3layers_' + 'preMLFFNet_' + str(epoch)+'epoch.pt'
+            #name = direc + '/3layers_' + 'preMLFFNet_' + str(epoch)+'epoch.pt'
             # state = {'model': model.state_dict(), 'optimizer':optimizer.state_dict(),'epoch': epoch}
             state = {'model': premodel.state_dict(), 'epoch': epoch}
             torch.save(state, name)
@@ -618,36 +664,78 @@ if pm.isNNpretrain == True:
 # ==========================part4:模型finetuning==========================
 
 # implement a linear scheduler
-def LinearLR(optimizer, lr, total_epoch, cur_epoch):
-    lr *= (1.0 - (float(cur_epoch) / float(total_epoch)))
+def LinearLR(optimizer, base_lr, target_lr, total_epoch, cur_epoch):
+    lr = base_lr - (base_lr - target_lr) * (float(cur_epoch) / float(total_epoch))
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
 if pm.isNNfinetuning == True:
     data_scalers = DataScalers(f_ds=pm.f_data_scaler, f_feat=pm.f_train_feat, load=True)
-    # import ipdb; ipdb.set_trace()
-    # model = MLFFNet(data_scalers)
-    # model = LNNet()
     model = MLFF_dmirror(opt_net_cfg, opt_act, device, opt_magic)
 
-    # if torch.cuda.device_count() > 1:
-        # model = nn.DataParallel(model)
-    optimizer = optim.Adam(
-                [
+    #if torch.cuda.device_count() > 1:
+    #    model = nn.DataParallel(model)
+
+    # set model parameter properties, do not apply weight decay to bias parameter
+    model_parameters = [
                     {'params': (p for name, p in model.named_parameters() if 'bias' not in name)},
-                    {'params': (p for name, p in model.named_parameters() if 'bias' in name), 'weight_decay': 0.}
-                ],
-                lr=LR_base, weight_decay = REGULAR_wd)
-    #optimizer = optim.SGD(model.parameters(), lr=LR_base, momentum=0.5)
-    #scheduler = optim.lr_scheduler.OneCycleLR(
-    #                            optimizer, max_lr=LR_max, 
-    #                            steps_per_epoch=LR_steps, epochs=LR_epochs)
-    #scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=LR_factor)
-    #scheduler1 = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', factor=LR_factor1)
-    #scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=LR_milestones, gamma=LR_gamma)
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=LR_step, gamma=LR_gamma)
-    #scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=LR_tmax, eta_min=LR_eta_min)
-    #scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=LR_gamma)
+                    {'params': (p for name, p in model.named_parameters() if 'bias' in name), 'weight_decay': 0.}]
+
+    if (opt_optimizer == 'SGD'):
+        optimizer = optim.SGD(model_parameters, lr=LR_base, momentum=momentum, weight_decay=REGULAR_wd)
+    elif (opt_optimizer == 'ASGD'):
+        optimizer = optim.ASGD(model_parameters, lr=LR_base, weight_decay=REGULAR_wd)
+    elif (opt_optimizer == 'RPROP'):
+        optimizer = optim.Rprop(model_parameters, lr=LR_base)
+    elif (opt_optimizer == 'RMSPROP'):
+        optimizer = optim.RMSprop(model_parameters, lr=LR_base, weight_decay=REGULAR_wd, momentum=momentum)
+    elif (opt_optimizer == 'ADAG'):
+        optimizer = optim.Adagrad(model_parameters, lr=LR_base, weight_decay=REGULAR_wd)
+    elif (opt_optimizer == 'ADAD'):
+        optimizer = optim.Adadelta(model_parameters, lr=LR_base, weight_decay=REGULAR_wd)
+    elif (opt_optimizer == 'ADAM'):
+        optimizer = optim.Adam(model_parameters, lr=LR_base, weight_decay = REGULAR_wd)
+    elif (opt_optimizer == 'ADAMW'):
+        optimizer = optim.AdamW(model_parameters, lr=LR_base, weight_decay = REGULAR_wd)
+    elif (opt_optimizer == 'ADAMAX'):
+        optimizer = optim.Adamax(model_parameters, lr=LR_base, weight_decay=REGULAR_wd)
+    elif (opt_optimizer == 'LBFGS'):
+        optimizer = optim.LBFGS(model_parameters, lr=LR_base)
+    else:
+        error("unsupported optimizer: %s" %opt_optimizer)
+        raise RuntimeError("unsupported optimizer: %s" %opt_optimizer)
+
+    # user specific LambdaLR lambda function
+    lr_lambda = lambda epoch: LR_gamma ** epoch
+
+    if (opt_scheduler == 'LAMBDA'):
+        scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
+    elif (opt_scheduler == 'STEP'):
+        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=LR_step, gamma=LR_gamma)
+    elif (opt_scheduler == 'MSTEP'):
+        scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=opt_LR_milestones, gamma=LR_gamma)
+    elif (opt_scheduler == 'EXP'):
+        scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=LR_gamma)
+    elif (opt_scheduler == 'COS'):
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=opt_LR_T_max, eta_min=opt_LR_min_lr)
+    elif (opt_scheduler == 'PLAT'):
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=LR_gamma, 
+                        patience=opt_LR_patience, cooldown=opt_LR_cooldown, min_lr=opt_LR_min_lr)
+    elif (opt_scheduler == 'OC'):
+        scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=opt_LR_max_lr, total_steps=opt_LR_total_steps)
+    elif (opt_scheduler == 'LR_INC'):
+        # do nothing, will direct call LR scheduler at each epoch
+        pass
+    elif (opt_scheduler == 'LR_DEC'):
+        # do nothing, will direct call LR scheduler at each epoch
+        pass
+    else:
+        error("unsupported scheduler: %s" %opt_schedler)
+        raise RuntimeError("unsupported scheduler: %s" %opt_scheduler)
+
+
+
+
     start = time.time()
     min_loss = np.inf
     start_epoch=1
@@ -669,6 +757,8 @@ if pm.isNNfinetuning == True:
         start_epoch=checkpoint['epoch']+1
 
     
+
+
     for epoch in range(start_epoch, n_epoch + 1):
         if (epoch == n_epoch):
             last_epoch = True
@@ -692,6 +782,10 @@ if pm.isNNfinetuning == True:
             loss_F += batch_loss_F * nr_batch_sample
             nr_total_sample += nr_batch_sample
 
+            # OneCycleLR scheduler steps() at each batch
+            if (opt_scheduler == 'OC'):
+                scheduler.step()
+
         # epoch loss update
         loss /= nr_total_sample
         loss_Etot /= nr_total_sample
@@ -700,7 +794,7 @@ if pm.isNNfinetuning == True:
         RMSE_Etot = loss_Etot ** 0.5
         RMSE_Egroup = loss_Egroup ** 0.5
         RMSE_F = loss_F ** 0.5
-        info("epoch_loss = %f (loss_Etot = %f, loss_F = %f, RMSE_Etot = %f, RMSE_F = %f)" %(loss, loss_Etot, loss_F, RMSE_Etot, RMSE_F))
+        info("epoch_loss = %.16f (loss_Etot = %.16f, loss_F = %.16f, RMSE_Etot = %.16f, RMSE_F = %.16f)" %(loss, loss_Etot, loss_F, RMSE_Etot, RMSE_F))
         # update tensorboard
         if (writer is not None):
             writer.add_scalar('train_loss', loss, epoch)
@@ -727,8 +821,16 @@ if pm.isNNfinetuning == True:
         # valid_epoch_etot_RMSE_loss = 0
         # valid_epoch_egroup_RMSE_loss = 0
 
-        #scheduler.step()
-        LinearLR(optimizer=optimizer, lr=LR_base, total_epoch=n_epoch, cur_epoch=epoch)
+        if (opt_scheduler == 'OC'):
+            pass
+        elif (opt_scheduler == 'PLAT'):
+            scheduler.step(loss)
+        elif (opt_scheduler == 'LR_INC'):
+            LinearLR(optimizer=optimizer, base_lr=LR_base, target_lr=opt_LR_max_lr, total_epoch=n_epoch, cur_epoch=epoch)
+        elif (opt_scheduler == 'LR_DEC'):
+            LinearLR(optimizer=optimizer, base_lr=LR_base, target_lr=opt_LR_min_lr, total_epoch=n_epoch, cur_epoch=epoch)
+        else:
+            scheduler.step()
         
         """
         for i_batch, sample_batches in enumerate(loader_valid):
