@@ -35,7 +35,7 @@ def error(msg, *args, **kwargs):
 # MLFF_dmirror implementation
 #
 def d_sigmoid(x):
-    return torch.sigmoid(x) * (1 - torch.sigmoid(x))
+    return torch.sigmoid(x) * (1.0 - torch.sigmoid(x))
 
 class MLFF_dmirror(nn.Module):
     def __init__(self, net_cfg, activation_type, device, magic=False):
