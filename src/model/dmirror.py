@@ -93,6 +93,7 @@ def error(msg, *args, **kwargs):
 class dmirror_linear(nn.Module):
     def __init__(self, in_dim, out_dim, bias=True, magic=False):
         super(dmirror_linear, self).__init__()
+        self.bias = None
 
         # for pesudo random number generator for float64/float32 precision test
         self.rand_a = 25214903917

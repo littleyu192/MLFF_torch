@@ -221,6 +221,8 @@ torch.set_printoptions(precision = 16)
 # set tensorboard
 if (opt_tensorboard_dir != ''):
     writer = SummaryWriter(opt_tensorboard_dir)
+else:
+    writer = None
 
 
 def get_loss_func(start_lr, real_lr, has_fi, lossFi, has_etot, loss_Etot, has_egroup, loss_Egroup, has_ei, loss_Ei):
