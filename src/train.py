@@ -220,6 +220,8 @@ torch.set_printoptions(precision = 16)
 # set tensorboard
 if (opt_tensorboard_dir != ''):
     writer = SummaryWriter(opt_tensorboard_dir)
+else:
+    writer = None
 
 
 def pretrain(sample_batches, premodel, optimizer, criterion):
