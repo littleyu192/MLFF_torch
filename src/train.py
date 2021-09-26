@@ -43,7 +43,7 @@ opt_act = 'sigmoid'
 opt_optimizer = 'ADAM'
 opt_momentum = float(0)
 opt_regular_wd = float(0)
-otp_scheduler = 'STEP'
+opt_scheduler = 'NONE'
 opt_epochs = 1000
 opt_lr = float(0.1)
 opt_gamma = float(0.9)
@@ -318,7 +318,6 @@ def pretrain(sample_batches, premodel, optimizer, criterion):
     return etot_square_loss, Etot_RMSE_error, Etot_ABS_error, Etot_L2
 
 def train(sample_batches, model, optimizer, criterion, last_epoch):
-    error=0
 
     # floating part of sample_batches, cast to specified opt_dtype
     #
@@ -437,7 +436,10 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
     loss_F = criterion(Force_predict, Force_label)
     loss_Etot = criterion(Etot_predict, Etot_label)
     loss_Egroup = 0
-    info("loss = %.16f (loss_etot = %.16f, loss_force = %.16f, RMSE_etot = %.16f, RMSE_force = %.16f)" %(loss, loss_Etot, loss_F, loss_Etot ** 0.5, loss_F ** 0.5))
+
+    #info("loss = %.16f (loss_etot = %.16f, loss_force = %.16f, RMSE_etot = %.16f, RMSE_force = %.16f)" %(loss, loss_Etot, loss_F, loss_Etot ** 0.5, loss_F ** 0.5))
+
+
     #w_f = loss_Etot / (loss_Etot + loss_F)
     #w_e = 1 - w_f
     #w_f = pm.rtLossF
@@ -450,18 +452,8 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
     
     # print("weighted loss: " + str(loss))
     #time_start = time.time()
-    loss.backward()                             # FIXME: need to try grad normalization with minibatch size
+    loss.backward()
 
-    for name, parameter in model.named_parameters():
-        dump("dump model parameter (%s : %s) ------------------------>" %(name, parameter.size()))
-        dump(parameter)
-        dump("dump grad of model parameter (%s : %s) (not applied)--->" %(name, parameter.size()))
-        dump(parameter.grad)
-        if (last_epoch):
-            summary("dump model parameter (%s : %s) ------------------------>" %(name, parameter.size()))
-            summary(parameter)
-            summary("dump grad of model parameter (%s : %s) (not applied)--->" %(name, parameter.size()))
-            summary(parameter.grad)
 
     optimizer.step()
     #time_end = time.time()
@@ -729,6 +721,8 @@ if pm.isNNfinetuning == True:
     elif (opt_scheduler == 'LR_DEC'):
         # do nothing, will direct call LR scheduler at each epoch
         pass
+    elif (opt_scheduler == 'NONE'):
+        pass
     else:
         error("unsupported scheduler: %s" %opt_schedler)
         raise RuntimeError("unsupported scheduler: %s" %opt_scheduler)
@@ -797,6 +791,7 @@ if pm.isNNfinetuning == True:
         info("epoch_loss = %.16f (loss_Etot = %.16f, loss_F = %.16f, RMSE_Etot = %.16f, RMSE_F = %.16f)" %(loss, loss_Etot, loss_F, RMSE_Etot, RMSE_F))
         # update tensorboard
         if (writer is not None):
+            writer.add_scalar('learning_rate', lr, epoch)
             writer.add_scalar('train_loss', loss, epoch)
             writer.add_scalar('train_loss_Etot', loss_Etot, epoch)
             writer.add_scalar('train_loss_Egroup', loss_Egroup, epoch)
@@ -829,9 +824,37 @@ if pm.isNNfinetuning == True:
             LinearLR(optimizer=optimizer, base_lr=LR_base, target_lr=opt_LR_max_lr, total_epoch=n_epoch, cur_epoch=epoch)
         elif (opt_scheduler == 'LR_DEC'):
             LinearLR(optimizer=optimizer, base_lr=LR_base, target_lr=opt_LR_min_lr, total_epoch=n_epoch, cur_epoch=epoch)
+        elif (opt_scheduler == 'NONE'):
+            pass
         else:
             scheduler.step()
         
+        for name, parameter in model.named_parameters():
+            param_RMS= parameter.pow(2).sum().pow(0.5)/pow(len(parameter),0.5)
+            param_ABS= parameter.abs().sum()/len(parameter)
+            grad_RMS= parameter.grad.pow(2).sum().pow(0.5)/pow(len(parameter.grad),0.5)
+            grad_ABS= parameter.grad.abs().sum()/len(parameter.grad)
+            if (writer is not None):
+                writer.add_scalar(name+'_RMS', param_RMS, epoch)
+                writer.add_scalar(name+'_ABS', param_ABS, epoch)
+                writer.add_scalar(name+'.grad_RMS', grad_RMS, epoch)
+                writer.add_scalar(name+'.grad_ABS', grad_ABS, epoch)
+            dump("dump parameter statistics of %s -------------------------->" %name)
+            dump("%s : %s" %(name+'_RMS', param_RMS))
+            dump("%s : %s" %(name+'_ABS', param_ABS))
+            dump("%s : %s" %(name+'.grad_RMS', grad_RMS))
+            dump("%s : %s" %(name+'.grad_ABS', grad_ABS))
+        
+            dump("dump model parameter (%s : %s) ------------------------>" %(name, parameter.size()))
+            dump(parameter)
+            dump("dump grad of model parameter (%s : %s) (not applied)--->" %(name, parameter.size()))
+            dump(parameter.grad)
+            if (last_epoch):
+                summary("dump model parameter (%s : %s) ------------------------>" %(name, parameter.size()))
+                summary(parameter)
+                summary("dump grad of model parameter (%s : %s) (not applied)--->" %(name, parameter.size()))
+                summary(parameter.grad)
+
         """
         for i_batch, sample_batches in enumerate(loader_valid):
             # error, force_square_loss, etot_square_loss, egroup_square_loss, \
