@@ -49,11 +49,12 @@ def write_natoms_dfeat():
         if kk == 0:
             feat = feat_tmp
         else:
+            # import ipdb;ipdb.set_trace()
             feat = np.concatenate((feat, feat_tmp), axis=1)
-
+        
         kk = kk+1
     feat_all = np.concatenate((feat_head_tmp, feat), axis=1)
-
+    # import ipdb;ipdb.set_trace()
     egroup_all = pd.read_csv(os.path.join(
         pm.trainSetDir, 'Egroup_weight'), header=None, names=range(max_natom+2))
     egroup_all = egroup_all.fillna(0)
@@ -98,6 +99,7 @@ def write_natoms_dfeat():
 
         count = count+natom*ImgNum
         Imgcount = Imgcount+ImgNum
+    # import ipdb;ipdb.set_trace()
     np.savetxt(pm.f_train_feat, feat_train, delimiter=',')
     np.savetxt(pm.f_test_feat, feat_test, delimiter=',')
     np.savetxt(pm.f_train_egroup, egroup_train, delimiter=',')

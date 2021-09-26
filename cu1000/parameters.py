@@ -7,13 +7,14 @@ isClassify=False
 isRunMd=False                                   #是否训练运行md  default:False
 isRunMd_nn=False
 isFollowMd=False                                #是否是接续上次的md继续运行  default:False
-isFitVdw=False
+isFitVdw=True  #训练时需关掉
 isRunMd100_nn=False
 isRunMd100=False
 add_force=False     # for NN md
-pbc = True
+pbc = False
 is_nn_do_profile = False
 #************** Dir **********************
+
 prefix = r'./'
 trainSetDir = r'./PWdata'
 codedir=r'/home/husiyu/software/MLFF_torch'
@@ -21,38 +22,64 @@ fortranFitSourceDir=codedir+'/src/pre_data/fit/'
 fitModelDir = r'./fread_dfeat'
 train_data_path = r'./train_data/final_train'
 test_data_path = r'./train_data/final_test'
+test_ratio = 0.2
+'''
+#模型测试数据集
+prefix = r'./'
+trainSetDir = r'./test_data'
+codedir=r'/home/husiyu/software/MLFF_torch'
+fortranFitSourceDir=codedir+'/src/pre_data/fit/'
+fitModelDir = r'./fread_dfeat'
+train_data_path = r'./test_data/inference'
+test_data_path = r'./test_data/inference_'
+genFeatDir = r'./gen_feature'
+test_ratio = 0.01
+'''
 
 genFeatDir = r'./gen_feature'
 mdImageFileDir=r'./MD'                              #设置md的初始image的文件所在的文件夹  default:'.'
 
 #训练时需要打开
 isCalcFeat=True
-#isFitLinModel=True
+isFitLinModel=True
+isNNpretrain=False
+isNNfinetuning=True
 
 #isClassify=True
 #isRunMd=True                                   #是否训练运行md  default:False
 #isRunMd_nn=True
 #isFollowMd=True                                #是否是接续上次的md继续运行  default:False
-isFitVdw=True
+#isFitVdw=True
 
 #NN预测时需要打开
+#isNewMd100=True
+#md_num_process = 12   # mpirun -n ${md_num_process} main_MD.x
+#is_md100_egroup = False
+#is_md100_show_X11_fig = False
+
 #isRunMd100_nn=True
 #inference=True
 #linear预测时需要打开
-#isRunMd100=True
+# isRunMd100=True
 #add_force=True     # for NN md
 #********* for gen_feature.in *********************
 atomType=[29]                                  #铜有29个同位素,相当于29个种类的cu
 maxNeighborNum=100
 natoms=[108]
 
-
 iflag_PCA=0
 Rc_M=5.5                     # max of Rcut
 
-Ftype_name={1:'gen_2b_feature',2:'gen_3b_feature'}
+#Ftype_name={1:'gen_2b_feature',2:'gen_3b_feature'}
 # Ftype2_name='gen_3b_feature'
-use_Ftype=[1,2]
+#use_Ftype=[1,2]
+Ftype_name={1:'gen_2b_feature', 2:'gen_3b_feature',
+            3:'gen_2bgauss_feature', 4:'gen_3bcos_feature',
+            5:'gen_MTP_feature', 6:'gen_SNAP_feature',
+            7:'gen_deepMD1_feature', 8:'gen_deepMD2_feature',
+            }
+#use_Ftype=[1,2,3,4,5,6,7,8]
+use_Ftype=[3,4]
 nfeat_type=len(use_Ftype)
 Ftype1_para={
     'numOf2bfeat':[24,24],       # [itpye1,itype2]
@@ -75,7 +102,79 @@ Ftype2_para={
     'dR2':[0.5,0.5],
     'iflag_ftype':3   # same value for different types, iflag_ftype:1,2,3 when 3, iflag_grid must be 3
 }
-nFeatures=42
+Ftype3_para={           # 2bgauss
+    'Rc':[5.4 for tmp in range(10)],     # number of elements in Rc = num atom type
+    'n2b':[6 for tmp in range(10)],       # number of elements in n2b = num atom type
+    'r':[ [1.0, 1.0, 1.0, 1.5, 1.5, 1.5, 2.0, 2.0, 2.0, 2.5, 2.5, 2.5, 3.0, 3.0, 3.0,
+           3.5, 3.5, 3.5, 5.0, 5.0, 5.0, 4.5, 4.5, 4.5, 5.0, 5.0, 5.0, 5.5, 5.5, 5.5,
+        ] for tmp in range(10) ],
+    'w':[ [1.0, 2.0, 3.0, 1.0, 2.0, 3.0, 1.0, 2.0, 3.0, 1.0, 2.0, 3.0, 1.0, 2.0, 3.0,
+           1.0, 2.0, 3.0, 1.0, 2.0, 3.0, 1.0, 2.0, 3.0, 1.0, 2.0, 3.0, 1.0, 2.0, 3.0,
+          ] for tmp in range(10) ]
+}
+Ftype4_para={           # 3bcos
+    'Rc':[5.4 for tmp in range(10)],     # number of elements in Rc = num atom type
+    'n3b':[20 for tmp in range(10)],       # number of elements in n2b = num atom type
+    'eta':   [ [1.0/1.0, 1.0/2.0, 1.0/4.0, 1.0/8.0, 1.0/16.0, 1.0/32.0, 1.0/1.0, 1.0/2.0, 1.0/4.0, 1.0/8.0, 1.0/16.0, 1.0/32.0,
+                1.0/1.0, 1.0/2.0, 1.0/4.0, 1.0/8.0, 1.0/16.0, 1.0/32.0, 1.0/1.0, 1.0/2.0, 1.0/4.0, 1.0/8.0, 1.0/16.0, 1.0/32.0, 
+                1.0/1.0, 1.0/2.0, 1.0/4.0, 1.0/8.0, 1.0/16.0, 1.0/32.0, 1.0/1.0, 1.0/2.0, 1.0/4.0, 1.0/8.0, 1.0/16.0, 1.0/32.0, 
+                1.0/1.0, 1.0/2.0, 1.0/4.0, 1.0/8.0, 1.0/16.0, 1.0/32.0, 1.0/1.0, 1.0/2.0, 1.0/4.0, 1.0/8.0, 1.0/16.0, 1.0/32.0, 
+             ] for tmp in range(10)],
+    'w':     [ [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0,
+                5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 6.0, 6.0, 6.0, 6.0, 6.0, 6.0, 7.0, 7.0, 7.0, 7.0, 7.0, 7.0, 8.0, 8.0, 8.0, 8.0, 8.0, 8.0,
+             ] for tmp in range(10)],
+    # w is the \ksi in formula
+    'lambda':[ [1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0,
+                1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0,
+                1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0, 1.0,-1.0,
+               ] for tmp in range(10)],
+}
+Ftype5_para={           # MTP
+    'Rc':[5.4 for tmp in range(10)],     # number of elements in Rc = num atom type
+    'Rm':[0.5  for tmp in range(10)],     # number of elements in Rc = num atom type
+    'n_MTP_line': [5 for tmp in range(10)], # 5~11
+    'tensors':[
+                [
+                  '1, 4, 0, ( )                              ',
+                  '2, 3,3, 0,0, ( ), ( )                     ',
+                  '2, 3,3, 1,1, ( 21 ), ( 11 )               ',
+                  '2, 3,3, 2,2, ( 21, 22 ), ( 11, 12 )       ',
+                  '3, 2,2,2, 2,1,1 ( 21, 31 ), ( 11 ), ( 12 )',
+                  '3, 2,2,2, 3,2,1 ( 21, 22, 31 ), ( 11, 12 ), ( 13 )',
+                  '3, 2,2,2, 4,2,2 ( 21, 22, 31, 32 ), ( 11, 12 ), ( 13, 14 )',
+                  '4, 2,2,2,2 3,1,1,1 ( 21, 31, 41 ), ( 11 ), ( 12 ), ( 13 )',
+                  '4, 2,2,2,2 4,2,1,1 ( 21, 22, 31, 41 ), ( 11, 12 ), ( 13 ), ( 14 )',
+                  '4, 2,2,2,2 5,2,2,1 ( 21, 22, 31, 32, 41 ), ( 11, 12 ), ( 13, 14 ), ( 15 )',
+                ] for tmp in range(10)
+              ],
+    }
+Ftype6_para={
+    'Rc':[5.4 for tmp in range(10)],     # number of elements in Rc = num atom type
+    'J' :[3.0 for tmp in range(10)],
+    'n_w_line': [2 for tmp in range(10)],
+    'w1':[ [0.9, 0.1, 0.8, 0.2, 0.7, 0.3, 0.6, 0.4]  for tmp in range(10)],  # shape(w1) = (ntype, n_w_line)
+    'w2':[ [0.1, 0.9, 0.2, 0.8, 0.3, 0.7, 0.4, 0.6]  for tmp in range(10) ],
+    }
+Ftype7_para={
+    'Rc':[5.4  for tmp in range(10)],     # number of elements in Rc = num atom type
+    'Rc2':[3.0  for tmp in range(10)],
+    'Rm':[1.0  for tmp in range(10)],
+    'M': [4  for tmp in range(10)],
+    'weight_r': [1.0  for tmp in range(10)],
+    }
+Ftype8_para={
+    'Rc':[5.4  for tmp in range(10)],     # number of elements in Rc = num atom type
+    'M':[8  for tmp in range(10)],
+    'weight_r':[1.0  for tmp in range(10)],
+    'rg':[
+            [1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 3.0, 3.0, 3.0, 3.0, 4.0, 4.0, 4.0, 4.0, 5.0, 5.0, 5.0, 5.0]  for tmp in range(10)
+         ],
+    'w':[
+            [1.0, 1.5, 2.0, 2.5, 1.0, 1.5, 2.0, 2.5, 1.0, 1.5, 2.0, 2.5, 1.0, 1.5, 2.0, 2.5, 1.0, 1.5, 2.0, 2.5]  for tmp in range(10)
+        ]
+    }
+
+nFeatures=26
 
 
 E_tolerance=0.3
@@ -145,24 +244,18 @@ isMdProfile=False
 gpu_mem  = 0.9       # tensorflow used gpu memory
 cuda_dev = '0'       # unoccupied gpu, using 'nvidia-smi' cmd
 cupyFeat=True
-torch_dtype = 'float32'
-tf_dtype = 'float32' # dtype of tensorflow trainning, 'float32' faster than 'float64'
-test_ratio = 0.2
+torch_dtype = 'float64'
+tf_dtype = 'float64' # dtype of tensorflow trainning, 'float32' faster than 'float64'
 #================================================================================
 # NN model related
 activation_func='softplus'     # could choose 'softplus' and 'elup1' now
 ntypes=len(atomType)
-#nLayers = 3
-#nNodes = np.array([[60,60],[30,30],[1,1]])
-nLayers = 1
-nNodes = np.array([[1]])
-# nLayers=5
-# nNodes = np.array([[256,256],[128,128],[64,64],[32,32],[1,1]])
+nLayers = 3
+nNodes = np.array([[60,60],[30,30],[1,1]])
+#nLayers=3
+#nNodes = np.array([[120,120],[120,120],[120,120],[1,1]])
 b_init=np.array([166.3969])      # energy of one atom, for different types, just a rough value
-#nLayers = 4
-#nNodes = np.array([[16,],[64,],[32,],[1,]])
-isNNpretrain = False
-isNNfinetuning = True
+DCNLayers = 5
 
 #================================================================================
 # training 
@@ -173,10 +266,14 @@ train_stage = 2      # only 1 or 2, 1 is begining training from energy and then 
 train_verb = 0       
 
 learning_rate= 1e-3
-batch_size = 2        
-rtLossE      = 0.8     # weight for energy, NN fitting 各个原子能量所占的权重
-rtLossF      = 0.2     # weight for force, NN fitting 各个原子所受力所占的权重
-rtLossEtot   = 0.0
+batch_size = 40
+#rtLossE      = 0.6     # weight for energy, NN fitting 各个原子能量所占的权重
+#rtLossF      = 0.2     # weight for force, NN fitting 各个原子所受力所占的权重
+#rtLossEtot   = 0.2
+rtLossE = 0.8
+rtLossF = 0.2
+rtLossEtot = 0
+
 bias_corr = True
 epochs_alltrain = 6000     # energy 训练循环次数
 epochs_Fi_train = 1000       # force+energy 训练循环次数 1000个epoch效果较好
@@ -205,6 +302,9 @@ InputPath=os.path.abspath('./input/')
 OutputPath=os.path.abspath('./output/')
 Ftype1InputPath=os.path.join('./input/',Ftype_name[1]+'.in')
 Ftype2InputPath=os.path.join('./input/',Ftype_name[2]+'.in')
+FtypeiiInputPath={i:'' for i in range(1,9)}  # python-dictionary, i = 1,2,3,4,5,6,7,8
+for i in range(1,9):
+    FtypeiiInputPath[i]=os.path.join('./input/',Ftype_name[i]+'.in')
 featCollectInPath=os.path.join(fitModelDir,'feat_collect.in')
 fitInputPath_lin=os.path.join(fitModelDir,'fit_linearMM.input')
 fitInputPath2_lin=os.path.join(InputPath,'fit_linearMM.input')
@@ -237,3 +337,5 @@ f_Einn_model   = d_nnEi+'allEi_final.ckpt'
 f_Finn_model   = d_nnFi+'Fi_final.ckpt'
 f_data_scaler = d_nnFi+'data_scaler.npy'
 f_Wij_np  = d_nnFi+'Wij.npy'
+
+#f_wij_txt = os.path.join(fitModelDir, "Wij.txt")

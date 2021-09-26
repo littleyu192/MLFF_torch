@@ -12,6 +12,12 @@
 /zwt/*
 !/zwt/parameters.py
 !/zwt/PWdata/MOVEMENT
+/cu1000
+!/cu1000/parameters.py
+!/cu1000/PWdata/MOVEMENT
+/cu1000_12
+/cu1000_5
+/cu1000_6
 
 /li10
 /Li

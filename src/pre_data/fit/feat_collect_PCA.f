@@ -19,9 +19,9 @@
        integer icount_feat(10)
        real*8 Ei_tmp
        integer itmp,lwork
-       character(len=80),allocatable,dimension (:) :: trainSetFileDir
-       character(len=80) trainSetDir,BadImageDir
-       character(len=90) MOVEMENTDir,dfeatDir,infoDir,trainDataDir,
+       character(len=200),allocatable,dimension (:) :: trainSetFileDir
+       character(len=200) trainSetDir,BadImageDir
+       character(len=200) MOVEMENTDir,dfeatDir,infoDir,trainDataDir,
      &       MOVEMENTallDir
        integer sys_num,sys
        integer nfeat2_store(100),nfeat1_store(100)
@@ -42,7 +42,7 @@
        open(13,file="location")
        rewind(13)
        read(13,*) sys_num  !,trainSetDir
-       read(13,'(a80)') trainSetDir
+       read(13,'(a200)') trainSetDir
        close(13)
        ! MOVEMENTallDir=trim(trainSetDir)//"/MOVEMENTall"
 
@@ -53,7 +53,7 @@
 
        trainDataDir=trim(trainSetDir)//"/trainData.txt.Ftype"// 
      &   char(ifeat_type(kkk)+48)
-
+       write(6,*) "traindatadir=", trainDataDir
 
        open(10,file=trainDataDir)
        rewind(10)

@@ -74,10 +74,10 @@
        integer,allocatable, dimension (:) :: iat_tmp,jneigh_tmp,
      &   ifeat_tmp
        integer num_tmp,jj
-       ! character(len=80) dfeat_n(400)
-       character(len=80) trainSetFileDir(400)
-       character(len=80) trainSetDir
-       character(len=90) MOVEMENTDir,dfeatDir,infoDir,trainDataDir,
+       ! character(len=200) dfeat_n(400)
+       character(len=200) trainSetFileDir(400)
+       character(len=200) trainSetDir
+       character(len=200) MOVEMENTDir,dfeatDir,infoDir,trainDataDir,
      &   MOVEMENTallDir
        integer sys_num,sys
        integer nfeat1tm(100),ifeat_type(100),nfeat1t(100)
@@ -288,10 +288,10 @@ ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
        open(13,file="location")
        rewind(13)
        read(13,*) sys_num  !,trainSetDir
-       read(13,'(a80)') trainSetDir
+       read(13,'(a200)') trainSetDir
        ! allocate(trainSetFileDir(sys_num))
        do i=1,sys_num
-       read(13,'(a80)') trainSetFileDir(i)    
+       read(13,'(a200)') trainSetFileDir(i)    
        enddo
        close(13)
        ! MOVEMENTallDir=trim(trainSetDir)//"/MOVEMENT"

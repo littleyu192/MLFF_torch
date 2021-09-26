@@ -47,10 +47,10 @@
  
        integer,allocatable,dimension(:) :: num_inv
        integer,allocatable,dimension(:,:) :: index_inv,index_inv2
-       ! character(len=80) dfeat_n(400)
-       character(len=80) trainSetFileDir(400)
-       character(len=80) trainSetDir
-       character(len=90) MOVEMENTDir,dfeatDir,infoDir,trainDataDir
+       ! character(len=200) dfeat_n(400)
+       character(len=200) trainSetFileDir(400)
+       character(len=200) trainSetDir
+       character(len=200) MOVEMENTDir,dfeatDir,infoDir,trainDataDir
        integer sys_num,sys
        
        real*8, allocatable, dimension (:,:) :: dfeat_tmp
@@ -248,10 +248,10 @@ ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
        open(13,file="location")
        rewind(13)
        read(13,*) sys_num  !,trainSetDir
-       read(13,'(a80)') trainSetDir
+       read(13,'(a200)') trainSetDir
        ! allocate(trainSetFileDir(sys_num))
        do i=1,sys_num
-       read(13,'(a80)') trainSetFileDir(i)    
+       read(13,'(a200)') trainSetFileDir(i)    
        enddo
        close(13)
 
@@ -278,10 +278,6 @@ ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
        num_AEM_F=0
        num_AEM_Egroup=0
 
-       MAE_Etot=0
-       MAE_Egroup=0
-       MAE_Eatom=0
-       MAE_F=0
 
        do 900 sys=1,sys_num
 
@@ -712,7 +708,7 @@ ccccccccccccccccccccccccccccccccccccccccccc
        energy_group_pred(iat1)=Esum2/sum
        num_AEM_Egroup=num_AEM_Egroup+1
        AEM_Egroup=AEM_Egroup+(Esum1/sum-Esum2/sum)**2
-       MAE_Egroup=MAE_Egroup+abs(Esum1/sum-Esum2/sum)
+       
        enddo
 
 
@@ -729,7 +725,7 @@ cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
        num_AEM_Etot=num_AEM_Etot+1
        AEM_Etot=AEM_Etot+(Etot-Etot_pred)**2
-       MAE_Etot=MAE_Etot+abs(Etot-Etot_pred)
+
 
         do i=1,natom
         itype=iatom_type(i)
@@ -740,12 +736,9 @@ cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
         write(40+itype,*) force(3,i),force_pred(3,i)
         num_AEM_Eatom=num_AEM_Eatom+1
         AEM_Eatom=AEM_Eatom+(energy(i)-energy_pred(i))**2
-        MAE_Eatom=MAE_Eatom+abs(energy(i)-energy_pred(i))
         num_AEM_F=num_AEM_F+3
         AEM_F=AEM_F+(force(1,i)-force_pred(1,i))**2+ 
      & (force(2,i)-force_pred(2,i))**2+(force(3,i)-force_pred(3,i))**2
-        MAE_F=MAE_F+abs(force(1,i)-force_pred(1,i))+
-     & abs(force(2,i)-force_pred(2,i))+abs(force(3,i)-force_pred(3,i))
         enddo
 
 3000   continue
@@ -784,41 +777,11 @@ cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
        close(70)
 
-       write(6,*) "RMSE_Eatom=", dsqrt(AEM_Eatom/num_AEM_Eatom) 
-       write(6,*) "RMSE_Egroup=", dsqrt(AEM_Egroup/num_AEM_Egroup) 
-       write(6,*) "RMSE_Etot=", dsqrt(AEM_Etot/num_AEM_Etot) 
-       write(6,*) "RMSE_F=", dsqrt(AEM_F/num_AEM_F)
-       
-       !write(6,*) "MAE_Eatom=", MAE_Eatom/num_AEM_Eatom
-       !write(6,*) "MAE_Egroup=", MAE_Egroup/num_AEM_Egroup
-       !write(6,*) "MAE_Etot=", MAE_Etot/num_AEM_Etot 
-       !write(6,*) "MAE_F=", MAE_F/num_AEM_F
+       write(6,*) "AEM_Eatom=", dsqrt(AEM_Eatom/num_AEM_Eatom) 
+       write(6,*) "AEM_Egroup=", dsqrt(AEM_Egroup/num_AEM_Egroup) 
+       write(6,*) "AEM_Etot=", dsqrt(AEM_Etot/num_AEM_Etot) 
+       write(6,*) "AEM_F=", dsqrt(AEM_F/num_AEM_F) 
 
-       write(6,*) "MSE_Eatom=", AEM_Eatom/num_AEM_Eatom
-       write(6,*) "MSE_Egroup=", AEM_Egroup/num_AEM_Egroup
-       write(6,*) "MSE_Etot=", AEM_Etot/num_AEM_Etot 
-       write(6,*) "MSE_F=", AEM_F/num_AEM_F
-
-       !E_loss=MSE_Eatom*weight_E0+MSE_Egroup*weight_E+MSE_F*weight_F
-       !write(6,*) "E_loss=", E_loss 
-
-       write(6,*) "square_loss_f=",  AEM_F
-       write(6,*) "square_loss_egroup=", AEM_Egroup
-       write(6,*) "square_loss_etot=", AEM_Etot
-
-       write(6,*) "weight_Egroup=", weight_E
-       write(6,*) "weight_Etot=",  weight_E0 
-       write(6,*) "weight_F=", weight_F
-      
-       write(6,*) "num_AEM_Eatom", num_AEM_Eatom
-       write(6,*) "num_AEM_Egroup", num_AEM_Egroup
-       write(6,*) "num_AEM_F", num_AEM_F
-
-       loss_func = weight_E*AEM_Egroup +
-     & weight_E0*AEM_Etot +
-     & weight_F*AEM_F
-       write(6,*) "loss=", loss_func
-       
        stop
        end
 
