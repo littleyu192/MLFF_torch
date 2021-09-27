@@ -597,17 +597,12 @@ LR_step = opt_step
 batch_size = opt_batch_size 
 
 if (opt_follow_mode == True):
-    opt_model_file = opt_
-    # TODO: 1) setup opt_model_file
-    #       2) print out opt_model_dir/ opt_model_file
-    #       3) load opt_model_file in training process
-
-
-
-
+    opt_model_file = opt_model_dir+opt_net_cfg+'.pt'
 
 info("Training: follow_mode = %s" %opt_follow_mode)
 info("Training: network = %s" %opt_net_cfg)
+info("Training: model_dir = %s" %opt_model_dir)
+info("Training: model_file = %s" %opt_model_file)
 info("Training: activation = %s" %opt_act)
 info("Training: optimizer = %s" %opt_optimizer)
 info("Training: momentum = %.16f" %momentum)
@@ -724,14 +719,17 @@ if pm.isNNfinetuning == True:
     if (opt_follow_mode == True):
         if (opt_session_name == ''):
             raise RuntimeError("you must run follow-mode from an existing session")
-        model_file = opt_model_dir+opt_net_cfg+'.pt'
-
-    if resume:
-        path=r"./FC3model/3layers_MLFFNet_11epoch.pt"
-        checkpoint = torch.load(opt_model_dir, map_location={'cpu':'cuda:0'})
+        checkpoint = torch.load(opt_model_file, map_location={'cpu':'cuda:0'})
         model.load_state_dict(checkpoint['model'])
         # optimizer.load_state_dict(checkpoint['optimizer'])
         start_epoch=checkpoint['epoch']+1
+
+        # TODO: clean the codes above
+        #       1) need to fix opt_net_cfg, the model still need to specify in follow-mode
+        #       2) add opt_image_file and it's parameter form
+        #       3) model store/load need to handle cpu/gpu
+        #       4) handle tensorboard file, can we modify accroding to 'epoch'?
+
     model = MLFF_dmirror(opt_net_cfg, opt_act, device, opt_magic)
 
     #if torch.cuda.device_count() > 1:
