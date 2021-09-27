@@ -38,6 +38,7 @@ logging_level_SUMMARY = 15
 # parse optional parameters
 opt_force_cpu = False
 opt_magic = False
+opt_follow_mode = False
 opt_net_cfg = 'default'
 opt_act = 'sigmoid'
 opt_optimizer = 'ADAM'
@@ -56,7 +57,9 @@ opt_session_name = ''
 opt_session_dir = ''
 opt_logging_file = ''
 opt_tensorboard_dir = ''
-# end session
+opt_model_dir = ''
+opt_model_file = ''
+# end session related
 opt_log_level = logging.INFO
 opt_file_log_level = logging.DEBUG
 
@@ -70,8 +73,8 @@ opt_LR_min_lr = 0.
 opt_LR_T_max = None
 
 opts,args = getopt.getopt(sys.argv[1:],
-    '-h-c-m-n:-a:-z:-v:-w:-u:-e:-l:-g:-t:-b:-d:-r:-s:-o:-i:',
-    ['help','cpu','magic','net_cfg=','act=','optimizer=','momentum',
+    '-h-c-m-f-n:-a:-z:-v:-w:-u:-e:-l:-g:-t:-b:-d:-r:-s:-o:-i:',
+    ['help','cpu','magic','follow','net_cfg=','act=','optimizer=','momentum',
      'weight_decay=','scheduler=','epochs=','lr=','gamma=','step=',
      'batch_size=','dtype=','rseed=','session=','log_level=',
      'file_log_level=',
@@ -85,8 +88,11 @@ for opt_name,opt_value in opts:
         print("     -h, --help                  :  print help info")
         print("     -c, --cpu                   :  force training run on cpu")
         print("     -m, --magic                 :  a magic flag for your testing code")
-        print("     -n cfg, --net_cfg=cfg       :  specify network cfg variable in parameters.py")
+        print("     -f, --follow                :  follow a previous trained model file")
+        print("     -n cfg, --net_cfg=cfg       :  if -f/--follow is not set, specify network cfg in parameters.py")
         print("                                    eg: -n MLFF_dmirror_cfg1")
+        print("                                    if -f/--follow is set, specify the model image file name")
+        print("                                    eg: '-n best1' will load model image file best1.pt from session dir")
         print("     -a act, --act=act           :  specify activation_type of MLFF_dmirror")
         print("                                    current supported: [sigmoid, softplus]")
         print("     -z name, --optimizer=name   :  specify optimizer")
@@ -132,6 +138,8 @@ for opt_name,opt_value in opts:
         opt_force_cpu = True
     elif opt_name in ('-m','--magic'):
         opt_magic = True
+    elif opt_name in ('-f','--follow'):
+        opt_follow_mode = True
     elif opt_name in ('-n','--net_cfg'):
         opt_net_cfg = opt_value
     elif opt_name in ('-a','--act'):
@@ -163,10 +171,13 @@ for opt_name,opt_value in opts:
         opt_session_dir = './'+opt_session_name+'/'
         opt_logging_file = opt_session_dir+'train.log'
         opt_tensorboard_dir = opt_session_dir+'/tensorboard/'
+        opt_model_dir = opt_session_dir+'/model/'
         if not os.path.exists(opt_session_dir):
             os.makedirs(opt_session_dir) 
         if not os.path.exists(opt_tensorboard_dir):
             os.makedirs(opt_tensorboard_dir) 
+        if not os.path.exists(opt_model_dir):
+            os.makedirs(opt_model_dir)
     elif opt_name in ('-o','--log_level'):
         if (opt_value == 'DUMP'):
             opt_log_level = logging_level_DUMP
@@ -549,6 +560,17 @@ LR_gamma = opt_gamma
 LR_step = opt_step
 batch_size = opt_batch_size 
 
+if (opt_follow_mode == True):
+    opt_model_file = opt_
+    # TODO: 1) setup opt_model_file
+    #       2) print out opt_model_dir/ opt_model_file
+    #       3) load opt_model_file in training process
+
+
+
+
+
+info("Training: follow_mode = %s" %opt_follow_mode)
 info("Training: network = %s" %opt_net_cfg)
 info("Training: activation = %s" %opt_act)
 info("Training: optimizer = %s" %opt_optimizer)
@@ -663,6 +685,17 @@ def LinearLR(optimizer, base_lr, target_lr, total_epoch, cur_epoch):
 
 if pm.isNNfinetuning == True:
     data_scalers = DataScalers(f_ds=pm.f_data_scaler, f_feat=pm.f_train_feat, load=True)
+    if (opt_follow_mode == True):
+        if (opt_session_name == ''):
+            raise RuntimeError("you must run follow-mode from an existing session")
+        model_file = opt_model_dir+opt_net_cfg+'.pt'
+
+    if resume:
+        path=r"./FC3model/3layers_MLFFNet_11epoch.pt"
+        checkpoint = torch.load(opt_model_dir, map_location={'cpu':'cuda:0'})
+        model.load_state_dict(checkpoint['model'])
+        # optimizer.load_state_dict(checkpoint['optimizer'])
+        start_epoch=checkpoint['epoch']+1
     model = MLFF_dmirror(opt_net_cfg, opt_act, device, opt_magic)
 
     #if torch.cuda.device_count() > 1:
