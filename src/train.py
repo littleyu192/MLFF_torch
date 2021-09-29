@@ -60,9 +60,11 @@ opt_logging_file = ''
 opt_tensorboard_dir = ''
 opt_model_dir = ''
 opt_model_file = ''
+opt_run_id = ''
 # end session related
 opt_log_level = logging.INFO
 opt_file_log_level = logging.DEBUG
+opt_journal_cycle = 1
 
 # scheduler specific options
 opt_LR_milestones = None
@@ -74,11 +76,11 @@ opt_LR_min_lr = 0.
 opt_LR_T_max = None
 
 opts,args = getopt.getopt(sys.argv[1:],
-    '-h-c-m-f-n:-a:-z:-v:-w:-u:-e:-l:-g:-t:-b:-d:-r:-s:-o:-i:',
+    '-h-c-m-f-n:-a:-z:-v:-w:-u:-e:-l:-g:-t:-b:-d:-r:-s:-o:-i:-j:',
     ['help','cpu','magic','follow','net_cfg=','act=','optimizer=','momentum',
      'weight_decay=','scheduler=','epochs=','lr=','gamma=','step=',
      'batch_size=','dtype=','rseed=','session=','log_level=',
-     'file_log_level=',
+     'file_log_level=','j_cycle=',
      'milestones=','patience=','cooldown=','eps=','total_steps=',
      'max_lr=','min_lr=','T_max='])
 
@@ -124,6 +126,10 @@ for opt_name,opt_value in opts:
         print("     -i L, --file_log_level=L    :  specify logging level of log file")
         print("                                    available: DUMP < [DEBUG] < SUMMARY < INFO < WARNING < ERROR")
         print("                                    logging msg with level >= logging_level will be recoreded")
+        print("     -j val, --j_cycle=val       :  specify journal cycle for tensorboard and data dump")
+        print("                                    0: disable journaling")
+        print("                                    1: record on every epoch [default]")
+        print("                                    n: record on every n epochs")
         print("")
         print("scheduler specific parameters:")
         print("     --milestones=int_list       :  milestones for MultiStep scheduler")
@@ -171,14 +177,27 @@ for opt_name,opt_value in opts:
         opt_session_name = opt_value
         opt_session_dir = './'+opt_session_name+'/'
         opt_logging_file = opt_session_dir+'train.log'
-        opt_tensorboard_dir = opt_session_dir+'/tensorboard/'
-        opt_model_dir = opt_session_dir+'/model/'
+        opt_model_dir = opt_session_dir+'model/'
+        opt_tensorboard_dir = opt_session_dir+'tensorboard/'
         if not os.path.exists(opt_session_dir):
             os.makedirs(opt_session_dir) 
-        if not os.path.exists(opt_tensorboard_dir):
-            os.makedirs(opt_tensorboard_dir) 
         if not os.path.exists(opt_model_dir):
             os.makedirs(opt_model_dir)
+        for i in range(1000):
+            opt_run_id = 'run'+str(i)
+            run_dir = opt_tensorboard_dir+opt_run_id
+            if (not os.path.exists(run_dir)):
+                os.makedirs(run_dir)
+                # TODO FIXME: cancel last_run symbol link, it's very unsafe for multi-run!!!
+                # TODO FIXME: add_sclars() of weight/bias/grad not work, check it
+                run_symbol_dir = opt_tensorboard_dir+'last_run'
+                if (os.path.lexists(run_symbol_dir)):
+                    os.remove(run_symbol_dir)
+                os.symlink(opt_run_id, run_symbol_dir)
+                break
+        else:
+            raise RuntimeError("reaches 1000 run dirs in %s, clean it" %opt_tensorboard_dir)
+        opt_tensorboard_dir = opt_session_dir+'/tensorboard/'+'last_run/'
     elif opt_name in ('-o','--log_level'):
         if (opt_value == 'DUMP'):
             opt_log_level = logging_level_DUMP
@@ -195,6 +214,8 @@ for opt_name,opt_value in opts:
         else:
             opt_file_log_level = 'logging.'+opt_value
             opt_file_log_level = eval(opt_file_log_level)
+    elif opt_name in ('-j','--j_cycle'):
+        opt_journal_cycle = int(opt_value)
     elif opt_name in ('--milestones'):
         opt_LR_milestones = list(map(int, opt_value.split(',')))
     elif opt_name in ('--patience'):
@@ -599,6 +620,9 @@ batch_size = opt_batch_size
 if (opt_follow_mode == True):
     opt_model_file = opt_model_dir+opt_net_cfg+'.pt'
 
+info("Training: session = %s" %opt_session_name)
+info("Training: run_id = %s" %opt_run_id)
+info("Training: journal_cycle = %d" %opt_journal_cycle)
 info("Training: follow_mode = %s" %opt_follow_mode)
 info("Training: network = %s" %opt_net_cfg)
 info("Training: model_dir = %s" %opt_model_dir)
@@ -635,73 +659,6 @@ loader_valid = Data.DataLoader(torch_valid_data, batch_size=1, shuffle=True)
     # model = nn.DataParallel(model)
 
 # ==========================part3:模型预训练==========================
-if pm.isNNpretrain == True:
-    premodel = preMLFFNet()           #预训练
-    optimizer = optim.Adam(premodel.parameters(), lr=learning_rate)
-    scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=opt_REGULAR)
-    start = time.time()
-    min_loss = np.inf
-    start_epoch=1
-    patience = 50	# 当验证集损失在连续50次没有降低时，停止模型训练，防止模型过拟合
-
-    resume=False  # resume:恢复
-    if resume:    # 中断的时候恢复训练
-        path=r"./FC3model/3layers_MLFFNet_34epoch.pt"
-        checkpoint = torch.load(path, map_location={'cpu':'cuda:0'})
-        premodel.load_state_dict(checkpoint['model'])
-        # optimizer.load_state_dict(checkpoint['optimizer'])
-        start_epoch=checkpoint['epoch']+1
-    # import ipdb; ipdb.set_trace()
-    for epoch in range(start_epoch, n_epoch + 1):
-        print("epoch " + str(epoch))
-        start = time.time()
-        lr = optimizer.param_groups[0]['lr']
-        
-        loss_function_err = 0
-        train_epoch_etot_RMSE_loss = 0
-
-        for i_batch, sample_batches in enumerate(loader_train):
-            etot_square_loss, Etot_RMSE_error, Etot_ABS_error, Etot_L2 = pretrain(sample_batches, premodel, optimizer, nn.MSELoss())
-            loss_function_err += etot_square_loss
-            train_epoch_etot_RMSE_loss += Etot_RMSE_error
-        train_function_err_avg = loss_function_err / len(loader_train)
-        train_etot_rmse_loss = train_epoch_etot_RMSE_loss/len(loader_train)
-
-        end = time.time()
-        time_cost = sec_to_hms(int(end-start))    #每个epoch的训练时间
-        print('Pretraining stage: epoch = {}, train_function_err_avg = {:.8f}, lr = {}, time cost = {}, \
-            training etot rmse = {:.8f}'.format(epoch, train_function_err_avg,  \
-                lr, time_cost, train_etot_rmse_loss)) 
-
-        if epoch > weight_decay_epoch:   # 学习率衰减
-            scheduler.step()
-            print("ddddddddddd")
-        iprint = 1               #隔几个epoch记录一次误差
-        f_err_log=pm.dir_work+'pretraining.dat'
-        if epoch // iprint == 1:
-            fid_err_log = open(f_err_log, 'w')
-        else:
-            fid_err_log = open(f_err_log, 'a')
-        fid_err_log.write('%d %e %e %e %s\n'       \
-        % (epoch, train_function_err_avg, lr, train_etot_rmse_loss, time_cost))
-        fid_err_log.close()
-
-        if train_function_err_avg < min_loss:
-            min_loss = train_function_err_avg
-            works_epoch = 0
-            #name = direc + '/3layers_' + 'preMLFFNet_' + str(epoch)+'epoch.pt'
-            # state = {'model': model.state_dict(), 'optimizer':optimizer.state_dict(),'epoch': epoch}
-            state = {'model': premodel.state_dict(), 'epoch': epoch}
-            torch.save(state, name)
-            print('saving model to {}'.format(name))
-        else:
-            works_epoch += 1
-            if works_epoch > patience:
-                name = direc + '/3layers_' + 'preMLFFNet.pt'
-                state = {'model': premodel.state_dict(), 'optimizer':optimizer.state_dict(),'epoch': epoch}
-                torch.save(state, name)
-                print("Early stopping")
-                break
 # os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3'
 # torch.distributed.init_process_group(backend='nccl', init_method='tcp://localhost:23457', rank=0, world_size=1)
 
@@ -731,6 +688,12 @@ if pm.isNNfinetuning == True:
         #       4) handle tensorboard file, can we modify accroding to 'epoch'?
 
     model = MLFF_dmirror(opt_net_cfg, opt_act, device, opt_magic)
+    # this is a temp fix for a quick test
+    for name, p in model.named_parameters():
+        if ('bias' in name):
+            dump(p)
+            p.data.fill_(0.0)
+            dump(p)
 
     #if torch.cuda.device_count() > 1:
     #    model = nn.DataParallel(model)
@@ -794,29 +757,8 @@ if pm.isNNfinetuning == True:
         error("unsupported scheduler: %s" %opt_schedler)
         raise RuntimeError("unsupported scheduler: %s" %opt_scheduler)
 
-
-
-
-    start = time.time()
-    min_loss = np.inf
+    #min_loss = np.inf
     start_epoch=1
-    patience = 100   #2000
-
-    if pm.isNNpretrain == True:   # True时表示load预训练的模型， False表示直接fine tuning
-        path=r"./FC3model/3layers_preMLFFNet.pt"
-        checkpoint = torch.load(path, map_location={'cpu':'cuda:0'})
-        model.load_state_dict(checkpoint['model'])
-        # optimizer.load_state_dict(checkpoint['optimizer'])
-        start_epoch=checkpoint['epoch']+1
-
-    resume = False  #模型中断时重新训练
-    if resume:
-        path=r"./FC3model_mini_force/3layers_MLFFNet.pt"
-        checkpoint = torch.load(path, map_location={'cpu':'cuda:0'})
-        model.load_state_dict(checkpoint['model'])
-        # optimizer.load_state_dict(checkpoint['optimizer'])
-        start_epoch=checkpoint['epoch']+1
-
     for epoch in range(start_epoch, n_epoch + 1):
         if (epoch == n_epoch):
             last_epoch = True
@@ -854,15 +796,16 @@ if pm.isNNfinetuning == True:
         RMSE_F = loss_F ** 0.5
         info("epoch_loss = %.16f (loss_Etot = %.16f, loss_F = %.16f, RMSE_Etot = %.16f, RMSE_F = %.16f)" %(loss, loss_Etot, loss_F, RMSE_Etot, RMSE_F))
         # update tensorboard
-        if (writer is not None):
-            writer.add_scalar('learning_rate', lr, epoch)
-            writer.add_scalar('train_loss', loss, epoch)
-            writer.add_scalar('train_loss_Etot', loss_Etot, epoch)
-            writer.add_scalar('train_loss_Egroup', loss_Egroup, epoch)
-            writer.add_scalar('train_loss_F', loss_F, epoch)
-            writer.add_scalar('train_RMSE_Etot', RMSE_Etot, epoch)
-            writer.add_scalar('train_RMSE_Egroup', RMSE_Egroup, epoch)
-            writer.add_scalar('train_RMSE_F', RMSE_F, epoch)
+        if ((opt_journal_cycle > 0) and ((epoch) % opt_journal_cycle == 0)):
+            if (writer is not None):
+                writer.add_scalar('learning_rate', lr, epoch)
+                writer.add_scalar('train_loss', loss, epoch)
+                writer.add_scalar('train_loss_Etot', loss_Etot, epoch)
+                writer.add_scalar('train_loss_Egroup', loss_Egroup, epoch)
+                writer.add_scalar('train_loss_F', loss_F, epoch)
+                writer.add_scalar('train_RMSE_Etot', RMSE_Etot, epoch)
+                writer.add_scalar('train_RMSE_Egroup', RMSE_Egroup, epoch)
+                writer.add_scalar('train_RMSE_F', RMSE_F, epoch)
             
         # print('Finetuning stage: epoch = {}, step = {}, train_function_err_avg = {:.8f}, train_epoch_force_square_loss = {:.8f}, \
         #     train_epoch_etot_square_loss = {:.8f}, train_epoch_egroup_square_loss = {:.8f}, lr = {}, time cost = {}, \
@@ -893,31 +836,35 @@ if pm.isNNfinetuning == True:
         else:
             scheduler.step()
         
-        for name, parameter in model.named_parameters():
-            param_RMS= parameter.pow(2).mean().pow(0.5)
-            param_ABS= parameter.abs().mean()
-            grad_RMS= parameter.grad.pow(2).mean().pow(0.5)
-            grad_ABS= parameter.grad.abs().mean()
-            if (writer is not None):
-                writer.add_scalar(name+'_RMS', param_RMS, epoch)
-                writer.add_scalar(name+'_ABS', param_ABS, epoch)
-                writer.add_scalar(name+'.grad_RMS', grad_RMS, epoch)
-                writer.add_scalar(name+'.grad_ABS', grad_ABS, epoch)
-            dump("dump parameter statistics of %s -------------------------->" %name)
-            dump("%s : %s" %(name+'_RMS', param_RMS))
-            dump("%s : %s" %(name+'_ABS', param_ABS))
-            dump("%s : %s" %(name+'.grad_RMS', grad_RMS))
-            dump("%s : %s" %(name+'.grad_ABS', grad_ABS))
-        
-            dump("dump model parameter (%s : %s) ------------------------>" %(name, parameter.size()))
-            dump(parameter)
-            dump("dump grad of model parameter (%s : %s) (not applied)--->" %(name, parameter.size()))
-            dump(parameter.grad)
-            if (last_epoch):
-                summary("dump model parameter (%s : %s) ------------------------>" %(name, parameter.size()))
-                summary(parameter)
-                summary("dump grad of model parameter (%s : %s) (not applied)--->" %(name, parameter.size()))
-                summary(parameter.grad)
+        if ((opt_journal_cycle > 0) and ((epoch) % opt_journal_cycle == 0)):
+            for name, parameter in model.named_parameters():
+                param_RMS= parameter.pow(2).mean().pow(0.5)
+                param_ABS= parameter.abs().mean()
+                grad_RMS= parameter.grad.pow(2).mean().pow(0.5)
+                grad_ABS= parameter.grad.abs().mean()
+                param_list = parameter.view(parameter.numel())
+                param_name = [str(x) for x in range(parameter.numel())]
+                param_dict = dict(zip(param_name, param_list))
+                grad_list = parameter.grad.view(parameter.grad.numel())
+                grad_name = [str(x) for x in range(parameter.grad.numel())]
+                grad_dict = dict(zip(grad_name, grad_list))
+                if (writer is not None):
+                    writer.add_scalar(name+'_RMS', param_RMS, epoch)
+                    writer.add_scalar(name+'_ABS', param_ABS, epoch)
+                    writer.add_scalar(name+'.grad_RMS', grad_RMS, epoch)
+                    writer.add_scalar(name+'.grad_ABS', grad_ABS, epoch)
+                    writer.add_scalars(name, param_dict, epoch)
+                    writer.add_scalars(name+'.grad', grad_dict, epoch)
+                
+                dump("dump parameter statistics of %s -------------------------->" %name)
+                dump("%s : %s" %(name+'_RMS', param_RMS))
+                dump("%s : %s" %(name+'_ABS', param_ABS))
+                dump("%s : %s" %(name+'.grad_RMS', grad_RMS))
+                dump("%s : %s" %(name+'.grad_ABS', grad_ABS))
+                dump("dump model parameter (%s : %s) ------------------------>" %(name, parameter.size()))
+                dump(parameter)
+                dump("dump grad of model parameter (%s : %s) (not applied)--->" %(name, parameter.size()))
+                dump(parameter.grad)
 
         """
         for i_batch, sample_batches in enumerate(loader_valid):
