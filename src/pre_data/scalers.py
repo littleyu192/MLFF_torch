@@ -26,14 +26,18 @@ class MinMaxScaler:
         # use 'inf' to avoid div-by-zero error
         x_max_min = xmax - xmin
         x_max_min[x_max_min == 0] = float('inf')
+        eps = 0.0001
 
         # DO NOT change the sequence of following four statements
-        self.a = (self.fr[1] - self.fr[0]) / x_max_min
-        self.a[x_max_min <= 0.1] = 10
-        self.a[xmax < 0.01] = 1
-        self.a[xmax == xmin] = 0  # important !!!
+        self.a = (self.fr[1] - self.fr[0]) / (x_max_min + eps)
+        #self.a[x_max_min <= 0.1] = 10
+        #self.a[xmax < 0.01] = 1
+        #self.a[xmax == xmin] = 0  # important !!!
 
         self.b = self.fr[0] - self.a*xmin
+
+        print("fit_transform: scaler a = %s" %self.a)
+        print("fit_transform: scaler b = %s" %self.b)
         return self.transform(x)
 
     def transform(self, x):
