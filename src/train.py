@@ -894,10 +894,10 @@ if pm.isNNfinetuning == True:
             scheduler.step()
         
         for name, parameter in model.named_parameters():
-            param_RMS= parameter.pow(2).sum().pow(0.5)/pow(len(parameter),0.5)
-            param_ABS= parameter.abs().sum()/len(parameter)
-            grad_RMS= parameter.grad.pow(2).sum().pow(0.5)/pow(len(parameter.grad),0.5)
-            grad_ABS= parameter.grad.abs().sum()/len(parameter.grad)
+            param_RMS= parameter.pow(2).mean().pow(0.5)
+            param_ABS= parameter.abs().mean()
+            grad_RMS= parameter.grad.pow(2).mean().pow(0.5)
+            grad_ABS= parameter.grad.abs().mean()
             if (writer is not None):
                 writer.add_scalar(name+'_RMS', param_RMS, epoch)
                 writer.add_scalar(name+'_ABS', param_ABS, epoch)
