@@ -325,7 +325,7 @@ if (opt_tensorboard_dir != ''):
     if (opt_wandb is True):
         wandb.tensorboard.patch(root_logdir=opt_tensorboard_dir)
         wandb_run = wandb.init(entity=opt_wandb_entity, project=opt_wandb_project, reinit=True)
-        wandb_run.name = getpass.getuser()+'_'+opt_session_name+'_'+opt_run_id
+        wandb_run.name = getpass.getuser()+'-'+opt_session_name+'-'+opt_run_id
         wandb_run.save()
     writer = SummaryWriter(opt_tensorboard_dir)
 else:
