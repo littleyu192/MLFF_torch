@@ -29,6 +29,7 @@ from torch.utils.tensorboard import SummaryWriter
 import torchviz
 import time
 import getopt
+import getpass
 
 # logging and our extension
 import logging
@@ -66,7 +67,7 @@ opt_file_log_level = logging.DEBUG
 opt_journal_cycle = 1
 # wandb related
 opt_wandb = False
-opt_wandb_entity = ''
+opt_wandb_entity = 'moleculenn'
 opt_wandb_project = 'MLFF_torch'
 # end wandb related
 
@@ -147,7 +148,7 @@ for opt_name,opt_value in opts:
         print("")
         print("wandb parameters:")
         print("     --wandb                     :  ebable wandb, sync tensorboard data to wandb")
-        print("     --wandb_entity=yr_account   :  your wandb account")
+        print("     --wandb_entity=yr_account   :  your wandb entity or account (default is: moleculenn")
         print("     --wandb_project=yr_project  :  your wandb project name (default is: MLFF_torch)")
         print("")
         exit()
@@ -323,7 +324,9 @@ torch.set_printoptions(precision = 16)
 if (opt_tensorboard_dir != ''):
     if (opt_wandb is True):
         wandb.tensorboard.patch(root_logdir=opt_tensorboard_dir)
-        wandb.init(entity=opt_wandb_entity, project=opt_wandb_project)
+        wandb_run = wandb.init(entity=opt_wandb_entity, project=opt_wandb_project, reinit=True)
+        wandb_run.name = getpass.getuser()+'_'+opt_session_name+'_'+opt_run_id
+        wandb_run.save()
     writer = SummaryWriter(opt_tensorboard_dir)
 else:
     writer = None
@@ -926,4 +929,4 @@ if pm.isNNfinetuning == True:
 if (writer is not None):
     writer.close()
     if (opt_wandb is True):
-        wandb.finish()
+        wandb_run.finish()
