@@ -64,6 +64,11 @@ opt_run_id = ''
 opt_log_level = logging.INFO
 opt_file_log_level = logging.DEBUG
 opt_journal_cycle = 1
+# wandb related
+opt_wandb = False
+opt_wandb_entity = ''
+opt_wandb_project = 'MLFF_torch'
+# end wandb related
 
 # scheduler specific options
 opt_LR_milestones = None
@@ -81,7 +86,8 @@ opts,args = getopt.getopt(sys.argv[1:],
      'batch_size=','dtype=','rseed=','session=','log_level=',
      'file_log_level=','j_cycle=',
      'milestones=','patience=','cooldown=','eps=','total_steps=',
-     'max_lr=','min_lr=','T_max='])
+     'max_lr=','min_lr=','T_max=',
+     'wandb','wandb_entity=','wandb_project='])
 
 for opt_name,opt_value in opts:
     if opt_name in ('-h','--help'):
@@ -138,6 +144,11 @@ for opt_name,opt_value in opts:
         print("     --max_lr=float_val          :  max learning rate for OneCycle scheduler")
         print("     --min_lr=float_val          :  min learning rate for CosineAnnealing/ReduceLROnPlateau")
         print("     --T_max=int_val             :  T_max for CosineAnnealing scheduler")
+        print("")
+        print("wandb parameters:")
+        print("     --wandb                     :  ebable wandb, sync tensorboard data to wandb")
+        print("     --wandb_entity=yr_account   :  your wandb account")
+        print("     --wandb_project=yr_project  :  your wandb project name (default is: MLFF_torch)")
         print("")
         exit()
     elif opt_name in ('-c','--cpu'):
@@ -223,6 +234,13 @@ for opt_name,opt_value in opts:
         opt_LR_min_lr = float(opt_value)
     elif opt_name in ('--T_max'):
         opt_LR_T_max = int(opt_value)
+    elif opt_name in ('--wandb'):
+        opt_wandb = True
+        import wandb
+    elif opt_name in ('--wandb_entity'):
+        opt_wandb_entity = opt_value
+    elif opt_name in ('--wandb_project'):
+        opt_wandb_project = opt_value
 
 
 # setup logging module
@@ -303,6 +321,9 @@ torch.set_printoptions(precision = 16)
 
 # set tensorboard
 if (opt_tensorboard_dir != ''):
+    if (opt_wandb is True):
+        wandb.tensorboard.patch(root_logdir=opt_tensorboard_dir)
+        wandb.init(entity=opt_wandb_entity, project=opt_wandb_project)
     writer = SummaryWriter(opt_tensorboard_dir)
 else:
     writer = None
@@ -904,3 +925,5 @@ if pm.isNNfinetuning == True:
 """
 if (writer is not None):
     writer.close()
+    if (opt_wandb is True):
+        wandb.finish()
