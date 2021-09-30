@@ -178,26 +178,20 @@ for opt_name,opt_value in opts:
         opt_session_dir = './'+opt_session_name+'/'
         opt_logging_file = opt_session_dir+'train.log'
         opt_model_dir = opt_session_dir+'model/'
-        opt_tensorboard_dir = opt_session_dir+'tensorboard/'
+        tensorboard_base_dir = opt_session_dir+'tensorboard/'
         if not os.path.exists(opt_session_dir):
             os.makedirs(opt_session_dir) 
         if not os.path.exists(opt_model_dir):
             os.makedirs(opt_model_dir)
         for i in range(1000):
             opt_run_id = 'run'+str(i)
-            run_dir = opt_tensorboard_dir+opt_run_id
-            if (not os.path.exists(run_dir)):
-                os.makedirs(run_dir)
-                # TODO FIXME: cancel last_run symbol link, it's very unsafe for multi-run!!!
-                # TODO FIXME: add_sclars() of weight/bias/grad not work, check it
-                run_symbol_dir = opt_tensorboard_dir+'last_run'
-                if (os.path.lexists(run_symbol_dir)):
-                    os.remove(run_symbol_dir)
-                os.symlink(opt_run_id, run_symbol_dir)
+            opt_tensorboard_dir = tensorboard_base_dir+opt_run_id
+            if (not os.path.exists(opt_tensorboard_dir)):
+                os.makedirs(opt_tensorboard_dir)
                 break
         else:
+            opt_tensorboard_dir = ''
             raise RuntimeError("reaches 1000 run dirs in %s, clean it" %opt_tensorboard_dir)
-        opt_tensorboard_dir = opt_session_dir+'/tensorboard/'+'last_run/'
     elif opt_name in ('-o','--log_level'):
         if (opt_value == 'DUMP'):
             opt_log_level = logging_level_DUMP
@@ -692,13 +686,14 @@ if pm.isNNfinetuning == True:
     for name, p in model.named_parameters():
         if ('bias' in name):
             dump(p)
-            p.data.fill_(0.0)
+            p.data.fill_(11.0)
             dump(p)
 
     #if torch.cuda.device_count() > 1:
     #    model = nn.DataParallel(model)
 
     # set model parameter properties, do not apply weight decay to bias parameter
+    # except for LBFGS, which do not support pre-parameter options
     model_parameters = [
                     {'params': (p for name, p in model.named_parameters() if 'bias' not in name)},
                     {'params': (p for name, p in model.named_parameters() if 'bias' in name), 'weight_decay': 0.}]
@@ -722,10 +717,22 @@ if pm.isNNfinetuning == True:
     elif (opt_optimizer == 'ADAMAX'):
         optimizer = optim.Adamax(model_parameters, lr=LR_base, weight_decay=REGULAR_wd)
     elif (opt_optimizer == 'LBFGS'):
-        optimizer = optim.LBFGS(model_parameters, lr=LR_base)
+        optimizer = optim.LBFGS(model.parameters(), lr=LR_base)
     else:
         error("unsupported optimizer: %s" %opt_optimizer)
         raise RuntimeError("unsupported optimizer: %s" %opt_optimizer)
+
+    # TODO: LBFGS is not done yet
+    # FIXME: train process should be better re-arranged to 
+    #        support this closure cleanly
+    # example code for LBFGS closure()
+    #def lbfgs_closure():
+    #    optimizer.zero_grad()
+    #    output = model(input)
+    #    loss = loss_fn(output, target)
+    #    loss.backward()
+    #    return loss
+    #optimizer.step(lbfgs_closure)
 
     # user specific LambdaLR lambda function
     lr_lambda = lambda epoch: LR_gamma ** epoch
