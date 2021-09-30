@@ -707,7 +707,7 @@ if pm.isNNfinetuning == True:
     for name, p in model.named_parameters():
         if ('bias' in name):
             dump(p)
-            p.data.fill_(11.0)
+            #p.data.fill_(11.0)
             dump(p)
 
     #if torch.cuda.device_count() > 1:
