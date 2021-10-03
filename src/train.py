@@ -71,6 +71,8 @@ opt_wandb = False
 opt_wandb_entity = 'moleculenn'
 opt_wandb_project = 'MLFF_torch'
 # end wandb related
+opt_init_b = False
+opt_save_model = False
 
 # scheduler specific options
 opt_LR_milestones = None
@@ -86,7 +88,7 @@ opts,args = getopt.getopt(sys.argv[1:],
     ['help','cpu','magic','follow','net_cfg=','act=','optimizer=','momentum',
      'weight_decay=','scheduler=','epochs=','lr=','gamma=','step=',
      'batch_size=','dtype=','rseed=','session=','log_level=',
-     'file_log_level=','j_cycle=',
+     'file_log_level=','j_cycle=','init_b','save_model',
      'milestones=','patience=','cooldown=','eps=','total_steps=',
      'max_lr=','min_lr=','T_max=',
      'wandb','wandb_entity=','wandb_project='])
@@ -243,6 +245,10 @@ for opt_name,opt_value in opts:
         opt_wandb_entity = opt_value
     elif opt_name in ('--wandb_project'):
         opt_wandb_project = opt_value
+    elif opt_name in ('--init_b'):
+        opt_init_b = True
+    elif opt_name in ('--save_model'):
+        opt_save_model = True
 
 
 # setup logging module
@@ -707,11 +713,12 @@ if pm.isNNfinetuning == True:
 
     model = MLFF_dmirror(opt_net_cfg, opt_act, device, opt_magic)
     # this is a temp fix for a quick test
-    for name, p in model.named_parameters():
-        if ('bias' in name):
-            dump(p)
-            #p.data.fill_(11.0)
-            dump(p)
+    if (opt_init_b == True):
+        for name, p in model.named_parameters():
+            if ('linear_3.bias' in name):
+                dump(p)
+                p.data.fill_(166.0)
+                dump(p)
 
     #if torch.cuda.device_count() > 1:
     #    model = nn.DataParallel(model)
@@ -866,6 +873,12 @@ if pm.isNNfinetuning == True:
             pass
         else:
             scheduler.step()
+
+        if ((opt_save_model == True) and (epoch % 10000 == 0)):
+            file_name = opt_model_dir + str(epoch) + '.pt'
+            state = {'model': model.state_dict(), 'loss': loss}
+            torch.save(state, file_name)
+
         
         if ((opt_journal_cycle > 0) and ((epoch) % opt_journal_cycle == 0)):
             for name, parameter in model.named_parameters():
@@ -884,8 +897,8 @@ if pm.isNNfinetuning == True:
                     writer.add_scalar(name+'_ABS', param_ABS, epoch)
                     writer.add_scalar(name+'.grad_RMS', grad_RMS, epoch)
                     writer.add_scalar(name+'.grad_ABS', grad_ABS, epoch)
-                    writer.add_scalars(name, param_dict, epoch)
-                    writer.add_scalars(name+'.grad', grad_dict, epoch)
+                    #writer.add_scalars(name, param_dict, epoch)
+                    #writer.add_scalars(name+'.grad', grad_dict, epoch)
                 
                 dump("dump parameter statistics of %s -------------------------->" %name)
                 dump("%s : %s" %(name+'_RMS', param_RMS))
