@@ -13,7 +13,7 @@ from torch.nn.modules import loss
 import torch.optim as optim
 from torch.nn.parameter import Parameter
 from torch.utils.data import Dataset, DataLoader
-from model.FC import preMLFFNet, MLFFNet
+from model.FCmix import MLFFmixNet
 # from model.LN import LNNet
 import torch.utils.data as Data
 from torch.autograd import Variable
@@ -298,80 +298,13 @@ n_epoch = 2000   #5000
 learning_rate = 0.1
 weight_decay = 0.9
 weight_decay_epoch = 50
-direc = './1010_softplus_dploss_f8'
+direc = './1010_softplus_dploss_2x_relu'
 if not os.path.exists(direc):
     os.makedirs(direc) 
 
 # if torch.cuda.device_count() > 1:
     # model = nn.DataParallel(model)
 
-# ==========================part3:模型预训练==========================
-if pm.isNNpretrain == True:
-    premodel = preMLFFNet()           #预训练
-    optimizer = optim.Adam(premodel.parameters(), lr=learning_rate)
-    scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=weight_decay)
-    start = time.time()
-    min_loss = np.inf
-    start_epoch=1
-    patience = 50	# 当验证集损失在连续50次没有降低时，停止模型训练，防止模型过拟合
-
-    resume=False  # resume:恢复
-    if resume:    # 中断的时候恢复训练
-        path=r"./FC3model/3layers_MLFFNet_34epoch.pt"
-        checkpoint = torch.load(path, map_location={'cpu':'cuda:0'})
-        premodel.load_state_dict(checkpoint['model'])
-        # optimizer.load_state_dict(checkpoint['optimizer'])
-        start_epoch=checkpoint['epoch']+1
-    # import ipdb; ipdb.set_trace()
-    for epoch in range(start_epoch, n_epoch + 1):
-        print("epoch " + str(epoch))
-        start = time.time()
-        lr = optimizer.param_groups[0]['lr']
-        
-        loss_function_err = 0
-        train_epoch_etot_RMSE_loss = 0
-
-        for i_batch, sample_batches in enumerate(loader_train):
-            etot_square_loss, Etot_RMSE_error, Etot_ABS_error, Etot_L2 = pretrain(sample_batches, premodel, optimizer, nn.MSELoss())
-            loss_function_err += etot_square_loss
-            train_epoch_etot_RMSE_loss += Etot_RMSE_error
-        train_function_err_avg = loss_function_err / len(loader_train)
-        train_etot_rmse_loss = train_epoch_etot_RMSE_loss/len(loader_train)
-
-        end = time.time()
-        time_cost = sec_to_hms(int(end-start))    #每个epoch的训练时间
-        print('Pretraining stage: epoch = {}, train_function_err_avg = {:.8f}, lr = {}, time cost = {}, \
-            training etot rmse = {:.8f}'.format(epoch, train_function_err_avg,  \
-                lr, time_cost, train_etot_rmse_loss)) 
-
-        if epoch > weight_decay_epoch:   # 学习率衰减
-            scheduler.step()
-        iprint = 1               #隔几个epoch记录一次误差
-        f_err_log=pm.dir_work+'pretraining.dat'
-        if epoch // iprint == 1:
-            fid_err_log = open(f_err_log, 'w')
-        else:
-            fid_err_log = open(f_err_log, 'a')
-        fid_err_log.write('%d %e %e %e %s\n'       \
-        % (epoch, train_function_err_avg, lr, train_etot_rmse_loss, time_cost))
-        fid_err_log.close()
-
-        if train_function_err_avg < min_loss:
-            min_loss = train_function_err_avg
-            works_epoch = 0
-            name = direc + '/3layers_' + 'preMLFFNet_' + str(epoch)+'epoch.pt'
-            # state = {'model': model.state_dict(), 'optimizer':optimizer.state_dict(),'epoch': epoch}
-            state = {'model': premodel.state_dict(), 'epoch': epoch}
-            torch.save(state, name)
-            print('saving model to {}'.format(name))
-        else:
-            works_epoch += 1
-            if works_epoch > patience:
-                name = direc + '/3layers_' + 'preMLFFNet.pt'
-                state = {'model': premodel.state_dict(), 'optimizer':optimizer.state_dict(),'epoch': epoch}
-                torch.save(state, name)
-                print("Early stopping")
-                break
 # os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3'
 # torch.distributed.init_process_group(backend='nccl', init_method='tcp://localhost:23457', rank=0, world_size=1)
 
@@ -380,7 +313,7 @@ if pm.isNNpretrain == True:
 if pm.isNNfinetuning == True:
     data_scalers = DataScalers(f_ds=pm.f_data_scaler, f_feat=pm.f_train_feat, load=True)
     # import ipdb; ipdb.set_trace()
-    model = MLFFNet(data_scalers)
+    model = MLFFmixNet(data_scalers)
     # model = LNNet()
     # if torch.cuda.device_count() > 1:
         # model = nn.DataParallel(model)
@@ -390,13 +323,6 @@ if pm.isNNfinetuning == True:
     min_loss = np.inf
     start_epoch=1
     patience = 100   #2000
-
-    if pm.isNNpretrain == True:   # True时表示load预训练的模型， False表示直接fine tuning
-        path=r"./FC3model/3layers_preMLFFNet.pt"
-        checkpoint = torch.load(path, map_location={'cpu':'cuda:0'})
-        model.load_state_dict(checkpoint['model'])
-        # optimizer.load_state_dict(checkpoint['optimizer'])
-        start_epoch=checkpoint['epoch']+1
 
     resume = False  #模型中断时重新训练
     if resume:
@@ -499,7 +425,7 @@ if pm.isNNfinetuning == True:
         if epoch > weight_decay_epoch:   # 学习率衰减
             scheduler.step()
         iprint = 10 #隔几个epoch记录一次误差
-        f_err_log=pm.dir_work+'1010_softplus_dploss_f8.dat'
+        f_err_log=pm.dir_work+'1010_softplus_dploss_2x_relu.dat'
         if epoch // iprint == 1:
             fid_err_log = open(f_err_log, 'w')
         else:

@@ -243,10 +243,10 @@ tf_dtype = 'float64' # dtype of tensorflow trainning, 'float32' faster than 'flo
 # NN model related
 activation_func='softplus'     # could choose 'softplus' and 'elup1' now
 ntypes=len(atomType)
-nLayers = 3
-nNodes = np.array([[60,60],[30,30],[1,1]])
-#nLayers=3
-#nNodes = np.array([[120,120],[120,120],[120,120],[1,1]])
+#nLayers = 3
+#nNodes = np.array([[60,60],[30,30],[1,1]])
+nLayers=4
+nNodes = np.array([[30,],[30,],[30,],[1,]])
 b_init=np.array([166.3969])      # energy of one atom, for different types, just a rough value
 DCNLayers = 5
 

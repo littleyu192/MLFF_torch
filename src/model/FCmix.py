@@ -81,6 +81,15 @@ class FCNet(nn.Module):
         self.itype= itype  # itype =0,1 if CuO         
         self.weights = nn.ParameterList()
         self.bias = nn.ParameterList()
+        # self.nfeats = [0,24,42]
+        self.nfeats = [2*x for x in range(22)]
+
+        self.w_feat = []
+        self.b_feat = []
+        for i in range(1, len(self.nfeats)):
+            in_feat_i = self.nfeats[i] - self.nfeats[i-1]
+            self.w_feat.append(nn.Parameter(torch.randn(in_feat_i, in_feat_i)).to(device))
+            self.b_feat.append(nn.Parameter(torch.randn(in_feat_i)).to(device))
 
         for i in range(pm.nLayers-1):
             in_putsize = pm.nFeatures if i==0 else pm.nNodes[i-1,itype] #0为type1,1为type2
@@ -96,72 +105,33 @@ class FCNet(nn.Module):
     def forward(self, x):
         L = []
         dL = []
-        # print("L[0]=F.linear(x, self.weights[0]")
-        # print(x)
-        # print('~'*10)
-        # print(self.weights[0])
-        # print('~'*10)
-        # dL.append(dACTIVE(F.linear(x, self.weights[0], bias=self.bias[0])))
-        # L.append(ACTIVE(F.linear(x, self.weights[0], bias=self.bias[0])))
-        # Fout_0=F.linear(x, self.weights[0], bias=self.bias[0])
+        for feat in range(1, len(self.nfeats)):
+            F_feature = torch.matmul(x[:,:,self.nfeats[feat-1]:self.nfeats[feat]], self.w_feat[feat-1].t()) + self.b_feat[feat-1]
+            F_feature = torch.relu(F_feature)  #换不同的激活函数
+            if feat == 1:
+                F = F_feature
+            else:
+                F = torch.cat((F, F_feature), dim=2)
+        x = F   
         Fout_0 = torch.matmul(x, self.weights[0].t()) + self.bias[0]
         L.append(ACTIVE(Fout_0))
         dL.append(dACTIVE(Fout_0))
-        for ilayer in range(1, pm.nLayers-1):
-            # Fout_temp = F.linear(L[ilayer-1], self.weights[ilayer], bias=self.bias[ilayer])
-            # L.append(ACTIVE(Fout_temp))
-            # dL.append(dACTIVE(Fout_temp))  
+        for ilayer in range(1, pm.nLayers-1): 
             Fout_temp = torch.matmul(L[ilayer-1], self.weights[ilayer].t()) + self.bias[ilayer]
-            L.append(ACTIVE(Fout_temp))
+            Fout_temp = ACTIVE(Fout_temp)
+            L.append(Fout_temp)
             dL.append(dACTIVE(Fout_temp)) 
         # print('L[1]='+str(L[1]))
         # print('dL[1]='+str(dL[1]))
         # predict = F.linear(L[pm.nLayers-2], self.weights[-1], bias=self.bias[-1])  #网络的最后一层
         predict = torch.matmul(L[pm.nLayers-2], self.weights[-1].t()) + self.bias[-1]
-        ilayer += 1
-        grad = self.weights[ilayer]
-        ilayer -= 1
-        while ilayer >= 0:
-            grad = dL[ilayer] * grad   #(2,108,30)*(1,30)-->(2,108,30)
-            grad = grad.unsqueeze(2) * self.weights[ilayer].t()  #(2,108,1,30)*(60,30)-->(2,108,60,30)
-            grad = grad.sum(axis=-1)  #(2,108,60,30)-->(2,108,60)
-            ilayer -= 1
         
-        return predict, grad
+        return predict
 
 
-class preMLFFNet(nn.Module):
-    def __init__(self, atomType = pm.atomType, natoms = pm.natoms):  # atomType=[8,32]
-        super(preMLFFNet,self).__init__()
-        self.atomType = atomType
-        self.natoms = pm.natoms   #[32,32]
-        self.models = nn.ModuleList()
-        for i in range(len(self.atomType)):  #i=[0,1]
-            self.models.append(FCNet(itype = i, Dropout=True))   # Dropout=True
-
-
-    def forward(self, image, dfeat, neighbor):
-        natoms_index = [0]
-        temp = 0
-        for i in self.natoms:
-            temp += i
-            natoms_index.append(temp)    #[0,32,64]
-        input_data = image
-        
-        for i in range(len(natoms_index)-1):
-            x = input_data[:, natoms_index[i]:natoms_index[i+1]]
-            _, predict = self.models[i](x)
-            if(i==0):
-                Ei = predict #[32, 1]
-            else:
-                Ei = torch.cat((Ei, predict), dim=1)    #[64,1]
-        Etot = Ei.sum(dim=1)
-        return Etot, Ei
-
-
-class MLFFNet(nn.Module):
+class MLFFmixNet(nn.Module):
     def __init__(self, scalers, atomType = pm.atomType, natoms = pm.natoms):  #atomType=[8,32]
-        super(MLFFNet,self).__init__()
+        super(MLFFmixNet,self).__init__()
         self.atomType = atomType
         self.natoms = pm.natoms   #[32,32]
         self.models = nn.ModuleList()
@@ -182,29 +152,26 @@ class MLFFNet(nn.Module):
         for i in range(pm.ntypes):
             itype = pm.atomType[i]
             x = image[:, natoms_index[i]:natoms_index[i+1]]
-            predict, grad = self.models[i](x)
+            predict = self.models[i](x)
             # scale_feat_a = torch.tensor(self.scalers.feat_as[itype], device=device, dtype=torch.float)
             # grad = grad * scale_feat_a
             if(i==0):
                 Ei = predict #[32, 1]
-                dE = grad
             else:
                 Ei = torch.cat((Ei, predict), dim=1)    #[64,1]
-                dE = torch.cat((dE, grad), dim=1)
         # de = self.get_de(image, dfeat, neighbor)  #函数的方法计算de
         # input_grad_allatoms = dE     #手动计算的dE
         
         cal_ei_de = time.time()
         Etot = Ei.sum(dim=1)
-        
-        # test = Ei.sum()
-        # test.backward(retain_graph=True)
-        # dE = image.grad
 
-        # Ei.unsqueeze(2)
-        # dEtest = torch.autograd.grad(Ei, x, grad_outputs=torch.ones(Ei.shape), create_graph=True, retain_graph=True)
-        # dEtest = torch.stack(list(dEtest), dim=0).squeeze(0)
-        # dE = dEtest
+        test = Ei.sum()
+        test.backward(retain_graph=True)
+        dE = image.grad
+
+        # out_sum = Etot.sum()
+        # out_sum.backward(retain_graph=True)
+        # input_grad_allatoms = input_data.grad
 
         # dfeat = dfeat.transpose(3, 4) # 40 108 100 3 42
         # dE = dE.unsqueeze(2).unsqueeze(2)
@@ -222,26 +189,7 @@ class MLFFNet(nn.Module):
                 tmp_dfeat = dfeat[batch_id, atom_id, :len(neighbor_list)]
                 tmp_force = torch.matmul(tmp_de, tmp_dfeat).sum([0, 1])
                 force[batch_id, atom_id] = tmp_force
-        # import ipdb;ipdb.set_trace()
-                # tmp = force_all[batch_id, atom_id, neighbor[batch_id, atom_id, flag[batch_id, atom_id]]]
-        # batch_size = image.shape[0]
-        # import ipdb; ipdb.set_trace()
-        # Force = torch.zeros((batch_size, natoms_index[-1], 3)).to(device)
-        # for batch_index in range(batch_size):
-        #     atom_index_temp = 0
-        #     for idx, natom in enumerate(self.natoms):  #[32,32]    
-        #         for i in range(natom):
-        #             neighbori = neighbor[batch_index, atom_index_temp + i]  # neighbor [40, 64, 100] neighbori [1, 100]
-        #             neighbor_number = neighbori.shape[-1]
-        #             atom_force = torch.zeros((1, 3)).to(device)
-        #             for nei in range(neighbor_number):
-        #                 nei_index = neighbori[nei] - 1 #第几个neighbor
-        #                 if(nei_index == -1):
-        #                     break 
-        #                 atom_force += torch.matmul(input_grad_allatoms[batch_index, nei_index, :], dfeat[batch_index, atom_index_temp + i, nei, :, :])
-        #                 # print("The dEtot/dfeature for batch_index %d, neighbor_inde %d" %(batch_index, nei_index))
-        #                 # print(input_grad_allatoms[batch_index, nei_index, :])
-        #             Force[batch_index, atom_index_temp+i] = atom_force
+        
         Egroup = self.get_egroup(Ei, Egroup_weight, divider)
         # return Force, Etot, Ei, Egroup
         end = time.time()
@@ -300,4 +248,3 @@ class MLFFNet(nn.Module):
                 res = res.sum(axis=-1)  #(2,108,60,30)-->(2,108,60)
                 ilayer -= 1
             return res
-
