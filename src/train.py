@@ -41,6 +41,7 @@ logging_level_SUMMARY = 15
 opt_force_cpu = False
 opt_magic = False
 opt_follow_mode = False
+opt_recover_mode = False
 opt_net_cfg = 'default'
 opt_act = 'sigmoid'
 opt_optimizer = 'ADAM'
@@ -89,7 +90,7 @@ opt_deepmd = False
 # opt_deepmd = True
 
 opts,args = getopt.getopt(sys.argv[1:],
-    '-h-c-m-f-n:-a:-z:-v:-w:-u:-e:-l:-g:-t:-b:-d:-r:-s:-o:-i:-j:',
+    '-h-c-m-f-r-n:-a:-z:-v:-w:-u:-e:-l:-g:-t:-b:-d:-r:-s:-o:-i:-j:',
     ['help','cpu','magic','follow','net_cfg=','act=','optimizer=','momentum',
      'weight_decay=','scheduler=','epochs=','lr=','gamma=','step=',
      'batch_size=','dtype=','rseed=','session=','log_level=',
@@ -107,6 +108,7 @@ for opt_name,opt_value in opts:
         print("     -c, --cpu                   :  force training run on cpu")
         print("     -m, --magic                 :  a magic flag for your testing code")
         print("     -f, --follow                :  follow a previous trained model file")
+        print("     -r, --recover               :  breakpoint training")
         print("     -n cfg, --net_cfg=cfg       :  if -f/--follow is not set, specify network cfg in parameters.py")
         print("                                    eg: -n MLFF_dmirror_cfg1")
         print("                                    if -f/--follow is set, specify the model image file name")
@@ -171,39 +173,43 @@ for opt_name,opt_value in opts:
         print("     --wandb_project=yr_project  :  your wandb project name (default is: MLFF_torch)")
         print("")
         exit()
-    elif opt_name in ('-c','--cpu'):
+    if opt_name in ('-c','--cpu'):
         opt_force_cpu = True
-    elif opt_name in ('-m','--magic'):
+    if opt_name in ('-m','--magic'):
         opt_magic = True
-    elif opt_name in ('-f','--follow'):
+    if opt_name in ('-r','--recover'):
+        opt_recover_mode = True
+        # opt_follow_epoch = int(opt_value)
+    if opt_name in ('-f','--follow'):
         opt_follow_mode = True
-    elif opt_name in ('-n','--net_cfg'):
+        # opt_follow_epoch = int(opt_value)
+    if opt_name in ('-n','--net_cfg'):
         opt_net_cfg = opt_value
-    elif opt_name in ('-a','--act'):
+    if opt_name in ('-a','--act'):
         opt_act = opt_value
-    elif opt_name in ('-z','--optimizer'):
+    if opt_name in ('-z','--optimizer'):
         opt_optimizer = opt_value
-    elif opt_name in ('-v','--momentum'):
+    if opt_name in ('-v','--momentum'):
         opt_momentum = float(opt_value)
-    elif opt_name in ('-w','--weight_decay'):
+    if opt_name in ('-w','--weight_decay'):
         opt_regular_wd = float(opt_value)
-    elif opt_name in ('-u','--scheduler'):
+    if opt_name in ('-u','--scheduler'):
         opt_scheduler = opt_value
-    elif opt_name in ('-e','--epochs'):
+    if opt_name in ('-e','--epochs'):
         opt_epochs = int(opt_value)
-    elif opt_name in ('-l','--lr'):
+    if opt_name in ('-l','--lr'):
         opt_lr = float(opt_value)
-    elif opt_name in ('-g','--gamma'):
+    if opt_name in ('-g','--gamma'):
         opt_gamma = float(opt_value)
-    elif opt_name in ('-t','--step'):
+    if opt_name in ('-t','--step'):
         opt_step = int(opt_value)
-    elif opt_name in ('-b','--batch_size'):
+    if opt_name in ('-b','--batch_size'):
         opt_batch_size = int(opt_value)
-    elif opt_name in ('-d','--dtype'):
+    if opt_name in ('-d','--dtype'):
         opt_dtype = opt_value
-    elif opt_name in ('-r','--rseed'):
+    if opt_name in ('-r','--rseed'):
         opt_rseed = int(opt_value)
-    elif opt_name in ('-s','--session'):
+    if opt_name in ('-s','--session'):
         opt_session_name = opt_value
         opt_session_dir = './'+opt_session_name+'/'
         opt_logging_file = opt_session_dir+'train.log'
@@ -222,7 +228,7 @@ for opt_name,opt_value in opts:
         else:
             opt_tensorboard_dir = ''
             raise RuntimeError("reaches 1000 run dirs in %s, clean it" %opt_tensorboard_dir)
-    elif opt_name in ('-o','--log_level'):
+    if opt_name in ('-o','--log_level'):
         if (opt_value == 'DUMP'):
             opt_log_level = logging_level_DUMP
         elif (opt_value == 'SUMMARY'):
@@ -230,7 +236,7 @@ for opt_name,opt_value in opts:
         else:
             opt_log_level = 'logging.'+opt_value
             opt_log_level = eval(opt_log_level)
-    elif opt_name in ('-i','--file_log_level'):
+    if opt_name in ('-i','--file_log_level'):
         if (opt_value == 'DUMP'):
             opt_file_log_level = logging_level_DUMP
         elif (opt_value == 'SUMMARY'):
@@ -238,32 +244,32 @@ for opt_name,opt_value in opts:
         else:
             opt_file_log_level = 'logging.'+opt_value
             opt_file_log_level = eval(opt_file_log_level)
-    elif opt_name in ('-j','--j_cycle'):
+    if opt_name in ('-j','--j_cycle'):
         opt_journal_cycle = int(opt_value)
-    elif opt_name in ('--milestones'):
+    if opt_name in ('--milestones'):
         opt_LR_milestones = list(map(int, opt_value.split(',')))
-    elif opt_name in ('--patience'):
+    if opt_name in ('--patience'):
         opt_LR_patience = int(opt_value)
-    elif opt_name in ('--cooldown'):
+    if opt_name in ('--cooldown'):
         opt_LR_cooldown = int(opt_value)
-    elif opt_name in ('--total_steps'):
+    if opt_name in ('--total_steps'):
         opt_LR_total_steps = int(opt_value)
-    elif opt_name in ('--max_lr'):
+    if opt_name in ('--max_lr'):
         opt_LR_max_lr = float(opt_value)
-    elif opt_name in ('--min_lr'):
+    if opt_name in ('--min_lr'):
         opt_LR_min_lr = float(opt_value)
-    elif opt_name in ('--T_max'):
+    if opt_name in ('--T_max'):
         opt_LR_T_max = int(opt_value)
-    elif opt_name in ('--wandb'):
+    if opt_name in ('--wandb'):
         opt_wandb = True
         import wandb
-    elif opt_name in ('--wandb_entity'):
+    if opt_name in ('--wandb_entity'):
         opt_wandb_entity = opt_value
-    elif opt_name in ('--wandb_project'):
+    if opt_name in ('--wandb_project'):
         opt_wandb_project = opt_value
-    elif opt_name in ('--init_b'):
+    if opt_name in ('--init_b'):
         opt_init_b = True
-    elif opt_name in ('--save_model'):
+    if opt_name in ('--save_model'):
         opt_save_model = True
     elif opt_name in ('--dmirror'):
         opt_autograd = False
@@ -470,7 +476,6 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
     dump("dump neighbor ------------------->")
     dump(neighbor)
 
-    model = model.to(device)
     # model = model.cuda()
     # model = torch.nn.parallel.DistributedDataParallel(model)
     # model.train()
@@ -630,7 +635,6 @@ def valid(sample_batches, model, criterion, start_lr, real_lr):
     ind_img = Variable(sample_batches['ind_image'].int().to(device))
     divider = Variable(sample_batches['input_divider'].float().to(device))
     # label = Variable(sample_batches['output_energy'].float().to(device))
-    model.to(device)
     model.train()
     Etot_predict, force_predict, Ei_predict, Egroup_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
     # force_predict, Etot_predict, Ei_predict = model(input_data, dfeat, neighbor)
@@ -711,6 +715,7 @@ info("Training: session = %s" %opt_session_name)
 info("Training: run_id = %s" %opt_run_id)
 info("Training: journal_cycle = %d" %opt_journal_cycle)
 info("Training: follow_mode = %s" %opt_follow_mode)
+info("Training: recover_mode = %s" %opt_recover_mode)
 info("Training: network = %s" %opt_net_cfg)
 info("Training: model_dir = %s" %opt_model_dir)
 info("Training: model_file = %s" %opt_model_file)
@@ -916,6 +921,21 @@ if (writer is not None):
 
 
 if pm.isNNfinetuning == True:
+    model = MLFF_dmirror(opt_net_cfg, opt_act, device, opt_magic)
+    model.to(device)
+    if opt_follow_mode==True:
+        checkpoint = torch.load(opt_model_file,map_location=device)
+        model.load_state_dict(checkpoint['model'],strict=False)
+        
+    # this is a temp fix for a quick test
+    if (opt_init_b == True):
+        for name, p in model.named_parameters():
+            if ('linear_3.bias' in name):
+                dump(p)
+                p.data.fill_(166.0)
+                dump(p)
+
+
     data_scalers = DataScalers(f_ds=pm.f_data_scaler, f_feat=pm.f_train_feat, load=True)
     # deepmd model test
     if opt_deepmd:
@@ -923,13 +943,14 @@ if pm.isNNfinetuning == True:
     else:
         model = MLFF(opt_net_cfg, opt_act, device, opt_magic, opt_autograd)
 
-    if (opt_follow_mode == True):
+    if (opt_recover_mode == True):
         if (opt_session_name == ''):
             raise RuntimeError("you must run follow-mode from an existing session")
-        checkpoint = torch.load(opt_model_file, map_location={'cpu':'cuda:0'})
+        opt_latest_file = opt_model_dir+'latest.pt'
+        checkpoint = torch.load(opt_latest_file,map_location=device)
         model.load_state_dict(checkpoint['model'])
         # optimizer.load_state_dict(checkpoint['optimizer'])
-        start_epoch=checkpoint['epoch']+1
+        start_epoch=checkpoint['epoch'] + 1
 
         # TODO: clean the codes above
         #       1) need to fix opt_net_cfg, the model still need to specify in follow-mode
@@ -954,6 +975,7 @@ if pm.isNNfinetuning == True:
                     {'params': (p for name, p in model.named_parameters() if 'bias' not in name)},
                     {'params': (p for name, p in model.named_parameters() if 'bias' in name), 'weight_decay': 0.}]
 
+
     if (opt_optimizer == 'SGD'):
         optimizer = optim.SGD(model_parameters, lr=LR_base, momentum=momentum, weight_decay=REGULAR_wd)
     elif (opt_optimizer == 'ASGD'):
@@ -977,6 +999,8 @@ if pm.isNNfinetuning == True:
     else:
         error("unsupported optimizer: %s" %opt_optimizer)
         raise RuntimeError("unsupported optimizer: %s" %opt_optimizer)
+    if (opt_recover_mode == True):
+        optimizer.load_state_dict(checkpoint['optimizer'])
 
     # TODO: LBFGS is not done yet
     # FIXME: train process should be better re-arranged to 
@@ -1021,7 +1045,7 @@ if pm.isNNfinetuning == True:
         raise RuntimeError("unsupported scheduler: %s" %opt_scheduler)
 
     #min_loss = np.inf
-    start_epoch=1
+    
     for epoch in range(start_epoch, n_epoch + 1):
         if (epoch == n_epoch):
             last_epoch = True
@@ -1100,9 +1124,11 @@ if pm.isNNfinetuning == True:
         else:
             scheduler.step()
 
-        if ((opt_save_model == True) and (epoch % 10000 == 0)):
-            file_name = opt_model_dir + str(epoch) + '.pt'
-            state = {'model': model.state_dict(), 'loss': loss}
+        if opt_save_model == True: 
+            state = {'model': model.state_dict(),'optimizer':optimizer.state_dict(),'epoch':epoch, 'loss': loss}
+            file_name = opt_model_dir + 'latest.pt'
+            if epoch % 10000 == 0:
+                file_name = opt_model_dir + str(epoch) + '.pt'
             torch.save(state, file_name)
 
         
