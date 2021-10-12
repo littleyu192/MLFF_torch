@@ -10,14 +10,14 @@ import parameters as pm
 # import prepare as pp
 # pp.readFeatnum()
 from model.dmirror import dmirror_FC
-
+from model.FC import f_FC
 # logging and our extension
 import logging
 logging_level_DUMP = 5
 logging_level_SUMMARY = 15
 
 # setup logging module
-logger = logging.getLogger('train.MLFF_dmirror')
+logger = logging.getLogger('train.MLFF')
 
 def dump(msg, *args, **kwargs):
     logger.log(logging_level_DUMP, msg, *args, **kwargs)
@@ -32,41 +32,66 @@ def warning(msg, *args, **kwargs):
 def error(msg, *args, **kwargs):
     logger.error(msg, *args, **kwargs, exc_info=True)
 
-# MLFF_dmirror implementation
+# MLFF contains two parts:
+# MLFF_dmirror implementation and MLFF_autograd implementation
 #
 def d_sigmoid(x):
     return torch.sigmoid(x) * (1.0 - torch.sigmoid(x))
 
-class MLFF_dmirror(nn.Module):
-    def __init__(self, net_cfg, activation_type, device, magic=False):
-        super(MLFF_dmirror, self).__init__()
+class MLFF(nn.Module):
+    def __init__(self, net_cfg, activation_type, device, magic=False, autograd=True):
+        super(MLFF, self).__init__()
         # config parameters
         self.atomType = pm.atomType
         self.natoms = pm.natoms[0]
         self.device = device
-        # network
-        if (net_cfg == 'default'):
-            self.net_cfg = pm.MLFF_dmirror_cfg
-            info("MLFF_dmirror: using default net_cfg: pm.MLFF_dmirror_cfg")
-            info(self.net_cfg)
-        else:
-            net_cfg = 'pm.' + net_cfg
-            self.net_cfg = eval(net_cfg)
-            info("MLFF_dmirror: using specified net_cfg: %s" %net_cfg)
-            info(self.net_cfg)
         self.dim_feat = pm.nFeatures
-        if (activation_type == 'sigmoid'):
-            self.activation_type = 'sigmoid'
-            info("MLFF_dmirror: using sigmoid activation")
-            self.net = dmirror_FC(self.net_cfg, torch.sigmoid, d_sigmoid, magic)
-        elif (activation_type == 'softplus'):
-            self.activation_type = 'softplus'
-            info("MLFF_dmirror: using softplus activation")
-            self.net = dmirror_FC(self.net_cfg, F.softplus, F.sigmoid, magic)
+        # network
+        if(autograd == False):
+            if (net_cfg == 'default'):
+                self.net_cfg = pm.MLFF_dmirror_cfg
+                info("MLFF_dmirror: using default net_cfg: pm.MLFF_dmirror_cfg")
+                info(self.net_cfg)
+            else:
+                net_cfg = 'pm.' + net_cfg
+                self.net_cfg = eval(net_cfg)
+                info("MLFF_dmirror: using specified net_cfg: %s" %net_cfg)
+                info(self.net_cfg)
+            
+            if (activation_type == 'sigmoid'):
+                self.activation_type = 'sigmoid'
+                info("MLFF_dmirror: using sigmoid activation")
+                self.net = dmirror_FC(self.net_cfg, torch.sigmoid, d_sigmoid, magic)
+            elif (activation_type == 'softplus'):
+                self.activation_type = 'softplus'
+                info("MLFF_dmirror: using softplus activation")
+                self.net = dmirror_FC(self.net_cfg, F.softplus, F.sigmoid, magic)
+            else:
+                error("MLFF_dmirror: unsupported activation_type: %s" %activation_type)
+                raise RuntimeError("MLFF_dmirror: unsupported activation_type: %s" %activation_type)
         else:
-            error("MLFF_dmirror: unsupported activation_type: %s" %activation_type)
-            raise RuntimeError("MLFF_dmirror: unsupported activation_type: %s" %activation_type)
-
+            if (net_cfg == 'default'):
+                self.net_cfg = pm.MLFF_autograd_cfg
+                info("MLFF_autograd: using default net_cfg: pm.MLFF_autograd_cfg")
+                info(self.net_cfg)
+            else:
+                net_cfg = 'pm.' + net_cfg
+                self.net_cfg = eval(net_cfg)
+                info("MLFF_autograd: using specified net_cfg: %s" %net_cfg)
+                info(self.net_cfg)
+            
+            if (activation_type == 'sigmoid'):
+                self.activation_type = 'sigmoid'
+                info("MLFF_autograd: using sigmoid activation")
+                self.net = f_FC(self.net_cfg, torch.sigmoid, magic)
+            elif (activation_type == 'softplus'):
+                self.activation_type = 'softplus'
+                info("MLFF_autograd: using softplus activation")
+                self.net = f_FC(self.net_cfg, F.softplus, magic)
+            else:
+                error("MLFF_autograd: unsupported activation_type: %s" %activation_type)
+                raise RuntimeError("MLFF_autograd: unsupported activation_type: %s" %activation_type)
+        
     def forward(self, image, dfeat, neighbor, Egroup_weight, divider):
         batch_size = image.shape[0]
         result_Ei = torch.zeros(

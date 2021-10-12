@@ -13,9 +13,9 @@ from torch.nn.modules import loss
 import torch.optim as optim
 from torch.nn.parameter import Parameter
 from torch.utils.data import Dataset, DataLoader
-from model.FC import preMLFFNet, MLFFNet
+from model.FCold import preMLFFNet, MLFFNet
 from model.LN import LNNet
-from model.MLFF_dmirror import MLFF_dmirror
+from model.MLFF import MLFF
 import torch.utils.data as Data
 from torch.autograd import Variable
 import math
@@ -83,6 +83,8 @@ opt_LR_max_lr = 1.
 opt_LR_min_lr = 0.
 opt_LR_T_max = None
 
+opt_autograd = True
+
 opts,args = getopt.getopt(sys.argv[1:],
     '-h-c-m-f-n:-a:-z:-v:-w:-u:-e:-l:-g:-t:-b:-d:-r:-s:-o:-i:-j:',
     ['help','cpu','magic','follow','net_cfg=','act=','optimizer=','momentum',
@@ -91,7 +93,8 @@ opts,args = getopt.getopt(sys.argv[1:],
      'file_log_level=','j_cycle=','init_b','save_model',
      'milestones=','patience=','cooldown=','eps=','total_steps=',
      'max_lr=','min_lr=','T_max=',
-     'wandb','wandb_entity=','wandb_project='])
+     'wandb','wandb_entity=','wandb_project=',
+     'auto_grad=', 'dmirror='])
 
 for opt_name,opt_value in opts:
     if opt_name in ('-h','--help'):
@@ -148,6 +151,11 @@ for opt_name,opt_value in opts:
         print("     --max_lr=float_val          :  max learning rate for OneCycle scheduler")
         print("     --min_lr=float_val          :  min learning rate for CosineAnnealing/ReduceLROnPlateau")
         print("     --T_max=int_val             :  T_max for CosineAnnealing scheduler")
+        print("")
+        print("     --dmirror=True              :  calculate dE/dx layer by layer explicitly")
+        print("     --auto_grad=True            :  calculate dE/dx by autograd func")
+        print("                                    using --dmirror=True or --auto_grad=True")
+        print("                                    default: --auto_grad=True")
         print("")
         print("wandb parameters:")
         print("     --wandb                     :  ebable wandb, sync tensorboard data to wandb")
@@ -249,6 +257,10 @@ for opt_name,opt_value in opts:
         opt_init_b = True
     elif opt_name in ('--save_model'):
         opt_save_model = True
+    elif opt_name in ('--dmirror'):
+        opt_autograd = False
+    elif opt_name in ('--auto_grad'):
+        opt_autograd = True
 
 
 # setup logging module
@@ -670,6 +682,7 @@ info("Scheduler: opt_LR_total_steps = %s" %opt_LR_total_steps)
 info("Scheduler: opt_LR_max_lr = %s" %opt_LR_max_lr)
 info("Scheduler: opt_LR_min_lr = %s" %opt_LR_min_lr)
 info("Scheduler: opt_LR_T_max = %s" %opt_LR_T_max)
+info("scheduler: opt_autograd = %s" %opt_autograd)
 
 train_data_path=pm.train_data_path
 torch_train_data = get_torch_data(pm.natoms, train_data_path)
@@ -711,7 +724,7 @@ if pm.isNNfinetuning == True:
         #       3) model store/load need to handle cpu/gpu
         #       4) handle tensorboard file, can we modify accroding to 'epoch'?
 
-    model = MLFF_dmirror(opt_net_cfg, opt_act, device, opt_magic)
+    model = MLFF(opt_net_cfg, opt_act, device, opt_magic, opt_autograd)
     # this is a temp fix for a quick test
     if (opt_init_b == True):
         for name, p in model.named_parameters():

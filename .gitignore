@@ -1,8 +1,6 @@
 # other configration
-/data/*
-!/data/parameters.py
-!/data/PWdata/MOVEMENT
-!/data/plot_mlff_inference.py
+/data
+/dataMD
 /cu/*
 !/cu/parameters.py
 !/cu/PWdata/MOVEMENT
@@ -13,8 +11,6 @@
 !/zwt/parameters.py
 !/zwt/PWdata/MOVEMENT
 /cu1000
-!/cu1000/parameters.py
-!/cu1000/PWdata/MOVEMENT
 /cu1000_12
 /cu1000_5
 /cu1000_6

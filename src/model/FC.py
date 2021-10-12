@@ -1,297 +1,147 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from torch.nn import init
-from torch.autograd import Variable
-import sys, os
-sys.path.append(os.getcwd())
-import parameters as pm    
-import time
-# import prepare as pp
-# pp.readFeatnum()
+import collections
 
+# logging and our extension
+import logging
+logging_level_DUMP = 5
+logging_level_SUMMARY = 15
 
-################################################################
-# fully connection nn
-# Ei Neural Network
-################################################################
+# setup logging module
+logger = logging.getLogger('train.FC')
 
-# ACTIVE = torch.tanh
-# ACTIVE = F.softplus 
-# ACTIVE = torch.relu  
+def dump(msg, *args, **kwargs):
+    logger.log(logging_level_DUMP, msg, *args, **kwargs)
+def debug(msg, *args, **kwargs):
+    logger.debug(msg, *args, **kwargs)
+def summary(msg, *args, **kwargs):
+    logger.log(logging_level_SUMMARY, msg, *args, **kwargs)
+def info(msg, *args, **kwargs):
+    logger.info(msg, *args, **kwargs)
+def warning(msg, *args, **kwargs):
+    logger.warning(msg, *args, **kwargs)
+def error(msg, *args, **kwargs):
+    logger.error(msg, *args, **kwargs, exc_info=True)
 
-# def dsigmoid(x):
-#     return torch.sigmoid(x) * (1 - torch.sigmoid(x))
-# ACTIVE = torch.sigmoid
- 
-# dACTIVE = dsigmoid
+# dmirror implementation
+#
+class f_linear(nn.Module):
+    def __init__(self, in_dim, out_dim, bias=True, magic=False):
+        super(f_linear, self).__init__()
+        self.bias = None
 
-ACTIVE = F.softplus
-dACTIVE = torch.sigmoid
+        # for pesudo random number generator for float64/float32 precision test
+        self.rand_a = 25214903917
+        self.rand_c = 11
+        self.rand_p = 2021
 
-# ACTIVE = torch.tanh
-# def dtanh(x):
-#     return 1-torch.tanh(x)**2
-# dACTIVE = dtanh
+        if (magic == False):
+            self.weight = nn.Parameter(torch.randn(out_dim, in_dim), requires_grad=True)
+            if (bias == True):
+                self.bias = nn.Parameter(torch.randn(out_dim), requires_grad=True)
+        else:
+            warmup_my_rand = self.my_rand_2d(out_dim, in_dim)
+            self.weight = nn.Parameter(self.my_rand_2d(out_dim, in_dim), requires_grad=True)
+            if (bias == True):
+                self.bias = nn.Parameter(self.my_rand_1d(out_dim), requires_grad=True)
 
-# ACTIVE = torch.relu
-# def drelu(x):
-#     res = torch.zeros_like(x)
-#     mask = x > 0
-#     res[mask] = 1
-#     return res
-# dACTIVE = drelu
+    # random number generator, maybe their better place is train.py
+    def my_rand_core(self):
+        r = (self.rand_a * self.rand_p + self.rand_c) % 10000
+        self.rand_p = r
+        return r
 
-# def no_act(x):
-#     return x
-# def no_dact(x):
-#     return torch.ones_like(x)
-# ACTIVE = no_act
-# dACTIVE = no_dact
+    def my_rand_2d(self, m, n):
+        res = torch.randn(m, n)
+        for i in range(m):
+            for j in range(n):
+                res[i, j] = float(self.my_rand_core() / 10000.0)
+        return res
 
-# ACTIVE = torch.nn.LeakyReLU(negative_slope=0.01, inplace=False)
-# def dLeakyReLU(x):
-#     res = torch.ones_like(x)
-#     mask = x < 0
-#     res[mask] = 0.01
-#     return res
-# dACTIVE = dLeakyReLU
-
-
-B_INIT= -0.2
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-class FCNet(nn.Module):
-    def __init__(self, BN = False, Dropout = False, itype = 0):  #atomtypes=len(pm.atomType)
-        super(FCNet,self).__init__()
-        self.dobn = BN
-        self.dodrop = Dropout                                  
-        self.fcs=[]
-        self.bns=[]
-        self.drops=[]
-        self.itype= itype  # itype =0,1 if CuO         
-        self.weights = nn.ParameterList()
-        self.bias = nn.ParameterList()
-
-        for i in range(pm.nLayers-1):
-            in_putsize = pm.nFeatures if i==0 else pm.nNodes[i-1,itype] #0为type1,1为type2
-            w = nn.Parameter(torch.randn(pm.nNodes[i, itype], in_putsize))
-            b = nn.Parameter(torch.randn(pm.nNodes[i, itype]))
-            self.weights.append(w)
-            self.bias.append(b)
-        w = nn.Parameter(torch.randn(1, pm.nNodes[pm.nLayers-2,itype]))  #最后一层  #ones
-        b = nn.Parameter(torch.randn(1))  #最后一层    #zeros
-        self.weights.append(w)
-        self.bias.append(b)
+    def my_rand_1d(self, m):
+        res = torch.randn(m)
+        for i in range(m):
+            res[i] = float(self.my_rand_core() / 10000.0)
+        return res
 
     def forward(self, x):
-        L = []
-        dL = []
-        # print("L[0]=F.linear(x, self.weights[0]")
-        # print(x)
-        # print('~'*10)
-        # print(self.weights[0])
-        # print('~'*10)
-        # dL.append(dACTIVE(F.linear(x, self.weights[0], bias=self.bias[0])))
-        # L.append(ACTIVE(F.linear(x, self.weights[0], bias=self.bias[0])))
-        # Fout_0=F.linear(x, self.weights[0], bias=self.bias[0])
-        Fout_0 = torch.matmul(x, self.weights[0].t()) + self.bias[0]
-        L.append(ACTIVE(Fout_0))
-        dL.append(dACTIVE(Fout_0))
-        for ilayer in range(1, pm.nLayers-1):
-            # Fout_temp = F.linear(L[ilayer-1], self.weights[ilayer], bias=self.bias[ilayer])
-            # L.append(ACTIVE(Fout_temp))
-            # dL.append(dACTIVE(Fout_temp))  
-            Fout_temp = torch.matmul(L[ilayer-1], self.weights[ilayer].t()) + self.bias[ilayer]
-            L.append(ACTIVE(Fout_temp))
-            dL.append(dACTIVE(Fout_temp)) 
-        # print('L[1]='+str(L[1]))
-        # print('dL[1]='+str(dL[1]))
-        # predict = F.linear(L[pm.nLayers-2], self.weights[-1], bias=self.bias[-1])  #网络的最后一层
-        predict = torch.matmul(L[pm.nLayers-2], self.weights[-1].t()) + self.bias[-1]
-        ilayer += 1
-        grad = self.weights[ilayer]
-        ilayer -= 1
-        while ilayer >= 0:
-            grad = dL[ilayer] * grad   #(2,108,30)*(1,30)-->(2,108,30)
-            grad = grad.unsqueeze(2) * self.weights[ilayer].t()  #(2,108,1,30)*(60,30)-->(2,108,60,30)
-            grad = grad.sum(axis=-1)  #(2,108,60,30)-->(2,108,60)
-            ilayer -= 1
-        
-        return predict, grad
+        if (self.bias is not None):
+            return torch.matmul(x, self.weight.t()) + self.bias
+        else:
+            return torch.matmul(x, self.weight.t())
 
 
-class preMLFFNet(nn.Module):
-    def __init__(self, atomType = pm.atomType, natoms = pm.natoms):  # atomType=[8,32]
-        super(preMLFFNet,self).__init__()
-        self.atomType = atomType
-        self.natoms = pm.natoms   #[32,32]
-        self.models = nn.ModuleList()
-        for i in range(len(self.atomType)):  #i=[0,1]
-            self.models.append(FCNet(itype = i, Dropout=True))   # Dropout=True
+class f_activation(nn.Module):
+    def __init__(self, func):
+        super(f_activation, self).__init__()
+        self.func = func
+        self.k = torch.tensor([])
 
+    def forward(self, x):
+        self.k = x
+        return self.func(x)
 
-    def forward(self, image, dfeat, neighbor):
-        natoms_index = [0]
-        temp = 0
-        for i in self.natoms:
-            temp += i
-            natoms_index.append(temp)    #[0,32,64]
-        input_data = image
-        
-        for i in range(len(natoms_index)-1):
-            x = input_data[:, natoms_index[i]:natoms_index[i+1]]
-            _, predict = self.models[i](x)
-            if(i==0):
-                Ei = predict #[32, 1]
+class f_FC(nn.Module):
+    def __init__(self, cfg, act_func, magic=False):
+        super(f_FC, self).__init__()
+        self.cfg = cfg
+        self.act_func = act_func
+        self.layers = []
+
+        # parse cfg & generating layers
+        idx_linear = 1
+        idx_activation = 1
+        for idx, item in enumerate(self.cfg):
+            layer_type = item[0]
+            if (layer_type == 'linear'):
+                in_dim = item[1]
+                out_dim = item[2]
+                bias = item[3]
+                self.layers.append((
+                    'f_linear_'+str(idx_linear),
+                    f_linear(in_dim, out_dim, bias, magic)
+                ))
+                idx_linear += 1
+            elif (layer_type == 'activation'):
+                self.layers.append((
+                    'f_activation_'+str(idx_activation),
+                    f_activation(act_func)
+                ))
+                idx_activation += 1
+            elif (layer_type == 'scale'):
+                raise RuntimeError(
+                    "Notimplemented for layer_type = %s" %(layer_type)
+                )
             else:
-                Ei = torch.cat((Ei, predict), dim=1)    #[64,1]
-        Etot = Ei.sum(dim=1)
-        return Etot, Ei
+                raise ValueError(
+                    "Invalid for layer_type = %s" %(layer_type)
+                )
 
+        # the layer parameters will be registered to nn Module,
+        # so optimizer can update the layer parameters.
+        #
+        self.base_net = nn.Sequential(
+            collections.OrderedDict(self.layers)
+        )
+        info("f_FC: start of network instance dump ==============>")
+        info("<----------------------- base_net ----------------------->")
+        info(self.base_net)
+        info("end of network instance dump ================>")
 
-class MLFFNet(nn.Module):
-    def __init__(self, scalers, atomType = pm.atomType, natoms = pm.natoms):  #atomType=[8,32]
-        super(MLFFNet,self).__init__()
-        self.atomType = atomType
-        self.natoms = pm.natoms   #[32,32]
-        self.models = nn.ModuleList()
-        self.scalers = scalers
-        for i in range(len(self.atomType)):  #i=[0,1]
-            self.models.append(FCNet(itype = i, Dropout=True))   # Dropout=True
+    # we can't call forward() of sequentialized module, since
+    # we extened the param list of the layers' forward()
+    #
+    def forward(self, x):
+        in_feature = x
+        for name, obj in (self.layers):
+            x = obj.forward(x)
+        res0 = x
 
+        res0.unsqueeze(2)
+        x = torch.ones_like(res0)
+        dE = torch.autograd.grad(res0, in_feature, grad_outputs=x, create_graph=True, retain_graph=True)
+        dE = torch.stack(list(dE), dim=0).squeeze(0)
+        res1 = dE
 
-    def forward(self, image, dfeat, neighbor, Egroup_weight, divider):
-        start = time.time()
-        natoms_index = [0]
-        temp = 0
-        for i in self.natoms:
-            temp += i
-            natoms_index.append(temp)    #[0,32,64]
-        
-        # for i in range(len(natoms_index)-1):
-        for i in range(pm.ntypes):
-            itype = pm.atomType[i]
-            x = image[:, natoms_index[i]:natoms_index[i+1]]
-            predict, grad = self.models[i](x)
-            # scale_feat_a = torch.tensor(self.scalers.feat_as[itype], device=device, dtype=torch.float)
-            # grad = grad * scale_feat_a
-            if(i==0):
-                Ei = predict #[32, 1]
-                dE = grad
-            else:
-                Ei = torch.cat((Ei, predict), dim=1)    #[64,1]
-                dE = torch.cat((dE, grad), dim=1)
-        # de = self.get_de(image, dfeat, neighbor)  #函数的方法计算de
-        # input_grad_allatoms = dE     #手动计算的dE
-        
-        cal_ei_de = time.time()
-        Etot = Ei.sum(dim=1)
-        
-        # test = Ei.sum()
-        # test.backward(retain_graph=True)
-        # dE = image.grad
-
-        # Ei.unsqueeze(2)
-        # dEtest = torch.autograd.grad(Ei, x, grad_outputs=torch.ones(Ei.shape), create_graph=True, retain_graph=True)
-        # dEtest = torch.stack(list(dEtest), dim=0).squeeze(0)
-        # dE = dEtest
-
-        # dfeat = dfeat.transpose(3, 4) # 40 108 100 3 42
-        # dE = dE.unsqueeze(2).unsqueeze(2)
-        # force_all = dfeat * dE
-        # force_all = force_all.sum(-1) # 40 108 100 3
-        flag = neighbor > 0 # 40 108 100
-        batch_size = image.shape[0]
-        natom = image.shape[1]
-        neighbor -= 1
-        force = torch.zeros(image.shape[0], image.shape[1], 3).to(device)
-        for batch_id in range(batch_size):
-            for atom_id in range(natom):
-                neighbor_list = neighbor[batch_id, atom_id, flag[batch_id, atom_id]].type(torch.int64)
-                tmp_de = dE[batch_id, neighbor_list.tolist()].unsqueeze(1)
-                tmp_dfeat = dfeat[batch_id, atom_id, :len(neighbor_list)]
-                tmp_force = torch.matmul(tmp_de, tmp_dfeat).sum([0, 1])
-                force[batch_id, atom_id] = tmp_force
-        # import ipdb;ipdb.set_trace()
-                # tmp = force_all[batch_id, atom_id, neighbor[batch_id, atom_id, flag[batch_id, atom_id]]]
-        # batch_size = image.shape[0]
-        # import ipdb; ipdb.set_trace()
-        # Force = torch.zeros((batch_size, natoms_index[-1], 3)).to(device)
-        # for batch_index in range(batch_size):
-        #     atom_index_temp = 0
-        #     for idx, natom in enumerate(self.natoms):  #[32,32]    
-        #         for i in range(natom):
-        #             neighbori = neighbor[batch_index, atom_index_temp + i]  # neighbor [40, 64, 100] neighbori [1, 100]
-        #             neighbor_number = neighbori.shape[-1]
-        #             atom_force = torch.zeros((1, 3)).to(device)
-        #             for nei in range(neighbor_number):
-        #                 nei_index = neighbori[nei] - 1 #第几个neighbor
-        #                 if(nei_index == -1):
-        #                     break 
-        #                 atom_force += torch.matmul(input_grad_allatoms[batch_index, nei_index, :], dfeat[batch_index, atom_index_temp + i, nei, :, :])
-        #                 # print("The dEtot/dfeature for batch_index %d, neighbor_inde %d" %(batch_index, nei_index))
-        #                 # print(input_grad_allatoms[batch_index, nei_index, :])
-        #             Force[batch_index, atom_index_temp+i] = atom_force
-        Egroup = self.get_egroup(Ei, Egroup_weight, divider)
-        # return Force, Etot, Ei, Egroup
-        end = time.time()
-        # print("cal ei de time:", cal_ei_de - start, 's')
-        # print("cal force time:", end - cal_ei_de, 's')
-        return Etot, force, Ei, Egroup
-
-    def get_egroup(self, Ei, Egroup_weight, divider):
-        batch_size = Ei.shape[0]
-        Egroup = torch.zeros_like(Ei)
-        for i in range(batch_size):
-            Etot1 = Ei[i]
-            weight_inner = Egroup_weight[i]
-            E_inner = torch.matmul(weight_inner, Etot1)
-            Egroup[i] = E_inner
-        Egroup_out = torch.divide(Egroup, divider)
-        return Egroup_out
-
-    def get_de(self, image, dfeat, neighbor):
-        batch_size = image.shape[0]
-        atom_type_num = len(self.atomType)
-        for i in range(atom_type_num):
-            model_weight = self.models[i].state_dict()
-            layer_name = []
-            for weight_name in model_weight.keys():
-                layer_name.append(weight_name)
-            layers = int(len(layer_name)/2)
-            W = []
-            B = []
-            L = []
-            dL = []
-            # W.append(model_weight['fc0.weight'].transpose(0, 1))            
-            # B.append(model_weight['fc0.bias'])   
-            W.append(model_weight[layer_name[0]])            
-            B.append(model_weight[layer_name[layers]])       
-            dL.append(dACTIVE(torch.matmul(image, W[0].T) + B[0]))
-            L.append(ACTIVE(torch.matmul(image, W[0].T) + B[0]))
-            for ilayer in range(1, pm.nLayers-1):
-                # W.append(model_weight['fc' + str(ilayer) + '.weight'].transpose(0, 1))            
-                # B.append(model_weight['fc' + str(ilayer) + '.bias'])   
-                W.append(model_weight[layer_name[ilayer]])            
-                B.append(model_weight[layer_name[layers + ilayer]])         
-                dL.append(dACTIVE(torch.matmul(L[ilayer-1], W[ilayer].T) + B[ilayer]))
-                L.append(ACTIVE(torch.matmul(L[ilayer-1], W[ilayer].T) + B[ilayer]))
-            ilayer += 1
-            # W.append(model_weight['output.weight'].transpose(0, 1))            
-            # B.append(model_weight['output.bias']) 
-            W.append(model_weight[layer_name[ilayer]])            
-            B.append(model_weight[layer_name[layers + ilayer]])           
-            # res = W[ilayer].transpose(0, 1)  
-            res = W[ilayer]
-            ilayer -= 1
-            while ilayer >= 0:
-                res = dL[ilayer] * res   #(2,108,30)*(1,30)-->(2,108,30)
-                res = res.unsqueeze(2) * W[ilayer].T  #(2,108,1,30)*(60,30)-->(2,108,60,30)
-                res = res.sum(axis=-1)  #(2,108,60,30)-->(2,108,60)
-                ilayer -= 1
-            return res
+        return res0, res1
 
