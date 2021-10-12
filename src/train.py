@@ -90,7 +90,7 @@ opt_deepmd = False
 # opt_deepmd = True
 
 opts,args = getopt.getopt(sys.argv[1:],
-    '-h-c-m-f-r-n:-a:-z:-v:-w:-u:-e:-l:-g:-t:-b:-d:-r:-s:-o:-i:-j:',
+    '-h-c-m-f-p-n:-a:-z:-v:-w:-u:-e:-l:-g:-t:-b:-d:-r:-s:-o:-i:-j:',
     ['help','cpu','magic','follow','net_cfg=','act=','optimizer=','momentum',
      'weight_decay=','scheduler=','epochs=','lr=','gamma=','step=',
      'batch_size=','dtype=','rseed=','session=','log_level=',
@@ -108,7 +108,7 @@ for opt_name,opt_value in opts:
         print("     -c, --cpu                   :  force training run on cpu")
         print("     -m, --magic                 :  a magic flag for your testing code")
         print("     -f, --follow                :  follow a previous trained model file")
-        print("     -r, --recover               :  breakpoint training")
+        print("     -p, --recover               :  breakpoint training")
         print("     -n cfg, --net_cfg=cfg       :  if -f/--follow is not set, specify network cfg in parameters.py")
         print("                                    eg: -n MLFF_dmirror_cfg1")
         print("                                    if -f/--follow is set, specify the model image file name")
@@ -173,43 +173,44 @@ for opt_name,opt_value in opts:
         print("     --wandb_project=yr_project  :  your wandb project name (default is: MLFF_torch)")
         print("")
         exit()
-    if opt_name in ('-c','--cpu'):
+    elif opt_name in ('-c','--cpu'):
         opt_force_cpu = True
-    if opt_name in ('-m','--magic'):
+    elif opt_name in ('-m','--magic'):
         opt_magic = True
-    if opt_name in ('-r','--recover'):
+    elif opt_name in ('-p','--recover'):
         opt_recover_mode = True
+        print(opt_recover_mode)
         # opt_follow_epoch = int(opt_value)
-    if opt_name in ('-f','--follow'):
+    elif opt_name in ('-f','--follow'):
         opt_follow_mode = True
         # opt_follow_epoch = int(opt_value)
-    if opt_name in ('-n','--net_cfg'):
+    elif opt_name in ('-n','--net_cfg'):
         opt_net_cfg = opt_value
-    if opt_name in ('-a','--act'):
+    elif opt_name in ('-a','--act'):
         opt_act = opt_value
-    if opt_name in ('-z','--optimizer'):
+    elif opt_name in ('-z','--optimizer'):
         opt_optimizer = opt_value
-    if opt_name in ('-v','--momentum'):
+    elif opt_name in ('-v','--momentum'):
         opt_momentum = float(opt_value)
-    if opt_name in ('-w','--weight_decay'):
+    elif opt_name in ('-w','--weight_decay'):
         opt_regular_wd = float(opt_value)
-    if opt_name in ('-u','--scheduler'):
+    elif opt_name in ('-u','--scheduler'):
         opt_scheduler = opt_value
-    if opt_name in ('-e','--epochs'):
+    elif opt_name in ('-e','--epochs'):
         opt_epochs = int(opt_value)
-    if opt_name in ('-l','--lr'):
+    elif opt_name in ('-l','--lr'):
         opt_lr = float(opt_value)
-    if opt_name in ('-g','--gamma'):
+    elif opt_name in ('-g','--gamma'):
         opt_gamma = float(opt_value)
-    if opt_name in ('-t','--step'):
+    elif opt_name in ('-t','--step'):
         opt_step = int(opt_value)
-    if opt_name in ('-b','--batch_size'):
+    elif opt_name in ('-b','--batch_size'):
         opt_batch_size = int(opt_value)
-    if opt_name in ('-d','--dtype'):
+    elif opt_name in ('-d','--dtype'):
         opt_dtype = opt_value
-    if opt_name in ('-r','--rseed'):
+    elif opt_name in ('-r','--rseed'):
         opt_rseed = int(opt_value)
-    if opt_name in ('-s','--session'):
+    elif opt_name in ('-s','--session'):
         opt_session_name = opt_value
         opt_session_dir = './'+opt_session_name+'/'
         opt_logging_file = opt_session_dir+'train.log'
@@ -228,7 +229,7 @@ for opt_name,opt_value in opts:
         else:
             opt_tensorboard_dir = ''
             raise RuntimeError("reaches 1000 run dirs in %s, clean it" %opt_tensorboard_dir)
-    if opt_name in ('-o','--log_level'):
+    elif opt_name in ('-o','--log_level'):
         if (opt_value == 'DUMP'):
             opt_log_level = logging_level_DUMP
         elif (opt_value == 'SUMMARY'):
@@ -236,7 +237,7 @@ for opt_name,opt_value in opts:
         else:
             opt_log_level = 'logging.'+opt_value
             opt_log_level = eval(opt_log_level)
-    if opt_name in ('-i','--file_log_level'):
+    elif opt_name in ('-i','--file_log_level'):
         if (opt_value == 'DUMP'):
             opt_file_log_level = logging_level_DUMP
         elif (opt_value == 'SUMMARY'):
@@ -244,7 +245,7 @@ for opt_name,opt_value in opts:
         else:
             opt_file_log_level = 'logging.'+opt_value
             opt_file_log_level = eval(opt_file_log_level)
-    if opt_name in ('-j','--j_cycle'):
+    elif opt_name in ('-j','--j_cycle'):
         opt_journal_cycle = int(opt_value)
     if opt_name in ('--milestones'):
         opt_LR_milestones = list(map(int, opt_value.split(',')))
@@ -921,7 +922,7 @@ if (writer is not None):
 
 
 if pm.isNNfinetuning == True:
-    model = MLFF_dmirror(opt_net_cfg, opt_act, device, opt_magic)
+    model = MLFF(opt_net_cfg, opt_act, device, opt_magic)
     model.to(device)
     if opt_follow_mode==True:
         checkpoint = torch.load(opt_model_file,map_location=device)
