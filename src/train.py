@@ -14,7 +14,6 @@ import torch.optim as optim
 from torch.nn.parameter import Parameter
 from torch.utils.data import Dataset, DataLoader
 from model.FC import preMLFFNet, MLFFNet
-#from model.LN import LNNet
 from model.MLFF_dmirror import MLFF_dmirror
 import torch.utils.data as Data
 from torch.autograd import Variable
@@ -26,268 +25,28 @@ sys.path.append(codepath+'/pre_data')
 from data_loader_2type import MovementDataset, get_torch_data
 from scalers import DataScalers
 from torch.utils.tensorboard import SummaryWriter
-# import torchviz
 import time
 import getopt
 import getpass
 
-# logging and our extension
-import logging
-logging_level_DUMP = 5
-logging_level_SUMMARY = 15
+# setup mlff runtime option
+# see component/option.py for runtime option details
+import component.option as option
+opt = option.mlff_runtime_option()
+opt.parse(sys.argv)
 
-# parse optional parameters
-opt_force_cpu = False
-opt_magic = False
-opt_follow_mode = False
-opt_recover_mode = False
-opt_shuffle_data = False
-opt_net_cfg = 'default'
-opt_act = 'sigmoid'
-opt_optimizer = 'ADAM'
-opt_momentum = float(0)
-opt_regular_wd = float(0)
-opt_scheduler = 'NONE'
-opt_epochs = 1000
-opt_lr = float(0.1)
-opt_gamma = float(0.9)
-opt_step = 100
-opt_batch_size = pm.batch_size
-opt_dtype = pm.training_dtype
-opt_rseed = 2021
-# session and related options
-opt_session_name = ''
-opt_session_dir = ''
-opt_logging_file = ''
-opt_tensorboard_dir = ''
-opt_model_dir = ''
-opt_model_file = ''
-opt_run_id = ''
-# end session related
-opt_log_level = logging.INFO
-opt_file_log_level = logging.DEBUG
-opt_journal_cycle = 1
-# wandb related
-opt_wandb = False
-opt_wandb_entity = 'moleculenn'
-opt_wandb_project = 'MLFF_torch'
-# end wandb related
-opt_init_b = False
-opt_save_model = False
+# setup mlff logger
+import component.logger as mlff_logger
+mlff_logger.init_mlff_logger(opt.log_level, opt.file_log_level, opt.logging_file)
 
-# scheduler specific options
-opt_LR_milestones = None
-opt_LR_patience = 0
-opt_LR_cooldown = 0
-opt_LR_total_steps = None
-opt_LR_max_lr = 1.
-opt_LR_min_lr = 0.
-opt_LR_T_max = None
-
-opts,args = getopt.getopt(sys.argv[1:],
-    '-h-c-m-f-p-S-n:-a:-z:-v:-w:-u:-e:-l:-g:-t:-b:-d:-r:-s:-o:-i:-j:',
-    ['help','cpu','magic','follow','recover','shuffle',
-     'net_cfg=','act=','optimizer=','momentum',
-     'weight_decay=','scheduler=','epochs=','lr=','gamma=','step=',
-     'batch_size=','dtype=','rseed=','session=','log_level=',
-     'file_log_level=','j_cycle=','init_b','save_model',
-     'milestones=','patience=','cooldown=','eps=','total_steps=',
-     'max_lr=','min_lr=','T_max=',
-     'wandb','wandb_entity=','wandb_project='])
-
-for opt_name,opt_value in opts:
-    if opt_name in ('-h','--help'):
-        print("")
-        print("Generic parameters:")
-        print("     -h, --help                  :  print help info")
-        print("     -c, --cpu                   :  force training run on cpu")
-        print("     -m, --magic                 :  a magic flag for your testing code")
-        print("     -f, --follow                :  follow a previous trained model file")
-        print("     -p, --recover               :  breakpoint training")
-        print("     -S, --shuffle               :  shuffle training set during each epoch")
-        print("     -n cfg, --net_cfg=cfg       :  if -f/--follow is not set, specify network cfg in parameters.py")
-        print("                                    eg: -n MLFF_dmirror_cfg1")
-        print("                                    if -f/--follow is set, specify the model image file name")
-        print("                                    eg: '-n best1' will load model image file best1.pt from session dir")
-        print("     -a act, --act=act           :  specify activation_type of MLFF_dmirror")
-        print("                                    current supported: [sigmoid, softplus]")
-        print("     -z name, --optimizer=name   :  specify optimizer")
-        print("                                    available : SGD ASGD RPROP RMSPROP ADAG")
-        print("                                                ADAD ADAM ADAMW ADAMAX LBFGS")
-        print("     -v val, --momentum=val      :  specify momentum parameter for optimizer")
-        print("     -w val, --weight_decay=val  :  specify weight decay regularization value")
-        print("     -u name, --scheduler=name   :  specify learning rate scheduler")
-        print("                                    available  : LAMBDA STEP MSTEP EXP COS PLAT OC LR_INC LR_DEC")
-        print("                                    LAMBDA     : lambda scheduler")
-        print("                                    STEP/MSTEP : Step/MultiStep scheduler")
-        print("                                    EXP/COS    : Exponential/CosineAnnealing") 
-        print("                                    PLAT/OC/LR : ReduceLROnPlateau/OneCycle")
-        print("                                    LR_INC     : linearly increase to max_lr")
-        print("                                    LR_DEC     : linearly decrease to min_lr")
-        print("     -e epochs, --epochs=epochs  :  specify training epochs")
-        print("     -l lr, --lr=lr              :  specify initial training lr")
-        print("     -g gamma, --gamma=gamma     :  specify gamma of StepLR scheduler")
-        print("     -t step, --step=step        :  specify step_size of StepLR scheduler")
-        print("     -b size, --batch_size=size  :  specify batch size")
-        print("     -d dtype, --dtype=dtype     :  specify default dtype: [float64, float32]")
-        print("     -r seed, --rseed=seed       :  specify random seed used in training")
-        print("     -s name, --session=name     :  specify the session name, log files, tensorboards and models")
-        print("                                    will be saved to subdirectory named by this session name")
-        print("     -o level, --log_level=level :  specify logging level of console")
-        print("                                    available: DUMP < DEBUG < SUMMARY < [INFO] < WARNING < ERROR")
-        print("                                    logging msg with level >= logging_level will be displayed")
-        print("     -i L, --file_log_level=L    :  specify logging level of log file")
-        print("                                    available: DUMP < [DEBUG] < SUMMARY < INFO < WARNING < ERROR")
-        print("                                    logging msg with level >= logging_level will be recoreded")
-        print("     -j val, --j_cycle=val       :  specify journal cycle for tensorboard and data dump")
-        print("                                    0: disable journaling")
-        print("                                    1: record on every epoch [default]")
-        print("                                    n: record on every n epochs")
-        print("")
-        print("scheduler specific parameters:")
-        print("     --milestones=int_list       :  milestones for MultiStep scheduler")
-        print("     --patience=int_val          :  patience for ReduceLROnPlateau")
-        print("     --cooldown=int_val          :  cooldown for ReduceLROnPlateau")
-        print("     --total_steps=int_val       :  total_steps for OneCycle scheduler")
-        print("     --max_lr=float_val          :  max learning rate for OneCycle scheduler")
-        print("     --min_lr=float_val          :  min learning rate for CosineAnnealing/ReduceLROnPlateau")
-        print("     --T_max=int_val             :  T_max for CosineAnnealing scheduler")
-        print("")
-        print("wandb parameters:")
-        print("     --wandb                     :  ebable wandb, sync tensorboard data to wandb")
-        print("     --wandb_entity=yr_account   :  your wandb entity or account (default is: moleculenn")
-        print("     --wandb_project=yr_project  :  your wandb project name (default is: MLFF_torch)")
-        print("")
-        exit()
-    elif opt_name in ('-c','--cpu'):
-        opt_force_cpu = True
-    elif opt_name in ('-m','--magic'):
-        opt_magic = True
-    elif opt_name in ('-f','--follow'):
-        opt_follow_mode = True
-        # opt_follow_epoch = int(opt_value)
-    elif opt_name in ('-p','--recover'):
-        opt_recover_mode = True
-        print(opt_recover_mode)
-        # opt_follow_epoch = int(opt_value)
-    elif opt_name in ('-S','--shuffle'):
-        opt_shuffle_data = True
-    elif opt_name in ('-n','--net_cfg'):
-        opt_net_cfg = opt_value
-    elif opt_name in ('-a','--act'):
-        opt_act = opt_value
-    elif opt_name in ('-z','--optimizer'):
-        opt_optimizer = opt_value
-    elif opt_name in ('-v','--momentum'):
-        opt_momentum = float(opt_value)
-    elif opt_name in ('-w','--weight_decay'):
-        opt_regular_wd = float(opt_value)
-    elif opt_name in ('-u','--scheduler'):
-        opt_scheduler = opt_value
-    elif opt_name in ('-e','--epochs'):
-        opt_epochs = int(opt_value)
-    elif opt_name in ('-l','--lr'):
-        opt_lr = float(opt_value)
-    elif opt_name in ('-g','--gamma'):
-        opt_gamma = float(opt_value)
-    elif opt_name in ('-t','--step'):
-        opt_step = int(opt_value)
-    elif opt_name in ('-b','--batch_size'):
-        opt_batch_size = int(opt_value)
-    elif opt_name in ('-d','--dtype'):
-        opt_dtype = opt_value
-    elif opt_name in ('-r','--rseed'):
-        opt_rseed = int(opt_value)
-    elif opt_name in ('-s','--session'):
-        opt_session_name = opt_value
-        opt_session_dir = './'+opt_session_name+'/'
-        opt_logging_file = opt_session_dir+'train.log'
-        opt_model_dir = opt_session_dir+'model/'
-        tensorboard_base_dir = opt_session_dir+'tensorboard/'
-        if not os.path.exists(opt_session_dir):
-            os.makedirs(opt_session_dir) 
-        if not os.path.exists(opt_model_dir):
-            os.makedirs(opt_model_dir)
-        for i in range(1000):
-            opt_run_id = 'run'+str(i)
-            opt_tensorboard_dir = tensorboard_base_dir+opt_run_id
-            if (not os.path.exists(opt_tensorboard_dir)):
-                os.makedirs(opt_tensorboard_dir)
-                break
-        else:
-            opt_tensorboard_dir = ''
-            raise RuntimeError("reaches 1000 run dirs in %s, clean it" %opt_tensorboard_dir)
-    elif opt_name in ('-o','--log_level'):
-        if (opt_value == 'DUMP'):
-            opt_log_level = logging_level_DUMP
-        elif (opt_value == 'SUMMARY'):
-            opt_log_level = logging_level_SUMMARY
-        else:
-            opt_log_level = 'logging.'+opt_value
-            opt_log_level = eval(opt_log_level)
-    elif opt_name in ('-i','--file_log_level'):
-        if (opt_value == 'DUMP'):
-            opt_file_log_level = logging_level_DUMP
-        elif (opt_value == 'SUMMARY'):
-            opt_file_log_level = logging_level_SUMMARY
-        else:
-            opt_file_log_level = 'logging.'+opt_value
-            opt_file_log_level = eval(opt_file_log_level)
-    elif opt_name in ('-j','--j_cycle'):
-        opt_journal_cycle = int(opt_value)
-    else:
-        if opt_name in ('--milestones'):
-            opt_LR_milestones = list(map(int, opt_value.split(',')))
-        if opt_name in ('--patience'):
-            opt_LR_patience = int(opt_value)
-        if opt_name in ('--cooldown'):
-            opt_LR_cooldown = int(opt_value)
-        if opt_name in ('--total_steps'):
-            opt_LR_total_steps = int(opt_value)
-        if opt_name in ('--max_lr'):
-            opt_LR_max_lr = float(opt_value)
-        if opt_name in ('--min_lr'):
-            opt_LR_min_lr = float(opt_value)
-        if opt_name in ('--T_max'):
-            opt_LR_T_max = int(opt_value)
-        if opt_name in ('--wandb'):
-            opt_wandb = True
-            import wandb
-        if opt_name in ('--wandb_entity'):
-            opt_wandb_entity = opt_value
-        if opt_name in ('--wandb_project'):
-            opt_wandb_project = opt_value
-        if opt_name in ('--init_b'):
-            opt_init_b = True
-        if opt_name in ('--save_model'):
-            opt_save_model = True
-
-
-# setup logging module
-logging.addLevelName(logging_level_DUMP, 'DUMP')
-logging.addLevelName(logging_level_SUMMARY, 'SUMMARY')
-logger = logging.getLogger('train')
-logger.setLevel(logging_level_DUMP)
-
-formatter = logging.Formatter("\33[0m\33[34;49m[%(name)s]\33[0m.\33[33;49m[%(levelname)s]\33[0m: %(message)s")
-handler1 = logging.StreamHandler()
-handler1.setLevel(opt_log_level)
-handler1.setFormatter(formatter)
-logger.addHandler(handler1)
-
-if (opt_logging_file != ''):
-    formatter = logging.Formatter("\33[0m\33[32;49m[%(asctime)s]\33[0m.\33[34;49m[%(name)s]\33[0m.\33[33;49m[%(levelname)s]\33[0m: %(message)s")
-    handler2 = logging.FileHandler(filename = opt_logging_file)
-    handler2.setLevel(opt_file_log_level)
-    handler2.setFormatter(formatter)
-    logger.addHandler(handler2)
-
+# setup module logger
+logger = mlff_logger.get_module_logger('train')
 def dump(msg, *args, **kwargs):
-    logger.log(logging_level_DUMP, msg, *args, **kwargs)
+    logger.log(mlff_logger.DUMP, msg, *args, **kwargs)
 def debug(msg, *args, **kwargs):
     logger.debug(msg, *args, **kwargs)
 def summary(msg, *args, **kwargs):
-    logger.log(logging_level_SUMMARY, msg, *args, **kwargs)
+    logger.log(mlff_logger.SUMMARY, msg, *args, **kwargs)
 def info(msg, *args, **kwargs):
     logger.info(msg, *args, **kwargs)
 def warning(msg, *args, **kwargs):
@@ -297,100 +56,55 @@ def error(msg, *args, **kwargs):
 
 # show start logging banner to logging file
 #
-summary("")
-summary("#########################################################################################")
-summary("#            ___          __                         __      __  ___       __  ___      #")
-summary("#      |\ | |__  |  |    |__) |  | |\ | |\ | | |\ | / _`    /__`  |   /\  |__)  |       #")
-summary("#      | \| |___ |/\|    |  \ \__/ | \| | \| | | \| \__>    .__/  |  /~~\ |  \  |       #")
-summary("#                                                                                       #")
-summary("#########################################################################################")
-summary("")
-summary(' '.join(sys.argv))
-summary("")
-
+info("New running starts ===>")
+info(' '.join(sys.argv))
 
 # set default training dtype
 #
 # 1) dtype of model parameters during training
 # 2) feature data will be casted to this dtype before using
 #
-if (opt_dtype == 'float64'):
+if (opt.dtype == 'float64'):
     info("Training: set default dtype to float64")
     torch.set_default_dtype(torch.float64)
-elif (opt_dtype == 'float32'):
+elif (opt.dtype == 'float32'):
     info("Training: set default dtype to float32")
     torch.set_default_dtype(torch.float32)
 else:
-    error("Training: unsupported dtype: %s" %opt_dtype)
-    raise RuntimeError("Training: unsupported dtype: %s" %opt_dtype)
+    error("Training: unsupported dtype: %s" %opt.dtype)
+    raise RuntimeError("Training: unsupported dtype: %s" %opt.dtype)
 
 # set training device
-if (opt_force_cpu == True):
+if (opt.force_cpu == True):
     device = torch.device('cpu')
 else:
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 info("Training: device = %s" %device)
 
 # set random seed
-torch.manual_seed(opt_rseed)
-torch.cuda.manual_seed(opt_rseed)
-info("Training: rseed = %s" %opt_rseed)
+torch.manual_seed(opt.rseed)
+torch.cuda.manual_seed(opt.rseed)
+info("Training: rseed = %s" %opt.rseed)
 
 # set print precision
 torch.set_printoptions(precision = 16)
 
 # set tensorboard
-if (opt_tensorboard_dir != ''):
-    if (opt_wandb is True):
-        wandb.tensorboard.patch(root_logdir=opt_tensorboard_dir)
-        wandb_run = wandb.init(entity=opt_wandb_entity, project=opt_wandb_project, reinit=True)
-        wandb_run.name = getpass.getuser()+'-'+opt_session_name+'-'+opt_run_id
+if (opt.tensorboard_dir != ''):
+    if (opt.wandb is True):
+        wandb.tensorboard.patch(root_logdir=opt.tensorboard_dir)
+        wandb_run = wandb.init(entity=opt.wandb_entity, project=opt.wandb_project, reinit=True)
+        wandb_run.name = getpass.getuser()+'-'+opt.session_name+'-'+opt.run_id
         wandb_run.save()
-    writer = SummaryWriter(opt_tensorboard_dir)
+    writer = SummaryWriter(opt.tensorboard_dir)
 else:
     writer = None
 
 
-def pretrain(sample_batches, premodel, optimizer, criterion):
-    error=0
-    Etot_label = Variable(sample_batches['output_energy'][:,:,:].double().to(device))
-    Etot_label = torch.sum(Etot_label, dim=1)   #[40,108,1]-->[40,1]
-    dump("==========Etot label==========")
-    dump(Etot_label[0])
-    input_data = Variable(sample_batches['input_feat'].double().to(device), requires_grad=True)
-    neighbor = Variable(sample_batches['input_nblist'].int().to(device))  # [40,108,100]
-    dfeat = Variable(sample_batches['input_dfeat'].double().to(device))  #[40,108,100,42,3]
-   
-    optimizer.zero_grad()
-    model = premodel.to(device)
-    model.train()
-    Etot_predict, Ei_predict = model(input_data, dfeat, neighbor)
-    dump("==========Etot predict==========")
-    dump(Etot_predict[0])
-    Etot_deviation = Etot_predict - Etot_label     # [40,1]
-    Etot_square_deviation = Etot_deviation ** 2
-    Etot_shape = Etot_label.shape[0]  #40
-    Etot_ABS_error = Etot_deviation.norm(1) / Etot_shape
-    Etot_RMSE_error = math.sqrt(1/Etot_shape) * Etot_deviation.norm(2)
-    Etot_L2 = (1/Etot_shape) * Etot_square_deviation.sum()   #L2-->tf.reduce_mean(tf.square())
-    
-    etot_square_loss = torch.sum(Etot_square_deviation) / Etot_shape
-    # ===========loss 选取etot==========
-    # loss = etot_square_loss
-
-    # ===========loss 选取torch.nn的函数==========
-    loss = criterion(Etot_predict, Etot_label)
-
-    loss.backward()
-    optimizer.step()
-
-    return etot_square_loss, Etot_RMSE_error, Etot_ABS_error, Etot_L2
-
 def train(sample_batches, model, optimizer, criterion, last_epoch):
-
-    # floating part of sample_batches, cast to specified opt_dtype
+    # floating part of sample_batches, cast to specified opt.dtype
     #
-    if (opt_dtype == 'float64'):
+    if (opt.dtype == 'float64'):
         Etot_label = Variable(sample_batches['output_energy'][:,:,:].double().to(device))
         Force_label = Variable(sample_batches['output_force'][:,:,:].double().to(device))   #[40,108,3]
         Egroup_label = Variable(sample_batches['input_egroup'].double().to(device))
@@ -398,7 +112,7 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
         dfeat = Variable(sample_batches['input_dfeat'].double().to(device))  #[40,108,100,42,3]
         egroup_weight = Variable(sample_batches['input_egroup_weight'].double().to(device))
         divider = Variable(sample_batches['input_divider'].double().to(device))
-    elif (opt_dtype == 'float32'):
+    elif (opt.dtype == 'float32'):
         Etot_label = Variable(sample_batches['output_energy'][:,:,:].float().to(device))
         Force_label = Variable(sample_batches['output_force'][:,:,:].float().to(device))   #[40,108,3]
         Egroup_label = Variable(sample_batches['input_egroup'].float().to(device))
@@ -407,8 +121,8 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
         egroup_weight = Variable(sample_batches['input_egroup_weight'].float().to(device))
         divider = Variable(sample_batches['input_divider'].float().to(device))
     else:
-        error("train(): unsupported opt_dtype %s" %opt_dtype)
-        raise RuntimeError("train(): unsupported opt_dtype %s" %opt_dtype)
+        error("train(): unsupported opt.dtype %s" %opt.dtype)
+        raise RuntimeError("train(): unsupported opt.dtype %s" %opt.dtype)
 
     # non-floating or derived part of sample_batches
     #
@@ -417,7 +131,7 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
     neighbor = Variable(sample_batches['input_nblist'].int().to(device))  # [40,108,100]
     ind_img = Variable(sample_batches['ind_image'].int().to(device))
 
-    # dumping what you want here
+    # dump interested input data
     #
     dump("defat.shape= %s" %(dfeat.shape,))
     dump("neighbor.shape = %s" %(neighbor.shape,))
@@ -426,16 +140,13 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
     dump("dump neighbor ------------------->")
     dump(neighbor)
 
-    # model = model.cuda()
-    # model = torch.nn.parallel.DistributedDataParallel(model)
-    # model.train()
-    # force_predict, Etot_predict, Ei_predict, Egroup_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
+    # do forward predict
+    #
     Etot_predict, Force_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
-    
-    optimizer.zero_grad()
     # Egroup_predict = model.get_egroup(Ei_predict, egroup_weight, divider)   #[40,108,1]
-
-    # Etot_deviation = Etot_predict - Etot_label     # [40,1]
+    
+    # dump predictioin result
+    #
     dump("etot predict =============================================>")
     dump(Etot_predict)
     dump("etot label ===============================================>")
@@ -455,83 +166,22 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
         summary("force label ==============================================>")
         summary(Force_label)
 
-    # Etot_square_deviation = Etot_deviation ** 2
-    # Etot_shape = Etot_label.shape[0]  #40
-    # Etot_ABS_error = Etot_deviation.norm(1) / Etot_shape
-    # Etot_RMSE_error = math.sqrt(1/Etot_shape) * Etot_deviation.norm(2)
-    # Etot_L2 = (1/Etot_shape) * Etot_square_deviation.sum()   #L2-->tf.reduce_mean(tf.square())
-    # Ei_L2 = Etot_L2 / atom_number
-
-    # Force_deviation = force_predict - Force_label
-    # import ipdb;ipdb.set_trace()
-    # print(force_predict[0,0])
-    # print("==========force label==========")
-    # print(Force_label[0,0])
-    # Force_square_deviation = Force_deviation ** 2
-    # Force_shape = Force_deviation.shape[0] * Force_deviation.shape[1] * Force_deviation.shape[2]   #40*108*3
-    # Force_ABS_error = Force_deviation.norm(1) / Force_shape
-    # Force_RMSE_error = math.sqrt(1/Force_shape) * Force_deviation.norm(2)
-    # Force_L2 = (1/Force_shape) * Force_square_deviation.sum()
-
-    # Egroup_deviation = Egroup_predict - Egroup_label
-    # Egroup_square_deviation = Egroup_deviation ** 2
-    # Egroup_shape = Egroup_label.shape[0] * Egroup_label.shape[1]
-    # Egroup_ABS_error = Egroup_deviation.norm(1) / Egroup_shape
-    # Egroup_RMSE_error = math.sqrt(1/Egroup_shape) * Egroup_deviation.norm(2)
-    # Egroup_L2 = (1/Egroup_shape) * Egroup_square_deviation.sum()
-    
-    # force_square_loss = torch.sum(Force_square_deviation) / Force_shape
-    # etot_square_loss = torch.sum(Etot_square_deviation) / Etot_shape
-    # egroup_square_loss = torch.sum(Egroup_square_deviation) / Egroup_shape
-
-    # ===========loss 只选 etot==========
-    # loss = etot_square_loss
-
-    # ===========loss 对etot和egroup配平==========
-    # w_e = torch.sum(Egroup_square_loss) / (torch.sum(Egroup_square_loss)+torch.sum(Etot_square_loss))
-    # w_eg = 1 - w_e
-    # loss = w_eg * torch.sum(Egroup_square_loss) + w_e * torch.sum(Etot_square_loss)
-
-    # ===========loss 选取linear的权重==========
-    # loss =  pm.rtLossF * force_square_loss + pm.rtLossEtot * etot_square_loss + pm.rtLossE * egroup_square_loss
-    
-    # ===========loss 选取torch.nn的函数==========
-    #loss = pm.rtLossF * criterion(force_predict, Force_label) + pm.rtLossEtot * criterion(Etot_predict, Etot_label) + pm.rtLossE * criterion(Egroup_predict, Egroup_label)
-    #
-    # Etot_label.shape = [batch_size, 1], while Etot_predict.shape = [batch_size], so squeeze Etot_label to match
+    # calculate batch loss
     #
     loss = pm.rtLossF * criterion(Force_predict, Force_label) + pm.rtLossEtot * criterion(Etot_predict, Etot_label)
     loss_F = criterion(Force_predict, Force_label)
     loss_Etot = criterion(Etot_predict, Etot_label)
     loss_Egroup = 0
+    debug("batch_loss = %.16f (loss_etot = %.16f, loss_force = %.16f, RMSE_etot = %.16f, RMSE_force = %.16f)" %(loss, loss_Etot, loss_F, loss_Etot ** 0.5, loss_F ** 0.5))
 
-    #info("loss = %.16f (loss_etot = %.16f, loss_force = %.16f, RMSE_etot = %.16f, RMSE_force = %.16f)" %(loss, loss_Etot, loss_F, loss_Etot ** 0.5, loss_F ** 0.5))
-
-
-    #w_f = loss_Etot / (loss_Etot + loss_F)
-    #w_e = 1 - w_f
-    #w_f = pm.rtLossF
-    #w_e = pm.rtLossE
-    #w_f = 0
-    #w_e = 1
-    #loss = w_e * criterion(Etot_predict, Etot_label) + w_f * criterion(force_predict, Force_label)
-    #print("etot MSE loss: " + str(loss_Etot))
-    #print("force MSE loss: " + str(loss_F))
-    
-    # print("weighted loss: " + str(loss))
-    #time_start = time.time()
+    # do backward optimize
+    #
+    optimizer.zero_grad()
     loss.backward()
-
-
     optimizer.step()
-    #time_end = time.time()
-    #print("update grad time:", time_end - time_start, 's')
 
-    # error = error + float(loss.item())
-    # return loss, force_square_loss, etot_square_loss, egroup_square_loss, \
-    #     Force_RMSE_error, Force_ABS_error, Force_L2, Etot_RMSE_error, Etot_ABS_error, Etot_L2, \
-    #          Egroup_RMSE_error, Egroup_ABS_error, Egroup_L2
-
+    # return batch loss
+    #
     return loss, loss_Etot, loss_Egroup, loss_F
 
 def valid(sample_batches, model, criterion):
@@ -599,39 +249,33 @@ def valid(sample_batches, model, criterion):
     #         Egroup_RMSE_error, Egroup_ABS_error, Egroup_L2
     return error, loss_F, loss_Etot
 
-def sec_to_hms(seconds):
-    m, s = divmod(seconds, 60)
-    h, m = divmod(m, 60)
-    return "%02d:%02d:%02d" % (h, m, s)
-
-
 # ==========================part2:指定模型参数==========================
 # ==========================part1:数据读取==========================
 
-momentum = opt_momentum
-REGULAR_wd = opt_regular_wd
-n_epoch = opt_epochs
-LR_base = opt_lr
-LR_gamma = opt_gamma
-LR_step = opt_step
-batch_size = opt_batch_size 
+momentum = opt.momentum
+REGULAR_wd = opt.regular_wd
+n_epoch = opt.epochs
+LR_base = opt.lr
+LR_gamma = opt.gamma
+LR_step = opt.step
+batch_size = opt.batch_size 
 
-if (opt_follow_mode == True):
-    opt_model_file = opt_model_dir+opt_net_cfg+'.pt'
+#if (opt.follow_mode == True):
+#    opt.model_file = opt.model_dir+opt.net_cfg+'.pt'
 
-info("Training: session = %s" %opt_session_name)
-info("Training: run_id = %s" %opt_run_id)
-info("Training: journal_cycle = %d" %opt_journal_cycle)
-info("Training: follow_mode = %s" %opt_follow_mode)
-info("Training: recover_mode = %s" %opt_recover_mode)
-info("Training: network = %s" %opt_net_cfg)
-info("Training: model_dir = %s" %opt_model_dir)
-info("Training: model_file = %s" %opt_model_file)
-info("Training: activation = %s" %opt_act)
-info("Training: optimizer = %s" %opt_optimizer)
+info("Training: session = %s" %opt.session_name)
+info("Training: run_id = %s" %opt.run_id)
+info("Training: journal_cycle = %d" %opt.journal_cycle)
+info("Training: follow_mode = %s" %opt.follow_mode)
+info("Training: recover_mode = %s" %opt.recover_mode)
+info("Training: network = %s" %opt.net_cfg)
+info("Training: model_dir = %s" %opt.model_dir)
+info("Training: model_file = %s" %opt.model_file)
+info("Training: activation = %s" %opt.act)
+info("Training: optimizer = %s" %opt.optimizer)
 info("Training: momentum = %.16f" %momentum)
 info("Training: REGULAR_wd = %.16f" %REGULAR_wd)
-info("Training: scheduler = %s" %opt_scheduler)
+info("Training: scheduler = %s" %opt.scheduler)
 info("Training: n_epoch = %d" %n_epoch)
 info("Training: LR_base = %.16f" %LR_base)
 info("Training: LR_gamma = %.16f" %LR_gamma)
@@ -639,17 +283,17 @@ info("Training: LR_step = %d" %LR_step)
 info("Training: batch_size = %d" %batch_size)
 
 # scheduler specific options
-info("Scheduler: opt_LR_milestones = %s" %opt_LR_milestones)
-info("Scheduler: opt_LR_patience = %s" %opt_LR_patience)
-info("Scheduler: opt_LR_cooldown = %s" %opt_LR_cooldown)
-info("Scheduler: opt_LR_total_steps = %s" %opt_LR_total_steps)
-info("Scheduler: opt_LR_max_lr = %s" %opt_LR_max_lr)
-info("Scheduler: opt_LR_min_lr = %s" %opt_LR_min_lr)
-info("Scheduler: opt_LR_T_max = %s" %opt_LR_T_max)
+info("Scheduler: opt.LR_milestones = %s" %opt.LR_milestones)
+info("Scheduler: opt.LR_patience = %s" %opt.LR_patience)
+info("Scheduler: opt.LR_cooldown = %s" %opt.LR_cooldown)
+info("Scheduler: opt.LR_total_steps = %s" %opt.LR_total_steps)
+info("Scheduler: opt.LR_max_lr = %s" %opt.LR_max_lr)
+info("Scheduler: opt.LR_min_lr = %s" %opt.LR_min_lr)
+info("Scheduler: opt.LR_T_max = %s" %opt.LR_T_max)
 
 train_data_path=pm.train_data_path
 torch_train_data = get_torch_data(pm.natoms, train_data_path)
-if (opt_shuffle_data == True):
+if (opt.shuffle_data == True):
     loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=True)
 else:
     loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=False)
@@ -676,14 +320,15 @@ def LinearLR(optimizer, base_lr, target_lr, total_epoch, cur_epoch):
 
 start_epoch=1
 if pm.isNNfinetuning == True:
-    model = MLFF_dmirror(opt_net_cfg, opt_act, device, opt_magic)
+    model = MLFF_dmirror(opt.net_cfg, opt.act, device, opt.magic)
     model.to(device)
-    if opt_follow_mode==True:
-        checkpoint = torch.load(opt_model_file,map_location=device)
-        model.load_state_dict(checkpoint['model'],strict=False)
+    if opt.follow_mode==True:
+        pass
+        #checkpoint = torch.load(opt.model_file,map_location=device)
+        #model.load_state_dict(checkpoint['model'],strict=False)
         
     # this is a temp fix for a quick test
-    if (opt_init_b == True):
+    if (opt.init_b == True):
         for name, p in model.named_parameters():
             if ('linear_3.bias' in name):
                 dump(p)
@@ -692,18 +337,18 @@ if pm.isNNfinetuning == True:
 
 
     data_scalers = DataScalers(f_ds=pm.f_data_scaler, f_feat=pm.f_train_feat, load=True)
-    if (opt_recover_mode == True):
-        if (opt_session_name == ''):
+    if (opt.recover_mode == True):
+        if (opt.session_name == ''):
             raise RuntimeError("you must run follow-mode from an existing session")
-        opt_latest_file = opt_model_dir+'latest.pt'
-        checkpoint = torch.load(opt_latest_file,map_location=device)
-        model.load_state_dict(checkpoint['model'])
+        #opt.latest_file = opt.model_dir+'latest.pt'
+        #checkpoint = torch.load(opt.latest_file,map_location=device)
+        #model.load_state_dict(checkpoint['model'])
         # optimizer.load_state_dict(checkpoint['optimizer'])
-        start_epoch=checkpoint['epoch'] + 1
+        #start_epoch=checkpoint['epoch'] + 1
 
         # TODO: clean the codes above
-        #       1) need to fix opt_net_cfg, the model still need to specify in follow-mode
-        #       2) add opt_image_file and it's parameter form
+        #       1) need to fix opt.net_cfg, the model still need to specify in follow-mode
+        #       2) add opt.image_file and it's parameter form
         #       3) model store/load need to handle cpu/gpu
         #       4) handle tensorboard file, can we modify accroding to 'epoch'?
 
@@ -717,30 +362,30 @@ if pm.isNNfinetuning == True:
                     {'params': (p for name, p in model.named_parameters() if 'bias' in name), 'weight_decay': 0.}]
 
 
-    if (opt_optimizer == 'SGD'):
+    if (opt.optimizer == 'SGD'):
         optimizer = optim.SGD(model_parameters, lr=LR_base, momentum=momentum, weight_decay=REGULAR_wd)
-    elif (opt_optimizer == 'ASGD'):
+    elif (opt.optimizer == 'ASGD'):
         optimizer = optim.ASGD(model_parameters, lr=LR_base, weight_decay=REGULAR_wd)
-    elif (opt_optimizer == 'RPROP'):
+    elif (opt.optimizer == 'RPROP'):
         optimizer = optim.Rprop(model_parameters, lr=LR_base)
-    elif (opt_optimizer == 'RMSPROP'):
+    elif (opt.optimizer == 'RMSPROP'):
         optimizer = optim.RMSprop(model_parameters, lr=LR_base, weight_decay=REGULAR_wd, momentum=momentum)
-    elif (opt_optimizer == 'ADAG'):
+    elif (opt.optimizer == 'ADAG'):
         optimizer = optim.Adagrad(model_parameters, lr=LR_base, weight_decay=REGULAR_wd)
-    elif (opt_optimizer == 'ADAD'):
+    elif (opt.optimizer == 'ADAD'):
         optimizer = optim.Adadelta(model_parameters, lr=LR_base, weight_decay=REGULAR_wd)
-    elif (opt_optimizer == 'ADAM'):
+    elif (opt.optimizer == 'ADAM'):
         optimizer = optim.Adam(model_parameters, lr=LR_base, weight_decay = REGULAR_wd)
-    elif (opt_optimizer == 'ADAMW'):
+    elif (opt.optimizer == 'ADAMW'):
         optimizer = optim.AdamW(model_parameters, lr=LR_base, weight_decay = REGULAR_wd)
-    elif (opt_optimizer == 'ADAMAX'):
+    elif (opt.optimizer == 'ADAMAX'):
         optimizer = optim.Adamax(model_parameters, lr=LR_base, weight_decay=REGULAR_wd)
-    elif (opt_optimizer == 'LBFGS'):
+    elif (opt.optimizer == 'LBFGS'):
         optimizer = optim.LBFGS(model.parameters(), lr=LR_base)
     else:
-        error("unsupported optimizer: %s" %opt_optimizer)
-        raise RuntimeError("unsupported optimizer: %s" %opt_optimizer)
-    if (opt_recover_mode == True):
+        error("unsupported optimizer: %s" %opt.optimizer)
+        raise RuntimeError("unsupported optimizer: %s" %opt.optimizer)
+    if (opt.recover_mode == True):
         optimizer.load_state_dict(checkpoint['optimizer'])
 
     # TODO: LBFGS is not done yet
@@ -758,32 +403,32 @@ if pm.isNNfinetuning == True:
     # user specific LambdaLR lambda function
     lr_lambda = lambda epoch: LR_gamma ** epoch
 
-    if (opt_scheduler == 'LAMBDA'):
+    if (opt.scheduler == 'LAMBDA'):
         scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
-    elif (opt_scheduler == 'STEP'):
+    elif (opt.scheduler == 'STEP'):
         scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=LR_step, gamma=LR_gamma)
-    elif (opt_scheduler == 'MSTEP'):
-        scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=opt_LR_milestones, gamma=LR_gamma)
-    elif (opt_scheduler == 'EXP'):
+    elif (opt.scheduler == 'MSTEP'):
+        scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=opt.LR_milestones, gamma=LR_gamma)
+    elif (opt.scheduler == 'EXP'):
         scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=LR_gamma)
-    elif (opt_scheduler == 'COS'):
-        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=opt_LR_T_max, eta_min=opt_LR_min_lr)
-    elif (opt_scheduler == 'PLAT'):
+    elif (opt.scheduler == 'COS'):
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=opt.LR_T_max, eta_min=opt.LR_min_lr)
+    elif (opt.scheduler == 'PLAT'):
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=LR_gamma, 
-                        patience=opt_LR_patience, cooldown=opt_LR_cooldown, min_lr=opt_LR_min_lr)
-    elif (opt_scheduler == 'OC'):
-        scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=opt_LR_max_lr, total_steps=opt_LR_total_steps)
-    elif (opt_scheduler == 'LR_INC'):
+                        patience=opt.LR_patience, cooldown=opt.LR_cooldown, min_lr=opt.LR_min_lr)
+    elif (opt.scheduler == 'OC'):
+        scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=opt.LR_max_lr, total_steps=opt.LR_total_steps)
+    elif (opt.scheduler == 'LR_INC'):
         # do nothing, will direct call LR scheduler at each epoch
         pass
-    elif (opt_scheduler == 'LR_DEC'):
+    elif (opt.scheduler == 'LR_DEC'):
         # do nothing, will direct call LR scheduler at each epoch
         pass
-    elif (opt_scheduler == 'NONE'):
+    elif (opt.scheduler == 'NONE'):
         pass
     else:
-        error("unsupported scheduler: %s" %opt_schedler)
-        raise RuntimeError("unsupported scheduler: %s" %opt_scheduler)
+        error("unsupported scheduler: %s" %opt.schedler)
+        raise RuntimeError("unsupported scheduler: %s" %opt.scheduler)
 
     #min_loss = np.inf
     
@@ -811,7 +456,7 @@ if pm.isNNfinetuning == True:
             nr_total_sample += nr_batch_sample
 
             # OneCycleLR scheduler steps() at each batch
-            if (opt_scheduler == 'OC'):
+            if (opt.scheduler == 'OC'):
                 scheduler.step()
 
         # epoch loss update
@@ -824,7 +469,7 @@ if pm.isNNfinetuning == True:
         RMSE_F = loss_F ** 0.5
         info("epoch_loss = %.16f (loss_Etot = %.16f, loss_F = %.16f, RMSE_Etot = %.16f, RMSE_F = %.16f)" %(loss, loss_Etot, loss_F, RMSE_Etot, RMSE_F))
         # update tensorboard
-        if ((opt_journal_cycle > 0) and ((epoch) % opt_journal_cycle == 0)):
+        if ((opt.journal_cycle > 0) and ((epoch) % opt.journal_cycle == 0)):
             if (writer is not None):
                 writer.add_scalar('learning_rate', lr, epoch)
                 writer.add_scalar('train_loss', loss, epoch)
@@ -851,28 +496,28 @@ if pm.isNNfinetuning == True:
         # valid_epoch_etot_RMSE_loss = 0
         # valid_epoch_egroup_RMSE_loss = 0
 
-        if (opt_scheduler == 'OC'):
+        if (opt.scheduler == 'OC'):
             pass
-        elif (opt_scheduler == 'PLAT'):
+        elif (opt.scheduler == 'PLAT'):
             scheduler.step(loss)
-        elif (opt_scheduler == 'LR_INC'):
-            LinearLR(optimizer=optimizer, base_lr=LR_base, target_lr=opt_LR_max_lr, total_epoch=n_epoch, cur_epoch=epoch)
-        elif (opt_scheduler == 'LR_DEC'):
-            LinearLR(optimizer=optimizer, base_lr=LR_base, target_lr=opt_LR_min_lr, total_epoch=n_epoch, cur_epoch=epoch)
-        elif (opt_scheduler == 'NONE'):
+        elif (opt.scheduler == 'LR_INC'):
+            LinearLR(optimizer=optimizer, base_lr=LR_base, target_lr=opt.LR_max_lr, total_epoch=n_epoch, cur_epoch=epoch)
+        elif (opt.scheduler == 'LR_DEC'):
+            LinearLR(optimizer=optimizer, base_lr=LR_base, target_lr=opt.LR_min_lr, total_epoch=n_epoch, cur_epoch=epoch)
+        elif (opt.scheduler == 'NONE'):
             pass
         else:
             scheduler.step()
 
-        if opt_save_model == True: 
+        if opt.save_model == True: 
             state = {'model': model.state_dict(),'optimizer':optimizer.state_dict(),'epoch':epoch, 'loss': loss}
-            file_name = opt_model_dir + 'latest.pt'
+            file_name = opt.model_dir + 'latest.pt'
             if epoch % 10000 == 0:
-                file_name = opt_model_dir + str(epoch) + '.pt'
+                file_name = opt.model_dir + str(epoch) + '.pt'
             torch.save(state, file_name)
 
         
-        if ((opt_journal_cycle > 0) and ((epoch) % opt_journal_cycle == 0)):
+        if ((opt.journal_cycle > 0) and ((epoch) % opt.journal_cycle == 0)):
             for name, parameter in model.named_parameters():
                 param_RMS= parameter.pow(2).mean().pow(0.5)
                 param_ABS= parameter.abs().mean()
@@ -969,5 +614,5 @@ if pm.isNNfinetuning == True:
 """
 if (writer is not None):
     writer.close()
-    if (opt_wandb is True):
+    if (opt.wandb is True):
         wandb_run.finish()

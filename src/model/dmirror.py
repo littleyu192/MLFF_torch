@@ -72,15 +72,15 @@ import logging
 logging_level_DUMP = 5
 logging_level_SUMMARY = 15
 
-# setup logging module
-logger = logging.getLogger('train.dmirror')
-
+# setup module logger
+import component.logger as mlff_logger
+logger = mlff_logger.get_module_logger('dmirror')
 def dump(msg, *args, **kwargs):
-    logger.log(logging_level_DUMP, msg, *args, **kwargs)
+    logger.log(mlff_logger.DUMP, msg, *args, **kwargs)
 def debug(msg, *args, **kwargs):
     logger.debug(msg, *args, **kwargs)
 def summary(msg, *args, **kwargs):
-    logger.log(logging_level_SUMMARY, msg, *args, **kwargs)
+    logger.log(mlff_logger.SUMMARY, msg, *args, **kwargs)
 def info(msg, *args, **kwargs):
     logger.info(msg, *args, **kwargs)
 def warning(msg, *args, **kwargs):

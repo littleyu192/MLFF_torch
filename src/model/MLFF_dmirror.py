@@ -11,20 +11,15 @@ import parameters as pm
 # pp.readFeatnum()
 from model.dmirror import dmirror_FC
 
-# logging and our extension
-import logging
-logging_level_DUMP = 5
-logging_level_SUMMARY = 15
-
-# setup logging module
-logger = logging.getLogger('train.MLFF_dmirror')
-
+# setup module logger
+import component.logger as mlff_logger
+logger = mlff_logger.get_module_logger('MLFF_dmirror')
 def dump(msg, *args, **kwargs):
-    logger.log(logging_level_DUMP, msg, *args, **kwargs)
+    logger.log(mlff_logger.DUMP, msg, *args, **kwargs)
 def debug(msg, *args, **kwargs):
     logger.debug(msg, *args, **kwargs)
 def summary(msg, *args, **kwargs):
-    logger.log(logging_level_SUMMARY, msg, *args, **kwargs)
+    logger.log(mlff_logger.SUMMARY, msg, *args, **kwargs)
 def info(msg, *args, **kwargs):
     logger.info(msg, *args, **kwargs)
 def warning(msg, *args, **kwargs):
@@ -82,13 +77,23 @@ class MLFF_dmirror(nn.Module):
         Etot = torch.sum(result_Ei, 1)
         Force = torch.zeros((batch_size, self.natoms, 3)).to(self.device)
 
-        # here we use the infinite cell (in Rcut) view to calc F_atom_i
+        # here we use the infinite cell (in Rcut) view to calc F_atom_i,
         # the formula is: sum dE(all neighbor atoms in Rcut)/dR_(this atom)
         #
         # for all infinite cells, the calculate of dE(atom)/dFeat is same as
         # the central unit cell, since they are just duplicates of unit cell,
-        # but each cell should has its' own version of dFeat/dRi_(unit_cell),
-        # so we have two tensors
+        # but each cell should has its' own version of dFeat/dRi_(unit_cell)
+        #
+        # an efficient way is using GEMM to calculate Forces of all atoms
+        # in one batch at once, and the key step is to generate a list of 
+        # dE(atom)/dFeat of all neighbors of all atoms in current batch --
+        # by performing neighbor indexing from the batched dE(atom)/dFeat
+        # results
+        #
+        # Note: the neighbor's atom index is in fortran style, which starts
+        # from 1, and 0 means an empty neighbor slot. we handle this by data
+        # layout in the reault_dEi_dFeat_fortran tensor, so it can be used
+        # for indexing directly
         #
         # dEi_neighbors: collection of all neighbor atoms' dE(atom)/dFeat
         # dfeat: collection of all neighbor atoms' dFeat/dRi_(unit_cell)
@@ -96,9 +101,8 @@ class MLFF_dmirror(nn.Module):
         # dEi_neighbors.shape = [batch_size, self.natoms, self.nneighbors, 1, self.dim_feat]
         # dfeat.shape         = [batch_size, self.natoms, self.nneighbors, self.dim_feat, 3]
         #
-        # n_a_idx_fortran: neighbor's atom index in fortran style, starts
-        # from 1, and 0 means empty neighbor slot. result_dEi_dFeat_fortran
-        # matches this in it's atom dimension
+        # n_a_idx_fortran: neighbor's atom index in fortran style
+        # result_dEi_dFeat_fortran matches this style in it's atom dimension
         #
         # n_a_ofs_fortran_b: offset of neighbor's atom index in the batched
         # atom list, the offset step value for each image is (natoms + 1)
