@@ -13,9 +13,10 @@ from torch.nn.modules import loss
 import torch.optim as optim
 from torch.nn.parameter import Parameter
 from torch.utils.data import Dataset, DataLoader
-from model.FCold import preMLFFNet, MLFFNet
+# from model.FCold import preMLFFNet, MLFFNet
 from model.LN import LNNet
-from model.MLFF import MLFF
+from model.MLFF import preMLFF, MLFF
+from model.deepmd import preDeepMD, DeepMD
 import torch.utils.data as Data
 from torch.autograd import Variable
 import math
@@ -27,7 +28,6 @@ from data_loader_2type import MovementDataset, get_torch_data
 from scalers import DataScalers
 from torch.utils.tensorboard import SummaryWriter
 # from tensorboardX import SummaryWriter
-import torchviz
 import time
 import getopt
 import getpass
@@ -85,6 +85,9 @@ opt_LR_T_max = None
 
 opt_autograd = True
 
+opt_deepmd = False
+# opt_deepmd = True
+
 opts,args = getopt.getopt(sys.argv[1:],
     '-h-c-m-f-n:-a:-z:-v:-w:-u:-e:-l:-g:-t:-b:-d:-r:-s:-o:-i:-j:',
     ['help','cpu','magic','follow','net_cfg=','act=','optimizer=','momentum',
@@ -94,7 +97,7 @@ opts,args = getopt.getopt(sys.argv[1:],
      'milestones=','patience=','cooldown=','eps=','total_steps=',
      'max_lr=','min_lr=','T_max=',
      'wandb','wandb_entity=','wandb_project=',
-     'auto_grad=', 'dmirror='])
+     'auto_grad=', 'dmirror=', 'deepmd='])
 
 for opt_name,opt_value in opts:
     if opt_name in ('-h','--help'):
@@ -152,10 +155,15 @@ for opt_name,opt_value in opts:
         print("     --min_lr=float_val          :  min learning rate for CosineAnnealing/ReduceLROnPlateau")
         print("     --T_max=int_val             :  T_max for CosineAnnealing scheduler")
         print("")
-        print("     --dmirror=True              :  calculate dE/dx layer by layer explicitly")
-        print("     --auto_grad=True            :  calculate dE/dx by autograd func")
-        print("                                    using --dmirror=True or --auto_grad=True")
-        print("                                    default: --auto_grad=True")
+        print("     --dmirror                   :  calculate dE/dx layer by layer explicitly")
+        print("     --auto_grad                 :  calculate dE/dx by autograd func")
+        print("                                    using --dmirror or --auto_grad")
+        print("                                    default: --auto_grad")
+        print("")
+        print("     --deepmd                    :  use deepmd method(emdedding net + fitting net)")
+        print("                                    using --deepmd=True enable deepmd method")
+        print("                                    adding -n DeepMD_cfg (see cu/parameters.py)")
+        print("                                    defalt: --deepmd=False (see line 90)")
         print("")
         print("wandb parameters:")
         print("     --wandb                     :  ebable wandb, sync tensorboard data to wandb")
@@ -261,7 +269,8 @@ for opt_name,opt_value in opts:
         opt_autograd = False
     elif opt_name in ('--auto_grad'):
         opt_autograd = True
-
+    elif opt_name in ('--deepmd'):
+        opt_deepmd = eval(opt_value)
 
 # setup logging module
 logging.addLevelName(logging_level_DUMP, 'DUMP')
@@ -380,69 +389,76 @@ def get_loss_func(start_lr, real_lr, has_fi, lossFi, has_etot, loss_Etot, has_eg
     return l2_loss
 
 
-
 def pretrain(sample_batches, premodel, optimizer, criterion):
     error=0
-    Etot_label = Variable(sample_batches['output_energy'][:,:,:].double().to(device))
-    Etot_label = torch.sum(Etot_label, dim=1)   #[40,108,1]-->[40,1]
+    Ei_label = Variable(sample_batches['output_energy'][:,:,:].double().to(device))
+    Etot_label = torch.sum(Ei_label, dim=1)   #[40,108,1]-->[40,1]
     dump("==========Etot label==========")
     dump(Etot_label[0])
     input_data = Variable(sample_batches['input_feat'].double().to(device), requires_grad=True)
     neighbor = Variable(sample_batches['input_nblist'].int().to(device))  # [40,108,100]
     dfeat = Variable(sample_batches['input_dfeat'].double().to(device))  #[40,108,100,42,3]
-   
+    egroup_weight = Variable(sample_batches['input_egroup_weight'].float().to(device))
+    divider = Variable(sample_batches['input_divider'].float().to(device))
+    dR_neigh = Variable(sample_batches['input_dR_neigh'].double().to(device), requires_grad=True)
+
     optimizer.zero_grad()
     model = premodel.to(device)
-    model.train()
-    Etot_predict, Ei_predict = model(input_data, dfeat, neighbor)
+    # model.train()
+    if opt_deepmd:
+        Etot_predict, Ei_predict = model(dR_neigh)
+    else:
+        Etot_predict, Ei_predict = model(input_data)
     dump("==========Etot predict==========")
     dump(Etot_predict[0])
-    Etot_deviation = Etot_predict - Etot_label     # [40,1]
-    Etot_square_deviation = Etot_deviation ** 2
-    Etot_shape = Etot_label.shape[0]  #40
-    Etot_ABS_error = Etot_deviation.norm(1) / Etot_shape
-    Etot_RMSE_error = math.sqrt(1/Etot_shape) * Etot_deviation.norm(2)
-    Etot_L2 = (1/Etot_shape) * Etot_square_deviation.sum()   #L2-->tf.reduce_mean(tf.square())
-    
-    etot_square_loss = torch.sum(Etot_square_deviation) / Etot_shape
-    # ===========loss 选取etot==========
-    # loss = etot_square_loss
+    # Etot_deviation = Etot_predict - Etot_label     # [40,1]
+    # Etot_square_deviation = Etot_deviation ** 2
+    # Etot_shape = Etot_label.shape[0]  #40
+    # Etot_ABS_error = Etot_deviation.norm(1) / Etot_shape
+    # Etot_RMSE_error = math.sqrt(1/Etot_shape) * Etot_deviation.norm(2)
+    # Etot_L2 = (1/Etot_shape) * Etot_square_deviation.sum()   #L2-->tf.reduce_mean(tf.square())
+    # etot_square_loss = torch.sum(Etot_square_deviation) / Etot_shape
 
-    # ===========loss 选取torch.nn的函数==========
-    loss = criterion(Etot_predict, Etot_label)
-
+    dump("==========loss==========")
+    loss_Etot = criterion(Etot_predict, Etot_label)
+    loss_Ei = criterion(Ei_predict, Ei_label)
+    loss = loss_Etot + loss_Ei
     loss.backward()
     optimizer.step()
-
-    return etot_square_loss, Etot_RMSE_error, Etot_ABS_error, Etot_L2
+    w_e = 1
+    w_ei = 1
+    loss = w_e * loss_Etot + w_ei * loss_Ei
+    return loss, loss_Etot, loss_Ei
 
 def train(sample_batches, model, optimizer, criterion, last_epoch):
     # floating part of sample_batches, cast to specified opt_dtype
     #
     if (opt_dtype == 'float64'):
-        Etot_label = Variable(sample_batches['output_energy'][:,:,:].double().to(device))
+        Ei_label = Variable(sample_batches['output_energy'][:,:,:].double().to(device))
         Force_label = Variable(sample_batches['output_force'][:,:,:].double().to(device))   #[40,108,3]
         Egroup_label = Variable(sample_batches['input_egroup'].double().to(device))
         input_data = Variable(sample_batches['input_feat'].double().to(device), requires_grad=True)
         dfeat = Variable(sample_batches['input_dfeat'].double().to(device))  #[40,108,100,42,3]
         egroup_weight = Variable(sample_batches['input_egroup_weight'].double().to(device))
         divider = Variable(sample_batches['input_divider'].double().to(device))
+        dR_neigh = Variable(sample_batches['input_dR_neigh'].double().to(device), requires_grad=True)
     elif (opt_dtype == 'float32'):
-        Etot_label = Variable(sample_batches['output_energy'][:,:,:].float().to(device))
+        Ei_label = Variable(sample_batches['output_energy'][:,:,:].float().to(device))
         Force_label = Variable(sample_batches['output_force'][:,:,:].float().to(device))   #[40,108,3]
         Egroup_label = Variable(sample_batches['input_egroup'].float().to(device))
         input_data = Variable(sample_batches['input_feat'].float().to(device), requires_grad=True)
         dfeat = Variable(sample_batches['input_dfeat'].float().to(device))  #[40,108,100,42,3]
         egroup_weight = Variable(sample_batches['input_egroup_weight'].float().to(device))
         divider = Variable(sample_batches['input_divider'].float().to(device))
+        dR_neigh = Variable(sample_batches['input_dR_neigh'].float().to(device), requires_grad=True)
     else:
         error("train(): unsupported opt_dtype %s" %opt_dtype)
         raise RuntimeError("train(): unsupported opt_dtype %s" %opt_dtype)
 
     # non-floating or derived part of sample_batches
     #
-    atom_number = Etot_label.shape[1]
-    Etot_label = torch.sum(Etot_label, dim=1)   #[40,108,1]-->[40,1]
+    atom_number = Ei_label.shape[1]
+    Etot_label = torch.sum(Ei_label, dim=1)   #[40,108,1]-->[40,1]
     neighbor = Variable(sample_batches['input_nblist'].int().to(device))  # [40,108,100]
     ind_img = Variable(sample_batches['ind_image'].int().to(device))
     # dumping what you want here
@@ -459,7 +475,11 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
     # model = torch.nn.parallel.DistributedDataParallel(model)
     # model.train()
     # force_predict, Etot_predict, Ei_predict, Egroup_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
-    Etot_predict, Force_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
+
+    if opt_deepmd:
+        Etot_predict, Ei_predict, Force_predict = model(dR_neigh, neighbor)
+    else:
+        Etot_predict, Ei_predict, Force_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
     
     optimizer.zero_grad()
     # Egroup_predict = model.get_egroup(Ei_predict, egroup_weight, divider)   #[40,108,1]
@@ -529,11 +549,12 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
     #
     # Etot_label.shape = [batch_size, 1], while Etot_predict.shape = [batch_size], so squeeze Etot_label to match
     #
-    loss = pm.rtLossF * criterion(Force_predict, Force_label) + pm.rtLossEtot * criterion(Etot_predict, Etot_label)
+   
     loss_F = criterion(Force_predict, Force_label)
     loss_Etot = criterion(Etot_predict, Etot_label)
-    loss_Egroup = 0
-
+    loss_Ei = criterion(Ei_predict, Ei_label)
+    w_ei = 1
+    loss = pm.rtLossF * loss_F+ pm.rtLossEtot * loss_Etot + w_ei * loss_Ei
     #info("loss = %.16f (loss_etot = %.16f, loss_force = %.16f, RMSE_etot = %.16f, RMSE_force = %.16f)" %(loss, loss_Etot, loss_F, loss_Etot ** 0.5, loss_F ** 0.5))
 
 
@@ -561,7 +582,38 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
     #     Force_RMSE_error, Force_ABS_error, Force_L2, Etot_RMSE_error, Etot_ABS_error, Etot_L2, \
     #          Egroup_RMSE_error, Egroup_ABS_error, Egroup_L2
 
-    return loss, loss_Etot, loss_Egroup, loss_F
+    return loss, loss_Etot, loss_Ei, loss_F
+
+def prevalid(sample_batches, premodel, criterion):
+    error=0
+    Ei_label = Variable(sample_batches['output_energy'][:,:,:].float().to(device))
+    atom_number = Ei_label.shape[1]
+    Etot_label = torch.sum(Ei_label, dim=1)   #[40,108,1]-->[40,1]
+    Force_label = Variable(sample_batches['output_force'][:,:,:].float().to(device))   #[40,108,3]
+    Egroup_label = Variable(sample_batches['input_egroup'].float().to(device))
+
+    input_data = Variable(sample_batches['input_feat'].float().to(device), requires_grad=True)
+    neighbor = Variable(sample_batches['input_nblist'].int().to(device))  # [40,108,100]
+    dfeat=Variable(sample_batches['input_dfeat'].float().to(device))  #[40,108,100,42,3]
+    egroup_weight = Variable(sample_batches['input_egroup_weight'].float().to(device))
+    ind_img = Variable(sample_batches['ind_image'].int().to(device))
+    divider = Variable(sample_batches['input_divider'].float().to(device))
+    # label = Variable(sample_batches['output_energy'].float().to(device))
+    model = premodel.to(device)
+    model.train()
+    Etot_predict, Ei_predict = model(input_data)
+  
+    # ===========loss 选取torch.nn的函数==========
+    loss_Etot = criterion(Etot_predict, Etot_label)
+    loss_Ei = criterion(Ei_predict, Ei_label)
+
+    w_e = 1
+    w_ei = 1
+    loss = w_e * loss_Etot + w_ei * loss_Ei
+    # loss = get_loss_func(start_lr, real_lr, w_f, loss_F, w_e, loss_Etot, w_eg, loss_Egroup, w_ei, loss_Ei)
+
+    error = error + float(loss.item())
+    return error, loss_Etot, loss_Ei
 
 def valid(sample_batches, model, criterion, start_lr, real_lr):
     error=0
@@ -642,8 +694,7 @@ def sec_to_hms(seconds):
     return "%02d:%02d:%02d" % (h, m, s)
 
 
-# ==========================part2:指定模型参数==========================
-# ==========================part1:数据读取==========================
+# ==========================part1:指定参数 && 数据读取==========================
 
 momentum = opt_momentum
 REGULAR_wd = opt_regular_wd
@@ -686,21 +737,22 @@ info("scheduler: opt_autograd = %s" %opt_autograd)
 
 train_data_path=pm.train_data_path
 torch_train_data = get_torch_data(pm.natoms, train_data_path)
-loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=True)
+loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=False)
 
 valid_data_path=pm.test_data_path
 torch_valid_data = get_torch_data(pm.natoms, valid_data_path)
 loader_valid = Data.DataLoader(torch_valid_data, batch_size=1, shuffle=True)
 
+
+# 模型多卡并行
 # if torch.cuda.device_count() > 1:
     # model = nn.DataParallel(model)
 
-# ==========================part3:模型预训练==========================
 # os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3'
 # torch.distributed.init_process_group(backend='nccl', init_method='tcp://localhost:23457', rank=0, world_size=1)
 
 
-# ==========================part4:模型finetuning==========================
+# ==========================part2:模型finetuning==========================
 
 # implement a linear scheduler
 def LinearLR(optimizer, base_lr, target_lr, total_epoch, cur_epoch):
@@ -708,8 +760,169 @@ def LinearLR(optimizer, base_lr, target_lr, total_epoch, cur_epoch):
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
+
+if pm.isNNpretrain == True:
+    data_scalers = DataScalers(f_ds=pm.f_data_scaler, f_feat=pm.f_train_feat, load=True)
+    # deepmd model test
+    if opt_deepmd:
+        model = preDeepMD(opt_net_cfg, opt_act, device, opt_magic)
+    else:
+        model = preMLFF(opt_net_cfg, opt_act, device, opt_magic, opt_autograd)
+
+    if (opt_follow_mode == True):
+        if (opt_session_name == ''):
+            raise RuntimeError("you must run follow-mode from an existing session")
+        checkpoint = torch.load(opt_model_file, map_location={'cpu':'cuda:0'})
+        model.load_state_dict(checkpoint['model'])
+        # optimizer.load_state_dict(checkpoint['optimizer'])
+        start_epoch=checkpoint['epoch']+1
+
+    # this is a temp fix for a quick test
+    if (opt_init_b == True):
+        for name, p in model.named_parameters():
+            if ('linear_3.bias' in name):
+                dump(p)
+                p.data.fill_(166.0)
+                dump(p)
+
+    # set model parameter properties, do not apply weight decay to bias parameter
+    # except for LBFGS, which do not support pre-parameter options
+    model_parameters = [
+                    {'params': (p for name, p in model.named_parameters() if 'bias' not in name)},
+                    {'params': (p for name, p in model.named_parameters() if 'bias' in name), 'weight_decay': 0.}]
+
+    if (opt_optimizer == 'SGD'):
+        optimizer = optim.SGD(model_parameters, lr=LR_base, momentum=momentum, weight_decay=REGULAR_wd)
+    elif (opt_optimizer == 'ASGD'):
+        optimizer = optim.ASGD(model_parameters, lr=LR_base, weight_decay=REGULAR_wd)
+    elif (opt_optimizer == 'RPROP'):
+        optimizer = optim.Rprop(model_parameters, lr=LR_base)
+    elif (opt_optimizer == 'RMSPROP'):
+        optimizer = optim.RMSprop(model_parameters, lr=LR_base, weight_decay=REGULAR_wd, momentum=momentum)
+    elif (opt_optimizer == 'ADAG'):
+        optimizer = optim.Adagrad(model_parameters, lr=LR_base, weight_decay=REGULAR_wd)
+    elif (opt_optimizer == 'ADAD'):
+        optimizer = optim.Adadelta(model_parameters, lr=LR_base, weight_decay=REGULAR_wd)
+    elif (opt_optimizer == 'ADAM'):
+        optimizer = optim.Adam(model_parameters, lr=LR_base, weight_decay = REGULAR_wd)
+    elif (opt_optimizer == 'ADAMW'):
+        optimizer = optim.AdamW(model_parameters, lr=LR_base, weight_decay = REGULAR_wd)
+    elif (opt_optimizer == 'ADAMAX'):
+        optimizer = optim.Adamax(model_parameters, lr=LR_base, weight_decay=REGULAR_wd)
+    elif (opt_optimizer == 'LBFGS'):
+        optimizer = optim.LBFGS(model.parameters(), lr=LR_base)
+    else:
+        error("unsupported optimizer: %s" %opt_optimizer)
+        raise RuntimeError("unsupported optimizer: %s" %opt_optimizer)
+
+    # user specific LambdaLR lambda function
+    lr_lambda = lambda epoch: LR_gamma ** epoch
+
+    if (opt_scheduler == 'LAMBDA'):
+        scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
+    elif (opt_scheduler == 'STEP'):
+        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=LR_step, gamma=LR_gamma)
+    elif (opt_scheduler == 'MSTEP'):
+        scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=opt_LR_milestones, gamma=LR_gamma)
+    elif (opt_scheduler == 'EXP'):
+        scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=LR_gamma)
+    elif (opt_scheduler == 'COS'):
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=opt_LR_T_max, eta_min=opt_LR_min_lr)
+    elif (opt_scheduler == 'PLAT'):
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=LR_gamma, 
+                        patience=opt_LR_patience, cooldown=opt_LR_cooldown, min_lr=opt_LR_min_lr)
+    elif (opt_scheduler == 'OC'):
+        scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=opt_LR_max_lr, total_steps=opt_LR_total_steps)
+    elif (opt_scheduler == 'LR_INC'):
+        # do nothing, will direct call LR scheduler at each epoch
+        pass
+    elif (opt_scheduler == 'LR_DEC'):
+        # do nothing, will direct call LR scheduler at each epoch
+        pass
+    elif (opt_scheduler == 'NONE'):
+        pass
+    else:
+        error("unsupported scheduler: %s" %opt_schedler)
+        raise RuntimeError("unsupported scheduler: %s" %opt_scheduler)
+
+    #min_loss = np.inf
+    start_epoch=1
+    for epoch in range(start_epoch, n_epoch + 1):
+        if (epoch == n_epoch):
+            last_epoch = True
+        else:
+            last_epoch = False
+        lr = optimizer.param_groups[0]['lr']
+        info("<-------------------------  epoch %d (lr=%.16f) ------------------------->" %(epoch, lr))
+        nr_total_sample = 0
+        loss = 0.
+        loss_Etot = 0.
+        loss_Ei = 0.
+        loss_F = 0.
+        for i_batch, sample_batches in enumerate(loader_train):
+            batch_loss, batch_loss_Etot, batch_loss_Ei = \
+                pretrain(sample_batches, model, optimizer, nn.MSELoss())
+            print("batch_loss="+ str(batch_loss))
+            nr_batch_sample = sample_batches['input_feat'].shape[0]
+            debug("nr_batch_sample = %s" %nr_batch_sample)
+            loss += batch_loss * nr_batch_sample
+            loss_Etot += batch_loss_Etot * nr_batch_sample
+            loss_Ei += batch_loss_Ei * nr_batch_sample
+            nr_total_sample += nr_batch_sample
+
+            # OneCycleLR scheduler steps() at each batch
+            if (opt_scheduler == 'OC'):
+                scheduler.step()
+
+        # epoch loss update
+        loss /= nr_total_sample
+        loss_Etot /= nr_total_sample
+        loss_Ei /= nr_total_sample
+        RMSE_Etot = loss_Etot ** 0.5
+        RMSE_Ei = loss_Ei ** 0.5
+        info("epoch_loss = %.16f (loss_Etot = %.16f, loss_Ei = %.16f, RMSE_Etot = %.16f, RMSE_Ei = %.16f)" %(loss, loss_Etot, loss_Ei, RMSE_Etot, RMSE_Ei))
+        # update tensorboard
+        if ((opt_journal_cycle > 0) and ((epoch) % opt_journal_cycle == 0)):
+            if (writer is not None):
+                writer.add_scalar('learning_rate', lr, epoch)
+                writer.add_scalar('train_loss', loss, epoch)
+                writer.add_scalar('train_loss_Etot', loss_Etot, epoch)
+                writer.add_scalar('train_loss_Ei', loss_Ei, epoch)
+                writer.add_scalar('train_RMSE_Etot', RMSE_Etot, epoch)
+                writer.add_scalar('train_RMSE_Egroup', RMSE_Ei, epoch)
+
+        if (opt_scheduler == 'OC'):
+            pass
+        elif (opt_scheduler == 'PLAT'):
+            scheduler.step(loss)
+        elif (opt_scheduler == 'LR_INC'):
+            LinearLR(optimizer=optimizer, base_lr=LR_base, target_lr=opt_LR_max_lr, total_epoch=n_epoch, cur_epoch=epoch)
+        elif (opt_scheduler == 'LR_DEC'):
+            LinearLR(optimizer=optimizer, base_lr=LR_base, target_lr=opt_LR_min_lr, total_epoch=n_epoch, cur_epoch=epoch)
+        elif (opt_scheduler == 'NONE'):
+            pass
+        else:
+            scheduler.step()
+
+        if ((opt_save_model == True) and (epoch % 10000 == 0)):
+            file_name = opt_model_dir + str(epoch) + '.pt'
+            state = {'model': model.state_dict(), 'loss': loss}
+            torch.save(state, file_name)
+
+if (writer is not None):
+    writer.close()
+    if (opt_wandb is True):
+        wandb_run.finish()
+
+
 if pm.isNNfinetuning == True:
     data_scalers = DataScalers(f_ds=pm.f_data_scaler, f_feat=pm.f_train_feat, load=True)
+    # deepmd model test
+    if opt_deepmd:
+        model = DeepMD(opt_net_cfg, opt_act, device, opt_magic)
+    else:
+        model = MLFF(opt_net_cfg, opt_act, device, opt_magic, opt_autograd)
+
     if (opt_follow_mode == True):
         if (opt_session_name == ''):
             raise RuntimeError("you must run follow-mode from an existing session")
@@ -724,7 +937,6 @@ if pm.isNNfinetuning == True:
         #       3) model store/load need to handle cpu/gpu
         #       4) handle tensorboard file, can we modify accroding to 'epoch'?
 
-    model = MLFF(opt_net_cfg, opt_act, device, opt_magic, opt_autograd)
     # this is a temp fix for a quick test
     if (opt_init_b == True):
         for name, p in model.named_parameters():
@@ -820,16 +1032,17 @@ if pm.isNNfinetuning == True:
         nr_total_sample = 0
         loss = 0.
         loss_Etot = 0.
-        loss_Egroup = 0.
+        loss_Ei = 0.
         loss_F = 0.
         for i_batch, sample_batches in enumerate(loader_train):
-            batch_loss, batch_loss_Etot, batch_loss_Egroup, batch_loss_F = \
+            batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
                 train(sample_batches, model, optimizer, nn.MSELoss(), last_epoch)
+            print("batch_loss:" + str(batch_loss))
             nr_batch_sample = sample_batches['input_feat'].shape[0]
             debug("nr_batch_sample = %s" %nr_batch_sample)
             loss += batch_loss * nr_batch_sample
             loss_Etot += batch_loss_Etot * nr_batch_sample
-            loss_Egroup += batch_loss_Egroup * nr_batch_sample
+            loss_Ei += batch_loss_Ei * nr_batch_sample
             loss_F += batch_loss_F * nr_batch_sample
             nr_total_sample += nr_batch_sample
 
@@ -840,10 +1053,10 @@ if pm.isNNfinetuning == True:
         # epoch loss update
         loss /= nr_total_sample
         loss_Etot /= nr_total_sample
-        loss_Egroup /= nr_total_sample
+        loss_Ei /= nr_total_sample
         loss_F /= nr_total_sample
         RMSE_Etot = loss_Etot ** 0.5
-        RMSE_Egroup = loss_Egroup ** 0.5
+        RMSE_Egroup = loss_Ei ** 0.5
         RMSE_F = loss_F ** 0.5
         info("epoch_loss = %.16f (loss_Etot = %.16f, loss_F = %.16f, RMSE_Etot = %.16f, RMSE_F = %.16f)" %(loss, loss_Etot, loss_F, RMSE_Etot, RMSE_F))
         # update tensorboard
@@ -852,10 +1065,10 @@ if pm.isNNfinetuning == True:
                 writer.add_scalar('learning_rate', lr, epoch)
                 writer.add_scalar('train_loss', loss, epoch)
                 writer.add_scalar('train_loss_Etot', loss_Etot, epoch)
-                writer.add_scalar('train_loss_Egroup', loss_Egroup, epoch)
+                writer.add_scalar('train_loss_Ei', loss_Ei, epoch)
                 writer.add_scalar('train_loss_F', loss_F, epoch)
                 writer.add_scalar('train_RMSE_Etot', RMSE_Etot, epoch)
-                writer.add_scalar('train_RMSE_Egroup', RMSE_Egroup, epoch)
+                writer.add_scalar('train_RMSE_Ei', RMSE_Egroup, epoch)
                 writer.add_scalar('train_RMSE_F', RMSE_F, epoch)
             
         # print('Finetuning stage: epoch = {}, step = {}, train_function_err_avg = {:.8f}, train_epoch_force_square_loss = {:.8f}, \

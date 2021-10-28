@@ -36,8 +36,8 @@ class MinMaxScaler:
 
         self.b = self.fr[0] - self.a*xmin
 
-        print("fit_transform: scaler a = %s" %self.a)
-        print("fit_transform: scaler b = %s" %self.b)
+        # print("fit_transform: scaler a = %s" %self.a)
+        # print("fit_transform: scaler b = %s" %self.b)
         return self.transform(x)
 
     def transform(self, x):

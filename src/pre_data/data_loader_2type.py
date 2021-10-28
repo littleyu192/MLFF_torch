@@ -105,7 +105,7 @@ class MovementDataset(Dataset):
     def __init__(self, natoms, feat_path, dfeat_path,
                  egroup_path, egroup_weight_path, divider_path, 
                  itype_path, nblist_path,weight_all_path,
-                 energy_path, force_path, ind_img_path):  # , natoms_path
+                 energy_path, force_path, ind_img_path, dR_neigh_path=None):  # , natoms_path
         super(MovementDataset, self).__init__()
         self.feat=np.load(feat_path)
         self.dfeat=np.load(dfeat_path)
@@ -122,6 +122,11 @@ class MovementDataset(Dataset):
 
         self.energy=np.load(energy_path)
         self.force=np.load(force_path)
+
+        self.use_dR_neigh = False
+        if dR_neigh_path:
+            self.use_dR_neigh = True
+            self.dR_neigh = np.load(dR_neigh_path)
 
         # label = pd.read_csv(label_path)
         # labels_Fi = [str(x) + "_f" for x in range(324)]
@@ -152,6 +157,8 @@ class MovementDataset(Dataset):
             # 'output_energy_pwmat': torch.from_numpy(np.array(self.labels_Ei[index:index + 1])[0]).float(),
             # 'output_Fi_pwmat': torch.from_numpy(np.array(self.labels_Fi[index:index + 1])[0]).float(),
         }
+        if self.use_dR_neigh:
+            dic['input_dR_neigh'] = self.dR_neigh[self.ind_img[index]:self.ind_img[index+1]]
         return dic
 
     def __len__(self):
@@ -181,6 +188,7 @@ def get_torch_data(atoms_number_in_one_image, examplespath):
     '''
     # examplespath='./train_data/final_train'   # for example
     f_feat = os.path.join(examplespath+'/feat_scaled.npy')
+    f_dR_neigh = os.path.join(examplespath+'/dR_neigh.npy')
     f_dfeat = os.path.join(examplespath+'/dfeat_scaled.npy')
     f_egroup = os.path.join(examplespath+'/egroup.npy')
     f_egroup_weight = os.path.join(examplespath+'/egroup_weight.npy')
@@ -194,10 +202,10 @@ def get_torch_data(atoms_number_in_one_image, examplespath):
     f_energy = os.path.join(examplespath+'/engy_scaled.npy')
     f_force = os.path.join(examplespath+'/fors_scaled.npy') 
 
-    torch_data=MovementDataset(atoms_number_in_one_image, f_feat, f_dfeat,
+    torch_data = MovementDataset(atoms_number_in_one_image, f_feat, f_dfeat,
                  f_egroup, f_egroup_weight, f_divider, 
                  f_itype, f_nblist, f_weight_all,
-                 f_energy, f_force, ind_img)
+                 f_energy, f_force, ind_img, f_dR_neigh)
     return torch_data
 
 def main():

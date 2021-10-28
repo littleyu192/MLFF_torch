@@ -30,7 +30,8 @@ else:
     %pm.feature_dtype)
 
 
-def process_data(f_train_feat, f_train_dfeat, f_train_natoms, f_train_egroup,
+def process_data(f_train_feat, f_train_dfeat, f_train_dR_neigh,
+                 f_train_natoms, f_train_egroup,
                  scalers, nn_data_path):
     if not os.path.exists(nn_data_path):
         os.makedirs(nn_data_path)
@@ -174,6 +175,8 @@ def process_data(f_train_feat, f_train_dfeat, f_train_natoms, f_train_egroup,
     # print(dfeat_scaled)
 
     convert_dfeat.deallo()
+    dR_neigh = pd.read_csv(f_train_dR_neigh, header=None).values.reshape(indImg[-1], pm.maxNeighborNum, 4) # 1 是 ntype
+
     print("feat_scaled shape" + str(feat_scaled.shape))
     print("fors_scaled shape" + str(fors_scaled.shape))
     print("nblist shape" + str(nblist.shape))
@@ -184,6 +187,7 @@ def process_data(f_train_feat, f_train_dfeat, f_train_natoms, f_train_egroup,
     print("egroup shape" + str(egroup.shape))
     print("divider shape" + str(egroup.shape))
     print("dfeat_scaled shape" + str(dfeat_scaled.shape))
+    print("dR neigh shape" + str(dR_neigh.shape))
     np.save(nn_data_path + "/feat_scaled.npy", feat_scaled)
     np.save(nn_data_path + "/fors_scaled.npy", fors_scaled)
     np.save(nn_data_path + "/nblist.npy", nblist)
@@ -194,6 +198,7 @@ def process_data(f_train_feat, f_train_dfeat, f_train_natoms, f_train_egroup,
     np.save(nn_data_path + "/egroup.npy", egroup)
     np.save(nn_data_path + "/divider.npy", divider)
     np.save(nn_data_path + "/dfeat_scaled.npy", dfeat_scaled)
+    np.save(nn_data_path + "/dR_neigh.npy", dR_neigh)
     np.save(nn_data_path + "/ind_img.npy", np.array(indImg).reshape(-1))
 
 def color_print(string, fg=31, bg=49):
@@ -214,6 +219,7 @@ def main():
     print(read_allnn.wp_atom)
     process_data(pm.f_train_feat,
                  pm.f_train_dfeat,
+                 pm.f_train_dR_neigh,
                  pm.f_train_natoms,
                  pm.f_train_egroup, 
                  data_scalers,
@@ -223,6 +229,7 @@ def main():
                                    f_feat=pm.f_test_feat)
     process_data(pm.f_test_feat,
                  pm.f_test_dfeat,
+                 pm.f_test_dR_neigh,
                  pm.f_test_natoms,
                  pm.f_test_egroup,
                  data_scalers,

@@ -14,7 +14,7 @@
       integer num_neigh(ntype,natom),num_neigh_M(ntype,natom)
       integer num_type(ntype),num_type_M(ntype)
       integer nperiod(3)
-      integer iflag,i,j,num
+      integer iflag,i,j,k,num
       integer i1,i2,i3,itype
       integer iat_type(100)
       integer itype_atom(natom)
@@ -142,6 +142,25 @@
       endif
 
 2000  continue
+
+      print *, "print m_neigh:", m_neigh
+      print *, "print ntype:", ntype
+      print *, "print natom:", natom
+      open(1314, file='./PWdata/dRneigh.dat', access='append', recl=100)
+      ! m_neigh,ntype,natom
+      do k=1, natom
+        do j=1, ntype
+          do i=1, m_neigh
+            if (abs(dR_neigh(1, i, j, k))>1.D-8) then
+              write(1314, *) dR_neigh(1, i, j, k), dR_neigh(2, i, j, k), dR_neigh(3, i, j, k), list_neigh(i,j,k)
+            else
+              write(1314, *) 0,0,0,0
+            end if
+          end do
+        end do
+      end do
+      close(1314)
+
       return
       end subroutine find_neighbore
       

@@ -44,6 +44,7 @@ if pm.isCalcFeat:
             'rm '+os.path.join(os.path.abspath(pm.trainSetDir), 'trainData.txt.*'))
         os.system(
             'rm '+os.path.join(os.path.abspath(pm.trainSetDir), 'inquirepos*'))
+        os.system('rm ' + pm.dRneigh_path)
     else:
         pass
     if os.path.exists(os.path.join(pm.trainSetDir, 'lppData.txt')):
@@ -57,7 +58,6 @@ if pm.isCalcFeat:
     os.system('cp '+os.path.abspath(pm.fbinListPath)+' ./input/')
 
     calFeatGrid = False
-
     for i in range(pm.atomTypeNum):
         if pm.Ftype1_para['iflag_grid'][i] == 3 or pm.Ftype2_para['iflag_grid'][i] == 3:
             calFeatGrid = True

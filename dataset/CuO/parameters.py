@@ -66,7 +66,7 @@ Ftype_name={1:'gen_2b_feature', 2:'gen_3b_feature',
             }
 # Ftype2_name='gen_3b_feature'
 #use_Ftype=[1,2,3,4,5,6,7,8]
-use_Ftype = [1,2]
+use_Ftype = [1]
 nfeat_type=len(use_Ftype)
 Ftype1_para={               #2b
     'numOf2bfeat':[24,24],       # [itpye1,itype2]
@@ -343,6 +343,10 @@ f_train_dfeat = os.path.join(dir_work,'dfeatname_train.csv')
 f_test_dfeat  = os.path.join(dir_work,'dfeatname_test.csv')
 f_train_egroup = os.path.join(dir_work,'egroup_train.csv')
 f_test_egroup  = os.path.join(dir_work,'egroup_test.csv')
+
+f_train_dR_neigh = os.path.join(dir_work,'dR_neigh_train.csv')
+f_test_dR_neigh  = os.path.join(dir_work,'dR_neigh_test.csv')
+dRneigh_path = r'./fread_dfeat/NN_output/dRneigh.dat'
 
 # f_pretr_nblt = dir_feat+f_feat +"_nblt_pretrain"+f_post
 # f_train_nblt = dir_feat+f_feat +"_nblt_train"+f_post

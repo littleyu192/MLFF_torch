@@ -81,6 +81,65 @@ class f_activation(nn.Module):
         self.k = x
         return self.func(x)
 
+class pre_f_FC(nn.Module):
+    def __init__(self, cfg, act_func, magic=False):
+        super(pre_f_FC, self).__init__()
+        self.cfg = cfg
+        self.act_func = act_func
+        self.layers = []
+
+        # parse cfg & generating layers
+        idx_linear = 1
+        idx_activation = 1
+        for idx, item in enumerate(self.cfg):
+            layer_type = item[0]
+            if (layer_type == 'linear'):
+                in_dim = item[1]
+                out_dim = item[2]
+                bias = item[3]
+                self.layers.append((
+                    'f_linear_'+str(idx_linear),
+                    f_linear(in_dim, out_dim, bias, magic)
+                ))
+                idx_linear += 1
+            elif (layer_type == 'activation'):
+                self.layers.append((
+                    'f_activation_'+str(idx_activation),
+                    f_activation(act_func)
+                ))
+                idx_activation += 1
+            elif (layer_type == 'scale'):
+                raise RuntimeError(
+                    "Notimplemented for layer_type = %s" %(layer_type)
+                )
+            else:
+                raise ValueError(
+                    "Invalid for layer_type = %s" %(layer_type)
+                )
+
+        # the layer parameters will be registered to nn Module,
+        # so optimizer can update the layer parameters.
+        #
+        self.base_net = nn.Sequential(
+            collections.OrderedDict(self.layers)
+        )
+        info("pretraining forward FC: start of network instance dump ==============>")
+        info("<----------------------- base_net ----------------------->")
+        info(self.base_net)
+        info("end of network instance dump ================>")
+
+    # we can't call forward() of sequentialized module, since
+    # we extened the param list of the layers' forward()
+    #
+    def forward(self, x):
+        in_feature = x
+        for name, obj in (self.layers):
+            x = obj.forward(x)
+        ei = x
+        ei.unsqueeze(2)
+        return ei
+
+
 class f_FC(nn.Module):
     def __init__(self, cfg, act_func, magic=False):
         super(f_FC, self).__init__()
@@ -123,7 +182,7 @@ class f_FC(nn.Module):
         self.base_net = nn.Sequential(
             collections.OrderedDict(self.layers)
         )
-        info("f_FC: start of network instance dump ==============>")
+        info("forward FC: start of network instance dump ==============>")
         info("<----------------------- base_net ----------------------->")
         info(self.base_net)
         info("end of network instance dump ================>")

@@ -43,6 +43,8 @@ mdImageFileDir=r'./MD'                              #设置md的初始image的�
 
 #isCalcFeat=True
 isFitLinModel=True
+isNNpretrain = False
+isNNfinetuning=True
 
 #isClassify=True
 #isRunMd=True                                   #是否训练运行md  default:False
@@ -271,6 +273,24 @@ nNodes = np.array([[60,60],[30,30],[1,1]])
 #nNodes = np.array([[120,120],[120,120],[120,120],[1,1]])
 b_init=np.array([166.3969])      # energy of one atom, for different types, just a rough value
 DCNLayers = 5
+
+# DeepMD configurations
+#from model.deepmd import DeepMD #dp训练时需加上
+DeepMD_cfg = {
+	'embeding_net': {
+		'network_size': [16, 32, 64], # 第一维表示输入的维度
+		'bias': True,
+		'resnet_dt': True,
+		'activation': torch.sigmoid,
+	},
+	'fitting_net': {
+	        'network_size': [120, 120, 120, 1],
+	        'activation': torch.sigmoid,
+	        'bias': True,
+	}
+}
+
+
 
 # MLFF_dmirror configurations
 MLFF_dmirror_cfg = [
