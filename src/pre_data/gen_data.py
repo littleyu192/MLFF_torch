@@ -175,8 +175,7 @@ def process_data(f_train_feat, f_train_dfeat, f_train_dR_neigh,
     # print(dfeat_scaled)
 
     convert_dfeat.deallo()
-    dR_neigh = pd.read_csv(f_train_dR_neigh, header=None).values.reshape(indImg[-1], pm.maxNeighborNum, 4) # 1 是 ntype
-
+    
     print("feat_scaled shape" + str(feat_scaled.shape))
     print("fors_scaled shape" + str(fors_scaled.shape))
     print("nblist shape" + str(nblist.shape))
@@ -187,7 +186,12 @@ def process_data(f_train_feat, f_train_dfeat, f_train_dR_neigh,
     print("egroup shape" + str(egroup.shape))
     print("divider shape" + str(egroup.shape))
     print("dfeat_scaled shape" + str(dfeat_scaled.shape))
-    print("dR neigh shape" + str(dR_neigh.shape))
+    
+    if (pm.dR_neigh):
+        dR_neigh = pd.read_csv(f_train_dR_neigh, header=None).values.reshape(indImg[-1], pm.maxNeighborNum, 4) # 1 是 ntype
+        print("dR neigh shape" + str(dR_neigh.shape))
+        np.save(nn_data_path + "/dR_neigh.npy", dR_neigh)
+
     np.save(nn_data_path + "/feat_scaled.npy", feat_scaled)
     np.save(nn_data_path + "/fors_scaled.npy", fors_scaled)
     np.save(nn_data_path + "/nblist.npy", nblist)
@@ -198,7 +202,6 @@ def process_data(f_train_feat, f_train_dfeat, f_train_dR_neigh,
     np.save(nn_data_path + "/egroup.npy", egroup)
     np.save(nn_data_path + "/divider.npy", divider)
     np.save(nn_data_path + "/dfeat_scaled.npy", dfeat_scaled)
-    np.save(nn_data_path + "/dR_neigh.npy", dR_neigh)
     np.save(nn_data_path + "/ind_img.npy", np.array(indImg).reshape(-1))
 
 def color_print(string, fg=31, bg=49):

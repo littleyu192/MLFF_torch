@@ -70,9 +70,9 @@ class preDeepMD(nn.Module):
         mask_1 = mask & mask_min  #[2,108,100]
         res[mask_1] = 1/x[mask_1]
         # import ipdb; ipdb.set_trace()
-        mask_max = x < 25
-        mask_2 = ~mask_min & mask_max
-        res[mask_2] = 0.5 * torch.cos(math.pi * (x[mask_2]-10)/(25-10)) + 0.5 * torch.ones_like(x[mask_2])
+        # mask_max = x < 25
+        # mask_2 = ~mask_min & mask_max
+        # res[mask_2] = 0.5 * torch.cos(math.pi * (x[mask_2]-10)/(25-10)) + 0.5 * torch.ones_like(x[mask_2])
         # import ipdb; ipdb.set_trace()
         return res
     

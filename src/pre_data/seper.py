@@ -138,4 +138,5 @@ if __name__ == '__main__':
     write_egroup_input()
     run_write_egroup()
     write_natoms_dfeat()
-    write_dR_neigh()
+    if (pm.dR_neigh):
+        write_dR_neigh()

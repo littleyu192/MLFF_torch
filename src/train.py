@@ -407,7 +407,8 @@ def pretrain(sample_batches, premodel, optimizer, criterion):
     dfeat = Variable(sample_batches['input_dfeat'].double().to(device))  #[40,108,100,42,3]
     egroup_weight = Variable(sample_batches['input_egroup_weight'].float().to(device))
     divider = Variable(sample_batches['input_divider'].float().to(device))
-    dR_neigh = Variable(sample_batches['input_dR_neigh'].double().to(device), requires_grad=True)
+    if pm.dR_neigh:
+        dR_neigh = Variable(sample_batches['input_dR_neigh'].double().to(device), requires_grad=True)
 
     optimizer.zero_grad()
     model = premodel.to(device)
@@ -448,7 +449,8 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
         dfeat = Variable(sample_batches['input_dfeat'].double().to(device))  #[40,108,100,42,3]
         egroup_weight = Variable(sample_batches['input_egroup_weight'].double().to(device))
         divider = Variable(sample_batches['input_divider'].double().to(device))
-        dR_neigh = Variable(sample_batches['input_dR_neigh'].double().to(device), requires_grad=True)
+        if pm.dR_neigh:
+            dR_neigh = Variable(sample_batches['input_dR_neigh'].double().to(device), requires_grad=True)
     elif (opt_dtype == 'float32'):
         Ei_label = Variable(sample_batches['output_energy'][:,:,:].float().to(device))
         Force_label = Variable(sample_batches['output_force'][:,:,:].float().to(device))   #[40,108,3]
@@ -457,7 +459,8 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
         dfeat = Variable(sample_batches['input_dfeat'].float().to(device))  #[40,108,100,42,3]
         egroup_weight = Variable(sample_batches['input_egroup_weight'].float().to(device))
         divider = Variable(sample_batches['input_divider'].float().to(device))
-        dR_neigh = Variable(sample_batches['input_dR_neigh'].float().to(device), requires_grad=True)
+        if pm.dR_neigh:
+            dR_neigh = Variable(sample_batches['input_dR_neigh'].float().to(device), requires_grad=True)
     else:
         error("train(): unsupported opt_dtype %s" %opt_dtype)
         raise RuntimeError("train(): unsupported opt_dtype %s" %opt_dtype)
@@ -743,7 +746,7 @@ info("scheduler: opt_autograd = %s" %opt_autograd)
 
 train_data_path=pm.train_data_path
 torch_train_data = get_torch_data(pm.natoms, train_data_path)
-loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=False)
+loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=True)
 
 valid_data_path=pm.test_data_path
 torch_valid_data = get_torch_data(pm.natoms, valid_data_path)
@@ -922,28 +925,26 @@ if (writer is not None):
 
 
 if pm.isNNfinetuning == True:
-    model = MLFF(opt_net_cfg, opt_act, device, opt_magic)
-    model.to(device)
-    if opt_follow_mode==True:
-        checkpoint = torch.load(opt_model_file,map_location=device)
-        model.load_state_dict(checkpoint['model'],strict=False)
-        
-    # this is a temp fix for a quick test
-    if (opt_init_b == True):
-        for name, p in model.named_parameters():
-            if ('linear_3.bias' in name):
-                dump(p)
-                p.data.fill_(166.0)
-                dump(p)
-
-
-    data_scalers = DataScalers(f_ds=pm.f_data_scaler, f_feat=pm.f_train_feat, load=True)
     # deepmd model test
     if opt_deepmd:
         model = DeepMD(opt_net_cfg, opt_act, device, opt_magic)
     else:
         model = MLFF(opt_net_cfg, opt_act, device, opt_magic, opt_autograd)
+        # this is a temp fix for a quick test
+        if (opt_init_b == True):
+            for name, p in model.named_parameters():
+                if ('linear_3.bias' in name):
+                    dump(p)
+                    p.data.fill_(166.0)
+                    dump(p)
 
+    model.to(device)
+    # if opt_follow_mode==True:
+    #     checkpoint = torch.load(opt_model_file,map_location=device)
+    #     model.load_state_dict(checkpoint['model'],strict=False)
+    
+    data_scalers = DataScalers(f_ds=pm.f_data_scaler, f_feat=pm.f_train_feat, load=True)
+    
     if (opt_recover_mode == True):
         if (opt_session_name == ''):
             raise RuntimeError("you must run follow-mode from an existing session")
@@ -958,14 +959,6 @@ if pm.isNNfinetuning == True:
         #       2) add opt_image_file and it's parameter form
         #       3) model store/load need to handle cpu/gpu
         #       4) handle tensorboard file, can we modify accroding to 'epoch'?
-
-    # this is a temp fix for a quick test
-    if (opt_init_b == True):
-        for name, p in model.named_parameters():
-            if ('linear_3.bias' in name):
-                dump(p)
-                p.data.fill_(166.0)
-                dump(p)
 
     #if torch.cuda.device_count() > 1:
     #    model = nn.DataParallel(model)
@@ -1046,7 +1039,7 @@ if pm.isNNfinetuning == True:
         raise RuntimeError("unsupported scheduler: %s" %opt_scheduler)
 
     #min_loss = np.inf
-    
+    start_epoch = 1
     for epoch in range(start_epoch, n_epoch + 1):
         if (epoch == n_epoch):
             last_epoch = True
@@ -1128,7 +1121,7 @@ if pm.isNNfinetuning == True:
         if opt_save_model == True: 
             state = {'model': model.state_dict(),'optimizer':optimizer.state_dict(),'epoch':epoch, 'loss': loss}
             file_name = opt_model_dir + 'latest.pt'
-            if epoch % 10000 == 0:
+            if epoch % 2 == 0:
                 file_name = opt_model_dir + str(epoch) + '.pt'
             torch.save(state, file_name)
 

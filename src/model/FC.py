@@ -9,6 +9,7 @@ logging_level_SUMMARY = 15
 
 # setup logging module
 logger = logging.getLogger('train.FC')
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def dump(msg, *args, **kwargs):
     logger.log(logging_level_DUMP, msg, *args, **kwargs)
@@ -36,14 +37,14 @@ class f_linear(nn.Module):
         self.rand_p = 2021
 
         if (magic == False):
-            self.weight = nn.Parameter(torch.randn(out_dim, in_dim), requires_grad=True)
+            self.weight = nn.Parameter(torch.randn(out_dim, in_dim), requires_grad=True).to(device)
             if (bias == True):
-                self.bias = nn.Parameter(torch.randn(out_dim), requires_grad=True)
+                self.bias = nn.Parameter(torch.randn(out_dim), requires_grad=True).to(device)
         else:
             warmup_my_rand = self.my_rand_2d(out_dim, in_dim)
-            self.weight = nn.Parameter(self.my_rand_2d(out_dim, in_dim), requires_grad=True)
+            self.weight = nn.Parameter(self.my_rand_2d(out_dim, in_dim), requires_grad=True).to(device)
             if (bias == True):
-                self.bias = nn.Parameter(self.my_rand_1d(out_dim), requires_grad=True)
+                self.bias = nn.Parameter(self.my_rand_1d(out_dim), requires_grad=True).to(device)
 
     # random number generator, maybe their better place is train.py
     def my_rand_core(self):
@@ -66,6 +67,7 @@ class f_linear(nn.Module):
 
     def forward(self, x):
         if (self.bias is not None):
+            # import ipdb;ipdb.set_trace()
             return torch.matmul(x, self.weight.t()) + self.bias
         else:
             return torch.matmul(x, self.weight.t())
@@ -195,10 +197,9 @@ class f_FC(nn.Module):
         for name, obj in (self.layers):
             x = obj.forward(x)
         res0 = x
-
         res0.unsqueeze(2)
-        x = torch.ones_like(res0)
-        dE = torch.autograd.grad(res0, in_feature, grad_outputs=x, create_graph=True, retain_graph=True)
+        mask = torch.ones_like(res0)
+        dE = torch.autograd.grad(res0, in_feature, grad_outputs=mask, create_graph=True, retain_graph=True)
         dE = torch.stack(list(dE), dim=0).squeeze(0)
         res1 = dE
 

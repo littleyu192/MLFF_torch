@@ -188,7 +188,10 @@ def get_torch_data(atoms_number_in_one_image, examplespath):
     '''
     # examplespath='./train_data/final_train'   # for example
     f_feat = os.path.join(examplespath+'/feat_scaled.npy')
-    f_dR_neigh = os.path.join(examplespath+'/dR_neigh.npy')
+    if pm.dR_neigh:
+        f_dR_neigh = os.path.join(examplespath+'/dR_neigh.npy')
+    else:
+        f_dR_neigh = None
     f_dfeat = os.path.join(examplespath+'/dfeat_scaled.npy')
     f_egroup = os.path.join(examplespath+'/egroup.npy')
     f_egroup_weight = os.path.join(examplespath+'/egroup_weight.npy')
