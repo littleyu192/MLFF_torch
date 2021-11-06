@@ -13,9 +13,11 @@ from torch.nn.modules import loss
 import torch.optim as optim
 from torch.nn.parameter import Parameter
 from torch.utils.data import Dataset, DataLoader
-# from model.FCold import preMLFFNet, MLFFNet
+
 from model.LN import LNNet
 from model.MLFF import preMLFF, MLFF
+from model.FCold import preMLFFNet, MLFFNet
+
 from model.deepmd import preDeepMD, DeepMD
 import torch.utils.data as Data
 from torch.autograd import Variable
@@ -90,8 +92,8 @@ opt_deepmd = False
 # opt_deepmd = True
 
 opts,args = getopt.getopt(sys.argv[1:],
-    '-h-c-m-f-p-n:-a:-z:-v:-w:-u:-e:-l:-g:-t:-b:-d:-r:-s:-o:-i:-j:',
-    ['help','cpu','magic','follow','net_cfg=','act=','optimizer=','momentum',
+    '-h-c-m-f-R-n:-a:-z:-v:-w:-u:-e:-l:-g:-t:-b:-d:-r:-s:-o:-i:-j:',
+    ['help','cpu','magic','follow','recover','net_cfg=','act=','optimizer=','momentum',
      'weight_decay=','scheduler=','epochs=','lr=','gamma=','step=',
      'batch_size=','dtype=','rseed=','session=','log_level=',
      'file_log_level=','j_cycle=','init_b','save_model',
@@ -108,7 +110,7 @@ for opt_name,opt_value in opts:
         print("     -c, --cpu                   :  force training run on cpu")
         print("     -m, --magic                 :  a magic flag for your testing code")
         print("     -f, --follow                :  follow a previous trained model file")
-        print("     -p, --recover               :  breakpoint training")
+        print("     -R, --recover               :  breakpoint training")
         print("     -n cfg, --net_cfg=cfg       :  if -f/--follow is not set, specify network cfg in parameters.py")
         print("                                    eg: -n MLFF_dmirror_cfg1")
         print("                                    if -f/--follow is set, specify the model image file name")
@@ -177,7 +179,7 @@ for opt_name,opt_value in opts:
         opt_force_cpu = True
     elif opt_name in ('-m','--magic'):
         opt_magic = True
-    elif opt_name in ('-p','--recover'):
+    elif opt_name in ('-R','--recover'):
         opt_recover_mode = True
         print(opt_recover_mode)
         # opt_follow_epoch = int(opt_value)
@@ -276,7 +278,7 @@ for opt_name,opt_value in opts:
         opt_autograd = False
     elif opt_name in ('--auto_grad'):
         opt_autograd = True
-    elif opt_name in ('--deepmd'):
+    elif opt_name in ('--deepmd='):
         opt_deepmd = eval(opt_value)
 
 # setup logging module
@@ -484,6 +486,13 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
     # model = torch.nn.parallel.DistributedDataParallel(model)
     # model.train()
     # force_predict, Etot_predict, Ei_predict, Egroup_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
+    
+    # parm={}
+    # for name,parameters in model.named_parameters():
+    #     print(name,':',parameters.size())
+    #     parm[name]=parameters.cpu().detach().numpy()
+    #     print(parm[name])
+    # import ipdb;ipdb.set_trace()
 
     if opt_deepmd:
         Etot_predict, Ei_predict, Force_predict = model(dR_neigh, neighbor)
@@ -512,6 +521,15 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
         summary(Force_predict)
         summary("force label ==============================================>")
         summary(Force_label)
+
+    # iprint = 1 #隔几个epoch记录一次误差
+    # f_err_log=pm.dir_work+'images.dat'
+    # if not os.path.isfile(f_err_log):
+    #     fid_err_log = open(f_err_log, 'w')
+    # else:
+    #     fid_err_log = open(f_err_log, 'a')
+    # fid_err_log.write('%e %e %e %e %e \n'%(Etot_predict[0,0], Etot_label[0,0], Force_predict[0,0,0], Force_predict[0,0,1], Force_predict[0,0,2]))
+    # fid_err_log.write('%e %e %e %e %e \n'%(Etot_predict[1,0], Etot_label[1,0], Force_predict[1,0,0], Force_predict[1,0,1], Force_predict[1,0,2]))
 
     # Etot_square_deviation = Etot_deviation ** 2
     # Etot_shape = Etot_label.shape[0]  #40
@@ -746,7 +764,7 @@ info("scheduler: opt_autograd = %s" %opt_autograd)
 
 train_data_path=pm.train_data_path
 torch_train_data = get_torch_data(pm.natoms, train_data_path)
-loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=True)
+loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=False)
 
 valid_data_path=pm.test_data_path
 torch_valid_data = get_torch_data(pm.natoms, valid_data_path)
@@ -923,8 +941,9 @@ if (writer is not None):
     if (opt_wandb is True):
         wandb_run.finish()
 
-
 if pm.isNNfinetuning == True:
+    data_scalers = DataScalers(f_ds=pm.f_data_scaler, f_feat=pm.f_train_feat, load=True)
+
     # deepmd model test
     if opt_deepmd:
         model = DeepMD(opt_net_cfg, opt_act, device, opt_magic)
@@ -937,14 +956,14 @@ if pm.isNNfinetuning == True:
                     dump(p)
                     p.data.fill_(166.0)
                     dump(p)
-
+        # model = MLFFNet(data_scalers)
     model.to(device)
     # if opt_follow_mode==True:
     #     checkpoint = torch.load(opt_model_file,map_location=device)
     #     model.load_state_dict(checkpoint['model'],strict=False)
     
-    data_scalers = DataScalers(f_ds=pm.f_data_scaler, f_feat=pm.f_train_feat, load=True)
-    
+
+    start_epoch = 1
     if (opt_recover_mode == True):
         if (opt_session_name == ''):
             raise RuntimeError("you must run follow-mode from an existing session")
@@ -968,7 +987,7 @@ if pm.isNNfinetuning == True:
     model_parameters = [
                     {'params': (p for name, p in model.named_parameters() if 'bias' not in name)},
                     {'params': (p for name, p in model.named_parameters() if 'bias' in name), 'weight_decay': 0.}]
-
+    
 
     if (opt_optimizer == 'SGD'):
         optimizer = optim.SGD(model_parameters, lr=LR_base, momentum=momentum, weight_decay=REGULAR_wd)
@@ -995,12 +1014,12 @@ if pm.isNNfinetuning == True:
         raise RuntimeError("unsupported optimizer: %s" %opt_optimizer)
     if (opt_recover_mode == True):
         optimizer.load_state_dict(checkpoint['optimizer'])
-
+    
     # TODO: LBFGS is not done yet
     # FIXME: train process should be better re-arranged to 
     #        support this closure cleanly
     # example code for LBFGS closure()
-    #def lbfgs_closure():
+    # def lbfgs_closure():
     #    optimizer.zero_grad()
     #    output = model(input)
     #    loss = loss_fn(output, target)
@@ -1039,7 +1058,7 @@ if pm.isNNfinetuning == True:
         raise RuntimeError("unsupported scheduler: %s" %opt_scheduler)
 
     #min_loss = np.inf
-    start_epoch = 1
+    
     for epoch in range(start_epoch, n_epoch + 1):
         if (epoch == n_epoch):
             last_epoch = True
@@ -1056,6 +1075,7 @@ if pm.isNNfinetuning == True:
             batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
                 train(sample_batches, model, optimizer, nn.MSELoss(), last_epoch)
             print("batch_loss:" + str(batch_loss))
+            print("batch loss F:" + str(batch_loss_F))
             nr_batch_sample = sample_batches['input_feat'].shape[0]
             debug("nr_batch_sample = %s" %nr_batch_sample)
             loss += batch_loss * nr_batch_sample
@@ -1121,40 +1141,48 @@ if pm.isNNfinetuning == True:
         if opt_save_model == True: 
             state = {'model': model.state_dict(),'optimizer':optimizer.state_dict(),'epoch':epoch, 'loss': loss}
             file_name = opt_model_dir + 'latest.pt'
-            if epoch % 2 == 0:
+            if epoch % 1 == 0:
                 file_name = opt_model_dir + str(epoch) + '.pt'
             torch.save(state, file_name)
 
-        
-        if ((opt_journal_cycle > 0) and ((epoch) % opt_journal_cycle == 0)):
-            for name, parameter in model.named_parameters():
-                param_RMS= parameter.pow(2).mean().pow(0.5)
-                param_ABS= parameter.abs().mean()
-                grad_RMS= parameter.grad.pow(2).mean().pow(0.5)
-                grad_ABS= parameter.grad.abs().mean()
-                param_list = parameter.view(parameter.numel())
-                param_name = [str(x) for x in range(parameter.numel())]
-                param_dict = dict(zip(param_name, param_list))
-                grad_list = parameter.grad.view(parameter.grad.numel())
-                grad_name = [str(x) for x in range(parameter.grad.numel())]
-                grad_dict = dict(zip(grad_name, grad_list))
-                if (writer is not None):
-                    writer.add_scalar(name+'_RMS', param_RMS, epoch)
-                    writer.add_scalar(name+'_ABS', param_ABS, epoch)
-                    writer.add_scalar(name+'.grad_RMS', grad_RMS, epoch)
-                    writer.add_scalar(name+'.grad_ABS', grad_ABS, epoch)
-                    #writer.add_scalars(name, param_dict, epoch)
-                    #writer.add_scalars(name+'.grad', grad_dict, epoch)
+        # for name, parameter in model.named_parameters():
+        #     f_err_log=pm.dir_work+ str(name) +'.txt'
+        #     if not os.path.isfile(f_err_log):
+        #         fid_err_log = open(f_err_log, 'w')
+        #     else:
+        #         fid_err_log = open(f_err_log, 'a')
+        #     np.savetxt(fid_err_log, parameter.cpu().detach().numpy())
+            
+
+        # if ((opt_journal_cycle > 0) and ((epoch) % opt_journal_cycle == 0)):
+        #     for name, parameter in model.named_parameters():
+                # param_RMS= parameter.pow(2).mean().pow(0.5)
+                # param_ABS= parameter.abs().mean()
+                # grad_RMS= parameter.grad.pow(2).mean().pow(0.5)
+                # grad_ABS= parameter.grad.abs().mean()
+                # param_list = parameter.view(parameter.numel())
+                # param_name = [str(x) for x in range(parameter.numel())]
+                # param_dict = dict(zip(param_name, param_list))
+                # grad_list = parameter.grad.view(parameter.grad.numel())
+                # grad_name = [str(x) for x in range(parameter.grad.numel())]
+                # grad_dict = dict(zip(grad_name, grad_list))
+                # if (writer is not None):
+                #     writer.add_scalar(name+'_RMS', param_RMS, epoch)
+                #     writer.add_scalar(name+'_ABS', param_ABS, epoch)
+                #     writer.add_scalar(name+'.grad_RMS', grad_RMS, epoch)
+                #     writer.add_scalar(name+'.grad_ABS', grad_ABS, epoch)
+                #     #writer.add_scalars(name, param_dict, epoch)
+                #     #writer.add_scalars(name+'.grad', grad_dict, epoch)
                 
-                dump("dump parameter statistics of %s -------------------------->" %name)
-                dump("%s : %s" %(name+'_RMS', param_RMS))
-                dump("%s : %s" %(name+'_ABS', param_ABS))
-                dump("%s : %s" %(name+'.grad_RMS', grad_RMS))
-                dump("%s : %s" %(name+'.grad_ABS', grad_ABS))
-                dump("dump model parameter (%s : %s) ------------------------>" %(name, parameter.size()))
-                dump(parameter)
-                dump("dump grad of model parameter (%s : %s) (not applied)--->" %(name, parameter.size()))
-                dump(parameter.grad)
+                # dump("dump parameter statistics of %s -------------------------->" %name)
+                # dump("%s : %s" %(name+'_RMS', param_RMS))
+                # dump("%s : %s" %(name+'_ABS', param_ABS))
+                # dump("%s : %s" %(name+'.grad_RMS', grad_RMS))
+                # dump("%s : %s" %(name+'.grad_ABS', grad_ABS))
+                # dump("dump model parameter (%s : %s) ------------------------>" %(name, parameter.size()))
+                # dump(parameter)
+                # dump("dump grad of model parameter (%s : %s) (not applied)--->" %(name, parameter.size()))
+                # dump(parameter.grad)
 
         """
         for i_batch, sample_batches in enumerate(loader_valid):

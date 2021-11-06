@@ -37,15 +37,14 @@ class f_linear(nn.Module):
         self.rand_p = 2021
 
         if (magic == False):
-            self.weight = nn.Parameter(torch.randn(out_dim, in_dim), requires_grad=True).to(device)
+            self.weight = nn.Parameter(torch.randn(out_dim, in_dim), requires_grad=True)
             if (bias == True):
-                self.bias = nn.Parameter(torch.randn(out_dim), requires_grad=True).to(device)
+                self.bias = nn.Parameter(torch.randn(out_dim), requires_grad=True)
         else:
             warmup_my_rand = self.my_rand_2d(out_dim, in_dim)
-            self.weight = nn.Parameter(self.my_rand_2d(out_dim, in_dim), requires_grad=True).to(device)
+            self.weight = nn.Parameter(self.my_rand_2d(out_dim, in_dim), requires_grad=True)
             if (bias == True):
-                self.bias = nn.Parameter(self.my_rand_1d(out_dim), requires_grad=True).to(device)
-
+                self.bias = nn.Parameter(self.my_rand_1d(out_dim), requires_grad=True)
     # random number generator, maybe their better place is train.py
     def my_rand_core(self):
         r = (self.rand_a * self.rand_p + self.rand_c) % 10000
@@ -197,10 +196,11 @@ class f_FC(nn.Module):
         for name, obj in (self.layers):
             x = obj.forward(x)
         res0 = x
-        res0.unsqueeze(2)
         mask = torch.ones_like(res0)
         dE = torch.autograd.grad(res0, in_feature, grad_outputs=mask, create_graph=True, retain_graph=True)
-        dE = torch.stack(list(dE), dim=0).squeeze(0)
+        dE = dE[0]
+        # dE = torch.stack(list(dE), dim=0).squeeze(0)
+
         res1 = dE
 
         return res0, res1
