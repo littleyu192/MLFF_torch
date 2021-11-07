@@ -228,12 +228,14 @@ class DeepMD(nn.Module):
         for batch_idx in range(batch_size):
             for i in range(natoms):
                 # get atom_idx & neighbor_idx
-                my_neighbor = list_neigh[batch_idx, i]  #[100]
-                neighbor_idx = my_neighbor.nonzero().squeeze().type(torch.int64)  #[78]
-                atom_idx = my_neighbor[neighbor_idx].type(torch.int64) - 1
+                i_neighbor = list_neigh[batch_idx, i]  #[100]
+                neighbor_idx = i_neighbor.nonzero().squeeze().type(torch.int64)  #[78]
+                atom_idx = i_neighbor[neighbor_idx].type(torch.int64) - 1
                 # calculate Force
-                for neigh_tmp, neighbor_id in zip(atom_idx, neighbor_idx):
-                    # import ipdb;ipdb.set_trace()
+                # for neigh_tmp, neighbor_id in zip(atom_idx, neighbor_idx):
+                for neigh_tmp in atom_idx:
+                    j_neighbor = list_neigh[batch_idx, neigh_tmp]
+                    neighbor_id = (j_neighbor == i+1).nonzero().squeeze()
                     dEtot[batch_idx, i, :] -= dE[batch_idx, neigh_tmp, neighbor_id, :3]
                 Force[batch_idx, i, :] = -dEtot[batch_idx, i, :]
             # import ipdb;ipdb.set_trace()
@@ -244,5 +246,5 @@ class DeepMD(nn.Module):
         print(Ei[0,5])
         print(Etot[0,0])
         print(Force[0,5,:])
-        # import ipdb;ipdb.set_trace()
+        import ipdb;ipdb.set_trace()
         return Etot, Ei, Force
