@@ -145,9 +145,9 @@ class DeepMD(nn.Module):
         mask_1 = mask & mask_min  #[2,108,100]
         res[mask_1] = 1/x[mask_1]
         # import ipdb; ipdb.set_trace()
-        mask_max = x < 25
-        mask_2 = ~mask_min & mask_max
-        res[mask_2] = 0.5 * torch.cos(math.pi * (x[mask_2]-10)/(25-10)) + 0.5 * torch.ones_like(x[mask_2])
+        # mask_max = x < 25
+        # mask_2 = ~mask_min & mask_max
+        # res[mask_2] = 0.5 * torch.cos(math.pi * (x[mask_2]-10)/(25-10)) + 0.5 * torch.ones_like(x[mask_2])
         # import ipdb; ipdb.set_trace()
         return res
     
@@ -231,7 +231,6 @@ class DeepMD(nn.Module):
                 my_neighbor = list_neigh[batch_idx, i]  #[100]
                 neighbor_idx = my_neighbor.nonzero().squeeze().type(torch.int64)  #[78]
                 atom_idx = my_neighbor[neighbor_idx].type(torch.int64) - 1
-                # import ipdb;ipdb.set_trace()
                 # calculate Force
                 for neigh_tmp, neighbor_id in zip(atom_idx, neighbor_idx):
                     # import ipdb;ipdb.set_trace()
@@ -241,6 +240,9 @@ class DeepMD(nn.Module):
         # calcF_time = datetime.datetime.now()
         # print("fitting net time:")
         # print((calcF_time - autograd_time).seconds)
-        print("Force[0,0,:]:")
-        print(Force[0,0,:])
+        print("Ei[0,5] & Etot[0,5] & Force[0,5,:]:")
+        print(Ei[0,5])
+        print(Etot[0,0])
+        print(Force[0,5,:])
+        # import ipdb;ipdb.set_trace()
         return Etot, Ei, Force

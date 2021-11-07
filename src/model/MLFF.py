@@ -161,7 +161,7 @@ class MLFF(nn.Module):
             else:
                 error("MLFF_autograd: unsupported activation_type: %s" %activation_type)
                 raise RuntimeError("MLFF_autograd: unsupported activation_type: %s" %activation_type)
-        
+    
     def forward(self, image, dfeat, neighbor, Egroup_weight, divider):
         batch_size = image.shape[0]
         result_Ei = torch.zeros(
@@ -172,7 +172,7 @@ class MLFF(nn.Module):
         ).to(self.device)
 
         result_Ei, result_dEi_dFeat = self.net(image)
-
+        
         Etot = torch.sum(result_Ei, 1)
         Force = torch.zeros((batch_size, self.natoms, 3)).to(self.device)
 
@@ -200,7 +200,11 @@ class MLFF(nn.Module):
                 a = result_dEi_dFeat[batch_idx, atom_idx].unsqueeze(1)
                 b = dfeat[batch_idx, i, neighbor_idx]
                 Force[batch_idx, i, :] = torch.matmul(a, b).sum([0, 1])
-
+        # print("Ei[0,1] & Force[0,1,:]:")
+        # print(result_Ei[0,1])
+        # print(Force[0,1,:])
+        # print(Etot[0,0])
+        # import ipdb;ipdb.set_trace()
         return Etot, result_Ei, Force
 
 '''

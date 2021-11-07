@@ -177,6 +177,7 @@ class MLFFNet(nn.Module):
             itype = pm.atomType[i]
             x = image[:, natoms_index[i]:natoms_index[i+1]]
             predict, grad = self.models[i](x)
+            
             # scale_feat_a = torch.tensor(self.scalers.feat_as[itype], device=device, dtype=torch.float)
             # grad = grad * scale_feat_a
             if(i==0):
@@ -195,11 +196,11 @@ class MLFFNet(nn.Module):
         # test.backward(retain_graph=True)
         # dE = image.grad
 
-        # Ei.unsqueeze(2)
-        # dEtest = torch.autograd.grad(Ei, x, grad_outputs=torch.ones(Ei.shape), create_graph=True, retain_graph=True)
-        # dEtest = torch.stack(list(dEtest), dim=0).squeeze(0)
-        # dE = dEtest
-
+        Ei.unsqueeze(2)
+        dEtest = torch.autograd.grad(Ei, x, grad_outputs=torch.ones_like(Ei), create_graph=True, retain_graph=True)
+        dEtest = torch.stack(list(dEtest), dim=0).squeeze(0)
+        dE = dEtest
+        # import ipdb;ipdb.set_trace()
         # dfeat = dfeat.transpose(3, 4) # 40 108 100 3 42
         # dE = dE.unsqueeze(2).unsqueeze(2)
         # force_all = dfeat * dE
@@ -294,4 +295,3 @@ class MLFFNet(nn.Module):
                 res = res.sum(axis=-1)  #(2,108,60,30)-->(2,108,60)
                 ilayer -= 1
             return res
-

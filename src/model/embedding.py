@@ -36,11 +36,11 @@ class EmbedingNet(nn.Module):
         self.network_size = [1] + self.cfg['network_size']
 
         for i in range(1, len(self.network_size)):
-            self.weights["weight" + str(i-1)] = nn.Parameter(torch.randn(self.network_size[i-1], self.network_size[i])) 
+            self.weights["weight" + str(i-1)] = nn.Parameter(torch.randn(self.network_size[i-1], self.network_size[i]), requires_grad=True) 
             if self.cfg['bias']:
-                self.bias["bias" + str(i-1)] = nn.Parameter(torch.randn(1, self.network_size[i])) 
+                self.bias["bias" + str(i-1)] = nn.Parameter(torch.randn(1, self.network_size[i]), requires_grad=True) 
             if self.cfg['resnet_dt']:
-                self.resnet_dt["resnet_dt" + str(i-1)] = nn.Parameter(torch.randn(1, self.network_size[i]))
+                self.resnet_dt["resnet_dt" + str(i-1)] = nn.Parameter(torch.randn(1, self.network_size[i]), requires_grad=True)
 
     def forward(self, x):
         for i in range(1, len(self.network_size)):
@@ -74,9 +74,9 @@ class FittingNet(nn.Module):
         self.network_size = [input_dim] + self.cfg['network_size']
 
         for i in range(1, len(self.network_size)):
-            self.weights["weight" + str(i-1)] = nn.Parameter(torch.randn(self.network_size[i-1], self.network_size[i])) 
+            self.weights["weight" + str(i-1)] = nn.Parameter(torch.randn(self.network_size[i-1], self.network_size[i]), requires_grad=True) 
             if self.cfg['bias']:
-                self.bias["bias" + str(i-1)] = nn.Parameter(torch.randn(1, self.network_size[i])) 
+                self.bias["bias" + str(i-1)] = nn.Parameter(torch.randn(1, self.network_size[i]), requires_grad=True) 
 
     def forward(self, x):
         for i in range(1, len(self.network_size) - 1):
