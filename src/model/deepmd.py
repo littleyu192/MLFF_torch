@@ -77,15 +77,16 @@ class preDeepMD(nn.Module):
         return res
     
         
-    def forward(self, image_dR):
+    def forward(self, image_dR, list_neigh):
         # starttime = datetime.datetime.now()
         torch.autograd.set_detect_anomaly(True)
         batch_size = image_dR.shape[0]
         natoms = image_dR.shape[1]
         neighbor_num = image_dR.shape[2]
-        list_neigh = image_dR[:,:,:,3]  #[2,108,100]
-        image_dR_xyz = image_dR[:,:,:,:3]
-        dR2 = torch.sum(image_dR_xyz * image_dR_xyz, -1) #[2,108,100]
+        # list_neigh = image_dR[:,:,:,3]  #[2,108,100]
+        # image_dR_xyz = image_dR[:,:,:,:3]
+        # dR2 = torch.sum(image_dR_xyz * image_dR_xyz, -1) #[2,108,100]
+        dR2 = torch.sum(image_dR * image_dR, -1) #[2,108,100]
         # Rij = torch.pow(dR2, 0.5)
         Rij = torch.sqrt(dR2)
         Rij = dR2
@@ -156,15 +157,16 @@ class DeepMD(nn.Module):
         h, m = divmod(m, 60)
         return "%02d:%02d:%02d" % (h, m, s)
         
-    def forward(self, image_dR, neighbor):
+    def forward(self, image_dR, list_neigh):
         # starttime = datetime.datetime.now()
         torch.autograd.set_detect_anomaly(True)
         batch_size = image_dR.shape[0]
         natoms = image_dR.shape[1]
         neighbor_num = image_dR.shape[2]
-        list_neigh = image_dR[:,:,:,3]  #[2,108,100]
-        image_dR_xyz = image_dR[:,:,:,:3]
-        dR2 = torch.sum(image_dR_xyz * image_dR_xyz, -1) #[2,108,100]
+        # list_neigh = image_dR[:,:,:,3]  #[2,108,100]
+        # image_dR_xyz = image_dR[:,:,:,:3]
+        # dR2 = torch.sum(image_dR_xyz * image_dR_xyz, -1) #[2,108,100]
+        dR2 = torch.sum(image_dR * image_dR, -1) #[2,108,100]
         # Rij = torch.pow(dR2, 0.5)
         Rij = torch.sqrt(dR2)  
         # import ipdb;ipdb.set_trace()
@@ -210,7 +212,8 @@ class DeepMD(nn.Module):
         # print((fitting_time - G_time).seconds)
 
         mask = torch.ones_like(Ei)
-        dE = torch.autograd.grad(Ei, image_dR_xyz, grad_outputs=mask, retain_graph=True, create_graph=True)
+        # dE = torch.autograd.grad(Ei, image_dR_xyz, grad_outputs=mask, retain_graph=True, create_graph=True)
+        dE = torch.autograd.grad(Ei, image_dR, grad_outputs=mask, retain_graph=True, create_graph=True)
         # autograd_time = datetime.datetime.now()
         # print("auto grad time:")
         # print((autograd_time - fitting_time).seconds)

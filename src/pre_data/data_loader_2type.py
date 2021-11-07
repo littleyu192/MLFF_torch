@@ -126,7 +126,10 @@ class MovementDataset(Dataset):
         self.use_dR_neigh = False
         if dR_neigh_path:
             self.use_dR_neigh = True
-            self.dR_neigh = np.load(dR_neigh_path)
+            tmp = np.load(dR_neigh_path)
+            self.dR = tmp[:,:,:3]
+            self.dR_neigh_list = np.squeeze(tmp[:,:,3:],axis=-1)
+            # import ipdb;ipdb.set_trace()
 
         # label = pd.read_csv(label_path)
         # labels_Fi = [str(x) + "_f" for x in range(324)]
@@ -158,7 +161,8 @@ class MovementDataset(Dataset):
             # 'output_Fi_pwmat': torch.from_numpy(np.array(self.labels_Fi[index:index + 1])[0]).float(),
         }
         if self.use_dR_neigh:
-            dic['input_dR_neigh'] = self.dR_neigh[self.ind_img[index]:self.ind_img[index+1]]
+            dic['input_dR'] = self.dR[self.ind_img[index]:self.ind_img[index+1]]
+            dic['input_dR_neigh_list'] = self.dR_neigh_list[self.ind_img[index]:self.ind_img[index+1]]
         return dic
 
     def __len__(self):

@@ -410,13 +410,14 @@ def pretrain(sample_batches, premodel, optimizer, criterion):
     egroup_weight = Variable(sample_batches['input_egroup_weight'].float().to(device))
     divider = Variable(sample_batches['input_divider'].float().to(device))
     if pm.dR_neigh:
-        dR_neigh = Variable(sample_batches['input_dR_neigh'].double().to(device), requires_grad=True)
+        dR = Variable(sample_batches['input_dR'].double().to(device), requires_grad=True)
+        dR_neigh_list = Variable(sample_batches['input_dR_neigh_list'].to(device))
 
     optimizer.zero_grad()
     model = premodel.to(device)
     # model.train()
     if opt_deepmd:
-        Etot_predict, Ei_predict = model(dR_neigh)
+        Etot_predict, Ei_predict = model(dR, dR_neigh_list)
     else:
         Etot_predict, Ei_predict = model(input_data)
     dump("==========Etot predict==========")
@@ -452,7 +453,8 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
         egroup_weight = Variable(sample_batches['input_egroup_weight'].double().to(device))
         divider = Variable(sample_batches['input_divider'].double().to(device))
         if pm.dR_neigh:
-            dR_neigh = Variable(sample_batches['input_dR_neigh'].double().to(device), requires_grad=True)
+            dR = Variable(sample_batches['input_dR'].double().to(device), requires_grad=True)
+            dR_neigh_list = Variable(sample_batches['input_dR_neigh_list'].to(device))
     elif (opt_dtype == 'float32'):
         Ei_label = Variable(sample_batches['output_energy'][:,:,:].float().to(device))
         Force_label = Variable(sample_batches['output_force'][:,:,:].float().to(device))   #[40,108,3]
@@ -462,7 +464,8 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
         egroup_weight = Variable(sample_batches['input_egroup_weight'].float().to(device))
         divider = Variable(sample_batches['input_divider'].float().to(device))
         if pm.dR_neigh:
-            dR_neigh = Variable(sample_batches['input_dR_neigh'].float().to(device), requires_grad=True)
+            dR = Variable(sample_batches['input_dR'].float().to(device), requires_grad=True)
+            dR_neigh_list = Variable(sample_batches['input_dR_neigh_list'].to(device))
     else:
         error("train(): unsupported opt_dtype %s" %opt_dtype)
         raise RuntimeError("train(): unsupported opt_dtype %s" %opt_dtype)
@@ -495,7 +498,7 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
     # import ipdb;ipdb.set_trace()
 
     if opt_deepmd:
-        Etot_predict, Ei_predict, Force_predict = model(dR_neigh, neighbor)
+        Etot_predict, Ei_predict, Force_predict = model(dR, dR_neigh_list)
     else:
         Etot_predict, Ei_predict, Force_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
     
