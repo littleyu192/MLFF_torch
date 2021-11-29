@@ -1,3 +1,5 @@
+from sys import path
+from builtins import print
 from re import S
 import numpy as np
 import torch
@@ -65,14 +67,16 @@ class preDeepMD(nn.Module):
     
     def smooth(self, x, mask):
         # return x
+        rmin = 5.8     # set rcut=10, min=0,max=30
+        rmax = 6.0     # set rcut=25,
         res = torch.zeros_like(x)
-        mask_min = x < 10   #set rcut=25, 10  min=0,max=30
+        mask_min = x < rmin
         mask_1 = mask & mask_min  #[2,108,100]
         res[mask_1] = 1/x[mask_1]
         # import ipdb; ipdb.set_trace()
-        # mask_max = x < 25
-        # mask_2 = ~mask_min & mask_max
-        # res[mask_2] = 0.5 * torch.cos(math.pi * (x[mask_2]-10)/(25-10)) + 0.5 * torch.ones_like(x[mask_2])
+        mask_max = x < rmax
+        mask_2 = ~mask_min & mask_max
+        res[mask_2] = 0.5 * torch.cos(math.pi * (x[mask_2]-rmin)/(rmax-rmin)) + 0.5 * torch.ones_like(x[mask_2])
         # import ipdb; ipdb.set_trace()
         return res
     
@@ -113,17 +117,24 @@ class preDeepMD(nn.Module):
         DR = torch.matmul(tmpA, tmpB).reshape(batch_size, natoms, -1)
         Ei = self.fitting_net(DR)
         Etot = torch.sum(Ei, 1)
+        # Etot.shape:[2,1], Ei.shape:[2,108,1]
+        print("Etot[0,0] and Ei[0,1]")
+        print(Etot[0,0])
+        print(Ei[0,0])
         return Etot, Ei
 
 
 class DeepMD(nn.Module):
-    def __init__(self, net_cfg, activation_type, device, magic=False):
+    def __init__(self, net_cfg, activation_type, device, stat, magic=False):
         super(DeepMD, self).__init__()
         # config parameters
         self.atomType = pm.atomType
         self.natoms = pm.natoms[0]
         self.device = device
         self.dim_feat = pm.nFeatures
+        # [0: avg, 1: std, 2: ener_shift]
+        self.stat = stat
+
         # network
         if (net_cfg == 'default'):
             self.net_cfg = pm.MLFF_autograd_cfg
@@ -137,20 +148,35 @@ class DeepMD(nn.Module):
         
         self.embeding_net = EmbedingNet(self.net_cfg['embeding_net'], magic)
         fitting_net_input_dim = self.net_cfg['embeding_net']['network_size'][-1]
-        self.fitting_net = FittingNet(self.net_cfg['fitting_net'], 16 * fitting_net_input_dim, magic)
+        self.fitting_net = FittingNet(self.net_cfg['fitting_net'], 16 * fitting_net_input_dim, self.stat[2], magic)
     
-    def smooth(self, x, mask):
-        # return x
+    def smooth(self, x, Ri_xyz, mask, davg, dstd):
         res = torch.zeros_like(x)
-        mask_min = x < 10   #set rcut=25, 10  min=0,max=30
+
+        # x < rcut_min vv = 1
+        mask_min = torch.abs(x) < 5.8   #set rcut=25, 10  min=0,max=30
         mask_1 = mask & mask_min  #[2,108,100]
         res[mask_1] = 1/x[mask_1]
+
+        # rcut_min< x < rcut_max
+        mask_max = torch.abs(x) < 6.0
+        mask_2 = ~mask_min & mask_max
+        # uu = (xx - rmin) / (rmax - rmin) ;
+        uu = torch.zeros_like(x)
+        vv = torch.zeros_like(x)
+        uu[mask_2] = (x[mask_2] - 5.8)/(6.0 -5.8)
+        vv[mask_2] = uu[mask_2] * uu[mask_2] * uu[mask_2] * (-6 * uu[mask_2] * uu[mask_2] + 15 * uu[mask_2] - 10) + 1
+        res[mask_2] = vv[mask_2] / x[mask_2]
+
+        vv = vv.unsqueeze(-1).repeat(1, 1, 1, 3)
+        Ri_xyz[mask_2] *= vv[mask_2]
+
+        Ri = torch.cat((res.unsqueeze(-1), Ri_xyz), dim=-1)
+
+        Ri = (Ri - davg) / dstd
         # import ipdb; ipdb.set_trace()
-        # mask_max = x < 25
-        # mask_2 = ~mask_min & mask_max
         # res[mask_2] = 0.5 * torch.cos(math.pi * (x[mask_2]-10)/(25-10)) + 0.5 * torch.ones_like(x[mask_2])
-        # import ipdb; ipdb.set_trace()
-        return res
+        return Ri
     
     def sec_to_hms(seconds):
         m, s = divmod(seconds, 60)
@@ -163,46 +189,35 @@ class DeepMD(nn.Module):
         batch_size = image_dR.shape[0]
         natoms = image_dR.shape[1]
         neighbor_num = image_dR.shape[2]
-        # list_neigh = image_dR[:,:,:,3]  #[2,108,100]
-        # image_dR_xyz = image_dR[:,:,:,:3]
-        # dR2 = torch.sum(image_dR_xyz * image_dR_xyz, -1) #[2,108,100]
-        dR2 = torch.sum(image_dR * image_dR, -1) #[2,108,100]
-        # Rij = torch.pow(dR2, 0.5)
-        Rij = torch.sqrt(dR2)  
-        # import ipdb;ipdb.set_trace()
-        # image_000 = torch.zeros([1,3], device=self.device)
-        # dR2 = torch.cdist(image_dR_xyz, image_000, 2)
-        Rij = dR2
-        mask = list_neigh > 0
-        S_Rij = self.smooth(Rij.squeeze(-1), mask)
-        # import ipdb;ipdb.set_trace()
-        Ri = torch.zeros((batch_size, natoms, neighbor_num, 4), device=self.device)
 
-        Ri[:, :, :, 0] = S_Rij
-        
-        for batch_idx in range(batch_size):
-            for i in range(natoms):
-                # neighbor_tmp = Rij[batch_idx, i].nonzero().squeeze().type(torch.int64)
-                for neighbor_tmp in range(neighbor_num):
-                    if list_neigh[batch_idx, i, neighbor_tmp] > 0:
-                        Ri[batch_idx, i, neighbor_tmp, 1] = S_Rij[batch_idx, i, neighbor_tmp] * image_dR[batch_idx, i, neighbor_tmp, 0] / Rij[batch_idx, i, neighbor_tmp]
-                        Ri[batch_idx, i, neighbor_tmp, 2] = S_Rij[batch_idx, i, neighbor_tmp] * image_dR[batch_idx, i, neighbor_tmp, 1] / Rij[batch_idx, i, neighbor_tmp]
-                        Ri[batch_idx, i, neighbor_tmp, 3] = S_Rij[batch_idx, i, neighbor_tmp] * image_dR[batch_idx, i, neighbor_tmp, 2] / Rij[batch_idx, i, neighbor_tmp]
-                    else:
-                        break
-        
-        S_Rij = S_Rij.unsqueeze(-1)
-        # Rtuta_time = datetime.datetime.now()
-        # print("R~ prepare time:")
-        # print((Rtuta_time - starttime).seconds)
+        mask = list_neigh > 0
+
+        dR2 = torch.zeros_like(list_neigh)
+        Rij = torch.zeros_like(list_neigh)
+        dR2[mask] = torch.sum(image_dR[mask] * image_dR[mask], -1) #[2,108,100]
+        Rij[mask] = torch.sqrt(dR2[mask])
+
+        nr = torch.zeros_like(dR2)
+        Ri_xyz = torch.zeros((batch_size, natoms, neighbor_num, 3), device=self.device)
+        dR2_copy = dR2.unsqueeze(-1).repeat(1, 1, 1, 3)
+
+        nr[mask] = dR2[mask] / Rij[mask]
+        Ri_xyz[mask] = image_dR[mask] / dR2_copy[mask]
+        davg = torch.tensor(self.stat[0], device=self.device)
+        dstd = torch.tensor(self.stat[1], device=self.device)
+        Ri = self.smooth(nr, Ri_xyz, mask, davg, dstd)
+        S_Rij = Ri[:, :, :, 0].unsqueeze(-1)
+        # import ipdb; ipdb.set_trace()
+
         G = self.embeding_net(S_Rij)
-        # G_time = datetime.datetime.now()
-        # print("embedding net time:")
-        # print((G_time - Rtuta_time).seconds)
-        G_t = G[:, :, :, :16].transpose(-2, -1)
-        tmpA = torch.matmul(G_t, Ri)
-        tmpB = torch.matmul(Ri.transpose(-2, -1), G)
-        DR = torch.matmul(tmpA, tmpB).reshape(batch_size, natoms, -1)
+        tmpA = torch.matmul(Ri.transpose(-2, -1), G)
+        tmpA *= 0.01 # batch 108 4 100
+        tmpB = tmpA[:, :, :, :16]
+
+        DR = torch.matmul(tmpA.transpose(-2, -1), tmpB)
+        DR = DR.reshape(batch_size, natoms, -1)
+
+        # import ipdb; ipdb.set_trace()
         # DR_time = datetime.datetime.now()
         # print("rotation GRRG time:")
         # print((G_time - Rtuta_time).seconds)
@@ -212,7 +227,6 @@ class DeepMD(nn.Module):
         # print((fitting_time - G_time).seconds)
 
         mask = torch.ones_like(Ei)
-        # dE = torch.autograd.grad(Ei, image_dR_xyz, grad_outputs=mask, retain_graph=True, create_graph=True)
         dE = torch.autograd.grad(Ei, image_dR, grad_outputs=mask, retain_graph=True, create_graph=True)
         # autograd_time = datetime.datetime.now()
         # print("auto grad time:")
@@ -239,15 +253,28 @@ class DeepMD(nn.Module):
                 for neigh_tmp in atom_idx:
                     j_neighbor = list_neigh[batch_idx, neigh_tmp]
                     neighbor_id = (j_neighbor == i+1).nonzero().squeeze()
-                    dEtot[batch_idx, i, :] -= dE[batch_idx, neigh_tmp, neighbor_id, :3]
+                    # print(neighbor_id)
+                    # dEtot[batch_idx, i, :] -= dE[batch_idx, neigh_tmp, neighbor_id, :3]
+                    if neighbor_id.dim() > 0:
+                        tmp = dE[batch_idx, neigh_tmp, neighbor_id, :3].sum(-2)
+                    else:
+                        tmp = dE[batch_idx, neigh_tmp, neighbor_id, :3]
+                    dEtot[batch_idx, i, :] -= tmp
+                    
+                    # for i in range([int(x) for x in neighbor_id.shape][0]):
+                    #     neighbor_idx = neighbor_idx.tolist()
+                    #     dEtot[batch_idx, i, :] -= dE[batch_idx, neigh_tmp, neighbor_id[i], :3]
+
+                # import ipdb;ipdb.set_trace()
                 Force[batch_idx, i, :] = -dEtot[batch_idx, i, :]
-            # import ipdb;ipdb.set_trace()
+            
         # calcF_time = datetime.datetime.now()
         # print("fitting net time:")
         # print((calcF_time - autograd_time).seconds)
-        print("Ei[0,5] & Etot[0,5] & Force[0,5,:]:")
-        print(Ei[0,5])
-        print(Etot[0,0])
-        print(Force[0,5,:])
-        import ipdb;ipdb.set_trace()
+        
+        # print("Ei[0,5] & Etot[0,5] & Force[0,5,:]:")
+        # print(Ei[0,5].item())
+        # print(Etot[0,0].item())
+        # print(Force[0,5,:].tolist())
+        # import ipdb;ipdb.set_trace()
         return Etot, Ei, Force

@@ -3,6 +3,7 @@
 import os
 import sys
 import re
+from ipdb.__main__ import set_trace
 import pandas as pd
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
@@ -107,6 +108,9 @@ class MovementDataset(Dataset):
                  itype_path, nblist_path,weight_all_path,
                  energy_path, force_path, ind_img_path, dR_neigh_path=None):  # , natoms_path
         super(MovementDataset, self).__init__()
+
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
         self.feat=np.load(feat_path)
         self.dfeat=np.load(dfeat_path)
         self.egroup=np.load(egroup_path)
@@ -129,7 +133,10 @@ class MovementDataset(Dataset):
             tmp = np.load(dR_neigh_path)
             self.dR = tmp[:,:,:3]
             self.dR_neigh_list = np.squeeze(tmp[:,:,3:],axis=-1)
-            # import ipdb;ipdb.set_trace()
+
+            self.__compute_stat(1)
+            self.__compute_stat_output(1)
+            
 
         # label = pd.read_csv(label_path)
         # labels_Fi = [str(x) + "_f" for x in range(324)]
@@ -163,11 +170,119 @@ class MovementDataset(Dataset):
         if self.use_dR_neigh:
             dic['input_dR'] = self.dR[self.ind_img[index]:self.ind_img[index+1]]
             dic['input_dR_neigh_list'] = self.dR_neigh_list[self.ind_img[index]:self.ind_img[index+1]]
+            dic['input_davg'] = self.davg
+            dic['input_dstd'] = self.dstd
+            dic['input_ener_shift'] = self.ener_shift
+            # import ipdb;ipdb.set_trace()
         return dic
 
     def __len__(self):
         image_number = self.ind_img.shape[0] - 1 
         return image_number
+    
+    def __compute_std(self, sum2, sum, sumn):
+        if sumn == 0:
+            return 1e-2
+        val = np.sqrt(sum2/sumn - np.multiply(sum/sumn, sum/sumn))
+        if np.abs(val) < 1e-2:
+            val = 1e-2
+        return val
+
+    def __smooth(self, x, Ri_xyz, mask):
+        res = torch.zeros_like(x)
+
+        # x < rcut_min vv = 1
+        mask_min = torch.abs(x) < 5.8   #set rcut=25, 10  min=0,max=30
+        mask_1 = mask & mask_min  #[2,108,100]
+        res[mask_1] = 1/x[mask_1]
+
+        # rcut_min< x < rcut_max
+        mask_max = torch.abs(x) < 6.0
+        mask_2 = ~mask_min & mask_max
+        # uu = (xx - rmin) / (rmax - rmin) ;
+        uu = torch.zeros_like(x)
+        vv = torch.zeros_like(x)
+        uu[mask_2] = (x[mask_2] - 5.8)/(6.0 -5.8)
+        vv[mask_2] = uu[mask_2] * uu[mask_2] * uu[mask_2] * (-6 * uu[mask_2] * uu[mask_2] + 15 * uu[mask_2] - 10) + 1
+        res[mask_2] = vv[mask_2] / x[mask_2]
+
+        vv = vv.unsqueeze(-1).repeat(1, 1, 1, 3)
+        Ri_xyz[mask_2] *= vv[mask_2]
+
+        Ri = torch.cat((res.unsqueeze(-1), Ri_xyz), dim=-1)
+        # res[mask_2] = 0.5 * torch.cos(math.pi * (x[mask_2]-10)/(25-10)) + 0.5 * torch.ones_like(x[mask_2])
+        return Ri
+
+    def __compute_stat(self, image_num = 10):
+        # only for one atom type
+        if image_num > self.__len__():
+            image_num = self.__len__()
+        image_dR = self.dR[self.ind_img[0]:self.ind_img[image_num]]
+        list_neigh = self.dR_neigh_list[self.ind_img[0]:self.ind_img[image_num]]
+        image_dR = np.reshape(image_dR, (-1, self.natoms[0], pm.maxNeighborNum, 3))
+        list_neigh = np.reshape(list_neigh, (-1, self.natoms[0], pm.maxNeighborNum))
+
+        image_dR = torch.tensor(image_dR, device=self.device)
+        list_neigh = torch.tensor(list_neigh, device=self.device)
+
+        mask = list_neigh > 0
+
+        dR2 = torch.zeros_like(list_neigh)
+        Rij = torch.zeros_like(list_neigh)
+        dR2[mask] = torch.sum(image_dR[mask] * image_dR[mask], -1) 
+        Rij[mask] = torch.sqrt(dR2[mask])
+        
+        nr = torch.zeros_like(dR2)
+        Ri_xyz = torch.zeros((image_num, self.natoms[0], pm.maxNeighborNum, 3), device=self.device)
+        dR2_copy = dR2.unsqueeze(-1).repeat(1, 1, 1, 3)
+
+        nr[mask] = dR2[mask] / Rij[mask]
+        Ri_xyz[mask] = image_dR[mask] / dR2_copy[mask]
+        Ri = self.__smooth(nr, Ri_xyz, mask)
+
+        Ri = Ri.reshape((-1, 4))
+        Ri2 = Ri * Ri
+        
+        sum_Ri = Ri.sum(axis=0).tolist()
+        sum_Ri_r = sum_Ri[0]
+        sum_Ri_a = np.average(sum_Ri[1:])
+        sum_Ri2 = Ri2.sum(axis=0).tolist()
+        sum_Ri2_r = sum_Ri2[0]
+        sum_Ri2_a = np.average(sum_Ri2[1:])
+        sum_n = Ri.shape[0]
+
+        davg_unit = [sum_Ri[0] / (sum_n + 1e-15), 0, 0, 0]
+        dstd_unit = [
+            self.__compute_std(sum_Ri2_r, sum_Ri_r, sum_n),
+            self.__compute_std(sum_Ri2_a, sum_Ri_a, sum_n),
+            self.__compute_std(sum_Ri2_a, sum_Ri_a, sum_n),
+            self.__compute_std(sum_Ri2_a, sum_Ri_a, sum_n)
+        ]
+
+        self.davg = np.tile(davg_unit, pm.maxNeighborNum).reshape(-1, 4)
+        self.dstd = np.tile(dstd_unit, pm.maxNeighborNum).reshape(-1, 4)
+    
+    def __compute_stat_output(self, image_num = 10,  rcond = 1e-3):
+        # only for one atom type
+        if image_num > self.__len__():
+            image_num = self.__len__()
+        energy = self.energy[self.ind_img[0]:self.ind_img[image_num]]
+        energy = np.reshape(energy, (-1, self.natoms[0], 1))
+        etot = energy.sum(axis=1)
+        natoms = np.ones_like(etot) * self.natoms[0]
+        ener_shift, _, _, _ = np.linalg.lstsq(natoms, etot, rcond = rcond)
+        self.ener_shift = ener_shift[0, 0]
+    
+
+    def get_stat(self, image_num=10, rcond=1e-3):
+        # image_num = batch_size * batch_stat_num
+        self.__compute_stat(image_num)
+        self.__compute_stat_output(image_num, rcond)
+        return self.davg, self.dstd, self.ener_shift
+
+
+
+
 
 def get_pwmat_data(movement_filename, train_data_file_frompwmat, test_data_file_frompwmat):
     movement_filename = pm.trainSetDir+'/MOVEMENT'

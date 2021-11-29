@@ -43,7 +43,9 @@ opt_magic = False
 opt_follow_mode = False
 opt_recover_mode = False
 opt_net_cfg = 'default'
-opt_act = 'sigmoid'
+# opt_act = 'sigmoid'
+# opt_act = 'tanh'
+opt_act = 'softplus'
 opt_optimizer = 'ADAM'
 opt_momentum = float(0)
 opt_regular_wd = float(0)
@@ -379,7 +381,10 @@ def test(sample_batches, model, criterion):
         egroup_weight = Variable(sample_batches['input_egroup_weight'].double().to(device))
         divider = Variable(sample_batches['input_divider'].double().to(device))
         if pm.dR_neigh:
-            dR_neigh = Variable(sample_batches['input_dR_neigh'].double().to(device), requires_grad=True)
+            dR = Variable(sample_batches['input_dR'].double().to(device), requires_grad=True)
+            dR_neigh_list = Variable(sample_batches['input_dR_neigh_list'].to(device))
+            dstd = Variable(sample_batches['input_dstd'].double().to(device))
+            davg = Variable(sample_batches['input_davg'].double().to(device))
     elif (opt_dtype == 'float32'):
         Ei_label = Variable(sample_batches['output_energy'][:,:,:].float().to(device))
         Force_label = Variable(sample_batches['output_force'][:,:,:].float().to(device))   #[40,108,3]
@@ -389,8 +394,11 @@ def test(sample_batches, model, criterion):
         egroup_weight = Variable(sample_batches['input_egroup_weight'].float().to(device))
         divider = Variable(sample_batches['input_divider'].float().to(device))
         if pm.dR_neigh:
-            dR_neigh = Variable(sample_batches['input_dR_neigh'].float().to(device), requires_grad=True)
-    else:
+            dR = Variable(sample_batches['input_dR'].float().to(device), requires_grad=True)
+            dR_neigh_list = Variable(sample_batches['input_dR_neigh_list'].to(device))
+            dstd = Variable(sample_batches['input_dstd'].float().to(device))
+            davg = Variable(sample_batches['input_davg'].float().to(device))
+
         error("test(): unsupported opt_dtype %s" %opt_dtype)
         raise RuntimeError("train(): unsupported opt_dtype %s" %opt_dtype)
 
@@ -415,18 +423,18 @@ def test(sample_batches, model, criterion):
     # force_predict, Etot_predict, Ei_predict, Egroup_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
 
     if opt_deepmd:
-        Etot_predict, Ei_predict, Force_predict = model(dR_neigh, neighbor)
+        Etot_predict, Ei_predict, Force_predict = model(dR, dR_neigh_list, davg, dstd)
     else:
         Etot_predict, Ei_predict, Force_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
     
-    dump("etot predict =============================================>")
-    dump(Etot_predict)
-    dump("etot label ===============================================>")
-    dump(Etot_label)
-    dump("force predict ============================================>")
-    dump(Force_predict)
-    dump("force label ==============================================>")
-    dump(Force_label)
+    print("etot predict =============================================>")
+    print(Etot_predict)
+    print("etot label ===============================================>")
+    print(Etot_label)
+    print("force predict ============================================>")
+    print(Force_predict)
+    print("force label ==============================================>")
+    print(Force_label)
    
     loss_F = criterion(Force_predict, Force_label)
     loss_Etot = criterion(Etot_predict, Etot_label)
@@ -479,7 +487,7 @@ else:
     model = MLFF(opt_net_cfg, opt_act, device, opt_magic, opt_autograd)
 model.to(device)
 
-path = r"../cu1000_5/model/latest.pt"
+path = r"../cu1000_5/update1122/model/4.pt"
 checkpoint = torch.load(path)
 model.load_state_dict(checkpoint['model'])
 # if opt_follow_mode==True:
@@ -502,8 +510,8 @@ loss_F = 0.
 for i_batch, sample_batches in enumerate(loader_test):
     batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
         test(sample_batches, model, nn.MSELoss())
-    print("batch_loss:" + str(batch_loss))
-    print("batch loss F:" + str(batch_loss_F))
+    print("mse etot:" + str(batch_loss_Etot))
+    print("mse F:" + str(batch_loss_F))
     nr_batch_sample = sample_batches['input_feat'].shape[0]
     debug("nr_batch_sample = %s" %nr_batch_sample)
     loss += batch_loss * nr_batch_sample

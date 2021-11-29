@@ -23,7 +23,7 @@ sys.path.append(os.getcwd())
 # 生成测试数据（十份里的第5份）
 filename = './PWdata/MOVEMENTraw'    #原始文件
 split_folds = 10                  #划分成若干份
-ifold = 6                         # 生成第i份
+ifold = 5                         # 生成第i份
 ifold_file = r'./PWdata/temp1'  
 
 
@@ -80,5 +80,5 @@ with open(ifold_file, 'w') as n:
 
 #########################################################
 # 生成测试数据后文件重命名
-os.rename(ifold_file, './mytest/MOVEMENT')
+# os.rename(ifold_file, './mytest/MOVEMENT')
 

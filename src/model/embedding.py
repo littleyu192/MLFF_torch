@@ -52,9 +52,9 @@ class EmbedingNet(nn.Module):
             hiden = self.cfg['activation'](hiden)
             if self.network_size[i] == self.network_size[i-1]:
                 if self.cfg['resnet_dt']:
-                    x += hiden * self.resnet_dt['resnet_dt' + str(i-1)]
+                    x = hiden * self.resnet_dt['resnet_dt' + str(i-1)] + x
                 else:
-                    x += hiden
+                    x = hiden + x
             elif self.network_size[i] == 2 * self.network_size[i-1]:
                 if self.cfg['resnet_dt']:
                     x = torch.cat((x, x), dim=-1)  + hiden * self.resnet_dt['resnet_dt' + str(i-1)]
@@ -64,29 +64,56 @@ class EmbedingNet(nn.Module):
                 x = hiden
         return x
 
+
 class FittingNet(nn.Module):
-    def __init__(self, cfg, input_dim, magic=False):
+
+    def __init__(self, cfg, input_dim, ener_shift, magic=False):
         super(FittingNet, self).__init__()
         self.cfg = cfg
         self.weights = nn.ParameterDict()
         if cfg['bias']:
             self.bias = nn.ParameterDict()
+        if self.cfg['resnet_dt']:
+            self.resnet_dt = nn.ParameterDict()
+        
         self.network_size = [input_dim] + self.cfg['network_size']
 
-        for i in range(1, len(self.network_size)):
+        for i in range(1, len(self.network_size)-1):
             self.weights["weight" + str(i-1)] = nn.Parameter(torch.randn(self.network_size[i-1], self.network_size[i]), requires_grad=True) 
             if self.cfg['bias']:
-                self.bias["bias" + str(i-1)] = nn.Parameter(torch.randn(1, self.network_size[i]), requires_grad=True) 
+                self.bias["bias" + str(i-1)] = nn.Parameter(torch.randn(1, self.network_size[i]), requires_grad=True)
+            if i > 1 and self.cfg['resnet_dt']:
+                self.resnet_dt["resnet_dt" + str(i-1)] = nn.Parameter(torch.randn(1, self.network_size[i]), requires_grad=True)
+        
+        i = len(self.network_size) - 1
+        
+        self.weights["weight" + str(i-1)] = nn.Parameter(torch.randn(self.network_size[i-1], self.network_size[i]), requires_grad=True) 
+        if self.cfg['bias']:
+            bias_init = torch.randn(1, self.network_size[i])
+            torch.nn.init.normal_(bias_init, mean=ener_shift, std=1.0)
+            self.bias["bias" + str(i-1)] = nn.Parameter(bias_init, requires_grad=True)       # 初始化指定均值
+        
 
     def forward(self, x):
         for i in range(1, len(self.network_size) - 1):
             if self.cfg['bias']:
-                x = torch.matmul(x, self.weights['weight' + str(i-1)]) + self.bias['bias' + str(i-1)]
+                hiden = torch.matmul(x, self.weights['weight' + str(i-1)]) + self.bias['bias' + str(i-1)]
             else:
-                x = torch.matmul(x, self.weights['weight' + str(i-1)])
+                hiden = torch.matmul(x, self.weights['weight' + str(i-1)])
             
-            x = self.cfg['activation'](x)
+            hiden = self.cfg['activation'](hiden)
+            
+            if i > 1:
+                if self.network_size[i] == self.network_size[i-1] and self.cfg['resnet_dt']:
+                    x = hiden * self.resnet_dt['resnet_dt' + str(i-1)] + x
+                else:
+                    x = hiden + x
+                x = hiden
+            else:
+                x = hiden
+
         i = len(self.network_size) - 1
+
         if self.cfg['bias']:
             x = torch.matmul(x, self.weights['weight' + str(i-1)]) + self.bias['bias' + str(i-1)]
         else:

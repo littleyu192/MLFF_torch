@@ -381,7 +381,7 @@ def get_loss_func(start_lr, real_lr, has_fi, lossFi, has_etot, loss_Etot, has_eg
     pref_fi = has_fi * (limit_pref_F + (start_pref_F - limit_pref_F) * real_lr / start_lr)
     pref_etot = has_etot * (limit_pref_etot + (start_pref_etot - limit_pref_etot) * real_lr / start_lr)
     pref_egroup = has_egroup * (limit_pref_egroup + (start_pref_egroup - limit_pref_egroup) * real_lr / start_lr)
-    pref_ei = has_egroup * (limit_pref_ei + (start_pref_ei - limit_pref_ei) * real_lr / start_lr)
+    pref_ei = has_ei * (limit_pref_ei + (start_pref_ei - limit_pref_ei) * real_lr / start_lr)
     l2_loss = 0
     if has_fi:
         l2_loss += pref_fi * lossFi
@@ -441,7 +441,7 @@ def pretrain(sample_batches, premodel, optimizer, criterion):
     loss = w_e * loss_Etot + w_ei * loss_Ei
     return loss, loss_Etot, loss_Ei
 
-def train(sample_batches, model, optimizer, criterion, last_epoch):
+def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
     # floating part of sample_batches, cast to specified opt_dtype
     #
     if (opt_dtype == 'float64'):
@@ -455,6 +455,7 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
         if pm.dR_neigh:
             dR = Variable(sample_batches['input_dR'].double().to(device), requires_grad=True)
             dR_neigh_list = Variable(sample_batches['input_dR_neigh_list'].to(device))
+
     elif (opt_dtype == 'float32'):
         Ei_label = Variable(sample_batches['output_energy'][:,:,:].float().to(device))
         Force_label = Variable(sample_batches['output_force'][:,:,:].float().to(device))   #[40,108,3]
@@ -466,6 +467,7 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
         if pm.dR_neigh:
             dR = Variable(sample_batches['input_dR'].float().to(device), requires_grad=True)
             dR_neigh_list = Variable(sample_batches['input_dR_neigh_list'].to(device))
+
     else:
         error("train(): unsupported opt_dtype %s" %opt_dtype)
         raise RuntimeError("train(): unsupported opt_dtype %s" %opt_dtype)
@@ -585,8 +587,16 @@ def train(sample_batches, model, optimizer, criterion, last_epoch):
     loss_Ei = criterion(Ei_predict, Ei_label)
     w_ei = 1
     loss = pm.rtLossF * loss_F+ pm.rtLossEtot * loss_Etot + w_ei * loss_Ei
+    # loss = loss_Ei
     #info("loss = %.16f (loss_etot = %.16f, loss_force = %.16f, RMSE_etot = %.16f, RMSE_force = %.16f)" %(loss, loss_Etot, loss_F, loss_Etot ** 0.5, loss_F ** 0.5))
-
+    
+    start_lr = 0.1
+    w_f = 1
+    w_e = 0
+    w_eg = 0
+    loss_Egroup = 0
+    w_ei = 1
+    loss = get_loss_func(start_lr, real_lr, w_f, loss_F, w_e, loss_Etot, w_eg, loss_Egroup, w_ei, loss_Ei)
 
     #w_f = loss_Etot / (loss_Etot + loss_F)
     #w_e = 1 - w_f
@@ -765,9 +775,12 @@ info("Scheduler: opt_LR_min_lr = %s" %opt_LR_min_lr)
 info("Scheduler: opt_LR_T_max = %s" %opt_LR_T_max)
 info("scheduler: opt_autograd = %s" %opt_autograd)
 
-train_data_path=pm.train_data_path
+train_data_path = pm.train_data_path
 torch_train_data = get_torch_data(pm.natoms, train_data_path)
 loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=False)
+
+davg, dstd, ener_shift = torch_train_data.get_stat()
+stat = [davg, dstd, ener_shift]
 
 valid_data_path=pm.test_data_path
 torch_valid_data = get_torch_data(pm.natoms, valid_data_path)
@@ -795,7 +808,7 @@ if pm.isNNpretrain == True:
     data_scalers = DataScalers(f_ds=pm.f_data_scaler, f_feat=pm.f_train_feat, load=True)
     # deepmd model test
     if opt_deepmd:
-        model = preDeepMD(opt_net_cfg, opt_act, device, opt_magic)
+        model = preDeepMD(opt_net_cfg, opt_act, device, stat, opt_magic)
     else:
         model = preMLFF(opt_net_cfg, opt_act, device, opt_magic, opt_autograd)
 
@@ -949,7 +962,7 @@ if pm.isNNfinetuning == True:
 
     # deepmd model test
     if opt_deepmd:
-        model = DeepMD(opt_net_cfg, opt_act, device, opt_magic)
+        model = DeepMD(opt_net_cfg, opt_act, device, stat, opt_magic)
     else:
         model = MLFF(opt_net_cfg, opt_act, device, opt_magic, opt_autograd)
         # this is a temp fix for a quick test
@@ -972,6 +985,39 @@ if pm.isNNfinetuning == True:
             raise RuntimeError("you must run follow-mode from an existing session")
         opt_latest_file = opt_model_dir+'latest.pt'
         checkpoint = torch.load(opt_latest_file,map_location=device)
+        '''
+        跟deepmd对齐时的模型转换，直接从latest.pt continue时 注释下面一段
+
+        weight_path = "/home/husiyu/software/deepMD/deepmd-kit-gpu/dataset/cu1000/data"
+        # dict_keys(['global_step:0', 'descrpt_attr/t_avg:0', 'descrpt_attr/t_std:0', 'filter_type_0/matrix_1_0:0', 'filter_type_0/bias_1_0:0', 'filter_type_0/matrix_2_0:0', 'filter_type_0/bias_2_0:0', 'filter_type_0/matrix_3_0:0', 'filter_type_0/bias_3_0:0', 'layer_0_type_0/matrix:0', 'layer_0_type_0/bias:0', 'layer_1_type_0/matrix:0', 'layer_1_type_0/bias:0', 'layer_1_type_0/idt:0', 'layer_2_type_0/matrix:0', 'layer_2_type_0/bias:0', 'layer_2_type_0/idt:0', 'final_layer_type_0/matrix:0', 'final_layer_type_0/bias:0', 'beta1_power:0', 'beta2_power:0'])
+        # odict_keys(['embeding_net.weights.weight0', 'embeding_net.weights.weight1', 'embeding_net.weights.weight2', 'embeding_net.bias.bias0', 'embeding_net.bias.bias1', 'embeding_net.bias.bias2', 'embeding_net.resnet_dt.resnet_dt0', 'embeding_net.resnet_dt.resnet_dt1', 'embeding_net.resnet_dt.resnet_dt2', 'fitting_net.weights.weight0', 'fitting_net.weights.weight1', 'fitting_net.weights.weight2', 'fitting_net.weights.weight3', 'fitting_net.bias.bias0', 'fitting_net.bias.bias1', 'fitting_net.bias.bias2', 'fitting_net.bias.bias3'])
+        map_relation = {"embeding_net.weights.weight0" : "filter_type_0/matrix_1_0:0",  #(1,25)
+                        "embeding_net.bias.bias0" : "filter_type_0/bias_1_0:0",         #(1,25)
+                        "embeding_net.weights.weight1" : "filter_type_0/matrix_2_0:0",  #(25, 50)
+                        "embeding_net.bias.bias1" : "filter_type_0/bias_2_0:0",         #(1,50)
+                        "embeding_net.weights.weight2" : "filter_type_0/matrix_3_0:0",  #(50,100)
+                        "embeding_net.bias.bias2" : "filter_type_0/bias_3_0:0",        #(1,100)
+                        "fitting_net.weights.weight0" : "layer_0_type_0/matrix:0",     #(1600, 240)
+                        "fitting_net.bias.bias0" : "layer_0_type_0/bias:0",            #(1,240)-->(240,)
+                        "fitting_net.weights.weight1" : "layer_1_type_0/matrix:0",     #(240, 240)
+                        "fitting_net.bias.bias1" : "layer_1_type_0/bias:0",            #(1,240)-->(240,)
+                        "fitting_net.resnet_dt.resnet_dt1":"layer_1_type_0/idt:0",             # (1,240):(240,)
+                        "fitting_net.weights.weight2" : "layer_2_type_0/matrix:0",     #(240, 240)
+                        "fitting_net.bias.bias2" : "layer_2_type_0/bias:0",            #(1,240)-->(240,)
+                        "fitting_net.resnet_dt.resnet_dt2":"layer_2_type_0/idt:0",             #(240,) 
+                        "fitting_net.weights.weight3" : "final_layer_type_0/matrix:0", #(240, 1)
+                        "fitting_net.bias.bias3" : "final_layer_type_0/bias:0",        #(1,1)-->(1,)
+        }
+        deepmd_weight = np.load(weight_path + "/weights.npy", allow_pickle='TRUE').item()
+        model_weights = checkpoint['model']
+        for name, value in model_weights.items():
+            copying = torch.from_numpy(deepmd_weight[map_relation[name]])
+            if 'fitting_net.bias' in name or 'resnet' in name:
+                copying = copying.unsqueeze(0)
+            model_weights[name] = copying
+        '''
+        # import ipdb; ipdb.set_trace() 
+
         model.load_state_dict(checkpoint['model'])
         # optimizer.load_state_dict(checkpoint['optimizer'])
         start_epoch=checkpoint['epoch'] + 1
@@ -1076,9 +1122,10 @@ if pm.isNNfinetuning == True:
         loss_F = 0.
         for i_batch, sample_batches in enumerate(loader_train):
             batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
-                train(sample_batches, model, optimizer, nn.MSELoss(), last_epoch)
-            print("batch_loss:" + str(batch_loss))
-            print("batch loss F:" + str(batch_loss_F))
+                train(sample_batches, model, optimizer, nn.MSELoss(), last_epoch, lr)
+            print("batch mse etot:" + str(batch_loss_Etot.item()))
+            print("batch mse F:" + str(batch_loss_F.item()))
+            print("=============================")
             nr_batch_sample = sample_batches['input_feat'].shape[0]
             debug("nr_batch_sample = %s" %nr_batch_sample)
             loss += batch_loss * nr_batch_sample
@@ -1148,12 +1195,17 @@ if pm.isNNfinetuning == True:
                 file_name = opt_model_dir + str(epoch) + '.pt'
             torch.save(state, file_name)
 
+        # 打印dict info
         # for name, parameter in model.named_parameters():
-        #     f_err_log=pm.dir_work+ str(name) +'.txt'
-        #     if not os.path.isfile(f_err_log):
-        #         fid_err_log = open(f_err_log, 'w')
-        #     else:
-        #         fid_err_log = open(f_err_log, 'a')
+        #     print(name)
+        #     print(parameter.shape)
+        #     print("===========")
+        #     # f_err_log=pm.dir_work+ str(name) +'.txt'
+        #     # if not os.path.isfile(f_err_log):
+        #     #     fid_err_log = open(f_err_log, 'w')
+        #     # else:
+        #     #     fid_err_log = open(f_err_log, 'a')
+        # import ipdb;ipdb.set_trace()
         #     np.savetxt(fid_err_log, parameter.cpu().detach().numpy())
             
 
