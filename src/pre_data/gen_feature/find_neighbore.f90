@@ -111,6 +111,9 @@
       if(abs(dx3-1).lt.abs(dx3)) dx3=dx3-1
 
       dx=AL(1,1)*dx1+AL(1,2)*dx2+AL(1,3)*dx3
+
+      
+
       dy=AL(2,1)*dx1+AL(2,2)*dx2+AL(2,3)*dx3
       dz=AL(3,1)*dx1+AL(3,2)*dx2+AL(3,3)*dx3
       dd=dx**2+dy**2+dz**2

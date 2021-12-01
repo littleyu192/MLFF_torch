@@ -516,7 +516,6 @@ def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
     dump(Force_predict)
     dump("force label ==============================================>")
     dump(Force_label)
-
     if (last_epoch):
         summary("etot predict =============================================>")
         summary(Etot_predict)
@@ -987,7 +986,7 @@ if pm.isNNfinetuning == True:
         checkpoint = torch.load(opt_latest_file,map_location=device)
         '''
         跟deepmd对齐时的模型转换，直接从latest.pt continue时 注释下面一段
-
+        '''
         weight_path = "/home/husiyu/software/deepMD/deepmd-kit-gpu/dataset/cu1000/data"
         # dict_keys(['global_step:0', 'descrpt_attr/t_avg:0', 'descrpt_attr/t_std:0', 'filter_type_0/matrix_1_0:0', 'filter_type_0/bias_1_0:0', 'filter_type_0/matrix_2_0:0', 'filter_type_0/bias_2_0:0', 'filter_type_0/matrix_3_0:0', 'filter_type_0/bias_3_0:0', 'layer_0_type_0/matrix:0', 'layer_0_type_0/bias:0', 'layer_1_type_0/matrix:0', 'layer_1_type_0/bias:0', 'layer_1_type_0/idt:0', 'layer_2_type_0/matrix:0', 'layer_2_type_0/bias:0', 'layer_2_type_0/idt:0', 'final_layer_type_0/matrix:0', 'final_layer_type_0/bias:0', 'beta1_power:0', 'beta2_power:0'])
         # odict_keys(['embeding_net.weights.weight0', 'embeding_net.weights.weight1', 'embeding_net.weights.weight2', 'embeding_net.bias.bias0', 'embeding_net.bias.bias1', 'embeding_net.bias.bias2', 'embeding_net.resnet_dt.resnet_dt0', 'embeding_net.resnet_dt.resnet_dt1', 'embeding_net.resnet_dt.resnet_dt2', 'fitting_net.weights.weight0', 'fitting_net.weights.weight1', 'fitting_net.weights.weight2', 'fitting_net.weights.weight3', 'fitting_net.bias.bias0', 'fitting_net.bias.bias1', 'fitting_net.bias.bias2', 'fitting_net.bias.bias3'])
@@ -1015,7 +1014,7 @@ if pm.isNNfinetuning == True:
             if 'fitting_net.bias' in name or 'resnet' in name:
                 copying = copying.unsqueeze(0)
             model_weights[name] = copying
-        '''
+        
         # import ipdb; ipdb.set_trace() 
 
         model.load_state_dict(checkpoint['model'])
