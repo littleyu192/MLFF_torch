@@ -133,9 +133,6 @@ class MovementDataset(Dataset):
             tmp = np.load(dR_neigh_path)
             self.dR = tmp[:,:,:3]
             self.dR_neigh_list = np.squeeze(tmp[:,:,3:],axis=-1)
-
-            self.__compute_stat(1)
-            self.__compute_stat_output(1)
             
 
         # label = pd.read_csv(label_path)
@@ -189,28 +186,32 @@ class MovementDataset(Dataset):
         return val
 
     def __smooth(self, x, Ri_xyz, mask):
+
+        uu = torch.zeros_like(x)
+        vv = torch.zeros_like(x)
+        
         res = torch.zeros_like(x)
 
         # x < rcut_min vv = 1
-        mask_min = torch.abs(x) < 5.8   #set rcut=25, 10  min=0,max=30
+        mask_min = x < 5.8   #set rcut=25, 10  min=0,max=30
         mask_1 = mask & mask_min  #[2,108,100]
-        res[mask_1] = 1/x[mask_1]
+        vv[mask_1] = 1
 
         # rcut_min< x < rcut_max
-        mask_max = torch.abs(x) < 6.0
-        mask_2 = ~mask_min & mask_max
+        mask_max = x < 6.0
+        mask_2 = ~mask_min & mask_max & mask
         # uu = (xx - rmin) / (rmax - rmin) ;
-        uu = torch.zeros_like(x)
-        vv = torch.zeros_like(x)
         uu[mask_2] = (x[mask_2] - 5.8)/(6.0 -5.8)
         vv[mask_2] = uu[mask_2] * uu[mask_2] * uu[mask_2] * (-6 * uu[mask_2] * uu[mask_2] + 15 * uu[mask_2] - 10) + 1
-        res[mask_2] = vv[mask_2] / x[mask_2]
+        # dd = ( 3 * uu*uu * (-6 * uu*uu + 15 * uu - 10) + uu*uu*uu * (-12 * uu + 15) ) * du;
+ 
+        mask_3 = ~mask_max & mask
+        vv[mask_3] = 0
 
-        vv = vv.unsqueeze(-1).repeat(1, 1, 1, 3)
-        Ri_xyz[mask_2] *= vv[mask_2]
-
+        res[mask] = vv[mask] / x[mask]
+        vv_copy = vv.unsqueeze(-1).repeat(1, 1, 1, 3)
+        Ri_xyz[mask] *= vv_copy[mask]
         Ri = torch.cat((res.unsqueeze(-1), Ri_xyz), dim=-1)
-        # res[mask_2] = 0.5 * torch.cos(math.pi * (x[mask_2]-10)/(25-10)) + 0.5 * torch.ones_like(x[mask_2])
         return Ri
 
     def __compute_stat(self, image_num = 10):
@@ -225,10 +226,17 @@ class MovementDataset(Dataset):
         image_dR = torch.tensor(image_dR, device=self.device)
         list_neigh = torch.tensor(list_neigh, device=self.device)
 
+        # image_dR = torch.tensor(np.load("rij.npy"), device=self.device)
+        # list_neigh = torch.tensor(np.load("nblist.npy"), device=self.device)
+        # image_dR = image_dR.reshape(1, 108, 100, 3)
+        # list_neigh = list_neigh.reshape(1, 108, 100)
+        # list_neigh = list_neigh + 1
+
+        # deepmd neighbor id 从 0 开始，MLFF从1开始
         mask = list_neigh > 0
 
-        dR2 = torch.zeros_like(list_neigh)
-        Rij = torch.zeros_like(list_neigh)
+        dR2 = torch.zeros_like(list_neigh, dtype=torch.double)
+        Rij = torch.zeros_like(list_neigh, dtype=torch.double)
         dR2[mask] = torch.sum(image_dR[mask] * image_dR[mask], -1) 
         Rij[mask] = torch.sqrt(dR2[mask])
         
@@ -241,6 +249,8 @@ class MovementDataset(Dataset):
         Ri = self.__smooth(nr, Ri_xyz, mask)
 
         Ri = Ri.reshape((-1, 4))
+
+        np.save("torch_stat_Ri.npy", Ri.cpu().numpy())
         Ri2 = Ri * Ri
         
         sum_Ri = Ri.sum(axis=0).tolist()
@@ -261,6 +271,9 @@ class MovementDataset(Dataset):
 
         self.davg = np.tile(davg_unit, pm.maxNeighborNum).reshape(-1, 4)
         self.dstd = np.tile(dstd_unit, pm.maxNeighborNum).reshape(-1, 4)
+
+        np.save("torch_davg.npy", self.davg)
+        np.save("torch_dstd.npy", self.dstd)
     
     def __compute_stat_output(self, image_num = 10,  rcond = 1e-3):
         # only for one atom type
@@ -274,7 +287,7 @@ class MovementDataset(Dataset):
         self.ener_shift = ener_shift[0, 0]
     
 
-    def get_stat(self, image_num=10, rcond=1e-3):
+    def get_stat(self, image_num=1, rcond=1e-3):
         # image_num = batch_size * batch_stat_num
         self.__compute_stat(image_num)
         self.__compute_stat_output(image_num, rcond)

@@ -40,7 +40,7 @@ with dorcker:
 	cd the/path/to/data    # in parameter.py, make sure isCalcFeat=True && isFitLinModel=True
 	python the/path/to/MLFF_torch/src/bin/mlff.py
 	python the/path/to/MLFF_torch/src/bin/seper.py  # in parameter.py, test_ratio = 0.2 for default
-	python the/path/to/MLFF_torch/src/bin/seper.py 
+	python the/path/to/MLFF_torch/src/bin/gen_data.py 
 	# model train
 	# make sure isFitVdw=True && isCalcFeat=True && isFitLinModel=True && isNNfinetuning=True
 	python the/path/to/MLFF_torch/src/train.py

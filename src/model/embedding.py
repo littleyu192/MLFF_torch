@@ -108,14 +108,13 @@ class FittingNet(nn.Module):
                     x = hiden * self.resnet_dt['resnet_dt' + str(i-1)] + x
                 else:
                     x = hiden + x
-                x = hiden
             else:
                 x = hiden
-
+                
         i = len(self.network_size) - 1
 
         if self.cfg['bias']:
             x = torch.matmul(x, self.weights['weight' + str(i-1)]) + self.bias['bias' + str(i-1)]
         else:
-            x = torch.matmul(x, self.weights['weight' + str(i-1)]) 
+            x = torch.matmul(x, self.weights['weight' + str(i-1)])
         return x

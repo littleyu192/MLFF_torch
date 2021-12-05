@@ -64,6 +64,12 @@
       dx2=xatom(2,j)-xatom(2,i)+i2
       dx3=xatom(3,j)-xatom(3,i)+i3
       dx=AL(1,1)*dx1+AL(1,2)*dx2+AL(1,3)*dx3
+            
+      !open(1445, file='./PWdata/dRneigh_detail.dat', access='append', recl=100)
+      !write(1445, *) dx1, xatom(1,j), xatom(1,i), i1
+      !write(1445, *) dx, AL(1,1)
+      !close(1445)
+
       dy=AL(2,1)*dx1+AL(2,2)*dx2+AL(2,3)*dx3
       dz=AL(3,1)*dx1+AL(3,2)*dx2+AL(3,3)*dx3
       dd=dx**2+dy**2+dz**2
@@ -111,9 +117,6 @@
       if(abs(dx3-1).lt.abs(dx3)) dx3=dx3-1
 
       dx=AL(1,1)*dx1+AL(1,2)*dx2+AL(1,3)*dx3
-
-      
-
       dy=AL(2,1)*dx1+AL(2,2)*dx2+AL(2,3)*dx3
       dz=AL(3,1)*dx1+AL(3,2)*dx2+AL(3,3)*dx3
       dd=dx**2+dy**2+dz**2

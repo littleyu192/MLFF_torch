@@ -167,28 +167,26 @@ class DeepMD(nn.Module):
         res = torch.zeros_like(x)
 
         # x < rcut_min vv = 1
-        mask_min = torch.abs(x) < 5.8   #set rcut=25, 10  min=0,max=30
+        mask_min = x < 5.8   #set rcut=25, 10  min=0,max=30
         mask_1 = mask & mask_min  #[2,108,100]
         vv[mask_1] = 1
         dvv[mask_1] = 0
 
         # rcut_min< x < rcut_max
-        mask_max = torch.abs(x) < 6.0
+        mask_max = x < 6.0
         mask_2 = ~mask_min & mask_max & mask
         # uu = (xx - rmin) / (rmax - rmin) ;
         uu[mask_2] = (x[mask_2] - 5.8)/(6.0 -5.8)
         vv[mask_2] = uu[mask_2] * uu[mask_2] * uu[mask_2] * (-6 * uu[mask_2] * uu[mask_2] + 15 * uu[mask_2] - 10) + 1
+        du = 1.0 / ( 6.0 - 5.8)
         # dd = ( 3 * uu*uu * (-6 * uu*uu + 15 * uu - 10) + uu*uu*uu * (-12 * uu + 15) ) * du;
-        dvv[mask_2] = 3 * uu[mask_2] * uu[mask_2] * (-6 * uu[mask_2] * uu[mask_2] + 15 * uu[mask_2] -10) + uu[mask_2] * uu[mask_2] * uu[mask_2] * (-12 * uu[mask_2] + 15)
-        dvv[mask_2] *= (1.0 / (6.0 - 5.8))
+        dvv[mask_2] = (3 * uu[mask_2] * uu[mask_2] * (-6 * uu[mask_2] * uu[mask_2] + 15 * uu[mask_2] -10) + uu[mask_2] * uu[mask_2] * uu[mask_2] * (-12 * uu[mask_2] + 15)) * du
  
         mask_3 = ~mask_max & mask
         vv[mask_3] = 0
         dvv[mask_3] = 0
 
-        res[mask] = vv[mask] / x[mask]
-        vv_copy = vv.unsqueeze(-1).repeat(1, 1, 1, 3)
-        Ri_xyz[mask] *= vv_copy[mask]
+        res[mask] = 1.0 / x[mask]
         Ri = torch.cat((res.unsqueeze(-1), Ri_xyz), dim=-1)
         Ri_d = torch.zeros_like(Ri).unsqueeze(-1).repeat(1, 1, 1, 1, 3) # 2 108 100 4 3
         tmp = torch.zeros_like(x)
@@ -225,6 +223,9 @@ class DeepMD(nn.Module):
         tmp[mask] = (2 * image_dR[:, :, :, 2][mask] * image_dR[:, :, :, 2][mask] * inr4[mask] - inr2[mask]) * vv[mask] - Ri[:, :, :, 3][mask] * dvv[mask] * image_dR[:, :, :, 2][mask] * inr[mask]
         Ri_d[:, :, :, 3, 2][mask] = tmp[mask]
 
+        vv_copy = vv.unsqueeze(-1).repeat(1, 1, 1, 4)
+        Ri[mask] *= vv_copy[mask]
+
         Ri = (Ri - davg) / dstd
         dstd = dstd.unsqueeze(-1).repeat(1, 1, 3)
         Ri_d = Ri_d / dstd 
@@ -239,14 +240,21 @@ class DeepMD(nn.Module):
         
     def forward(self, image_dR, list_neigh):
         # starttime = datetime.datetime.now()
+        # image_dR = torch.tensor(np.load("rij.npy"), device=self.device, requires_grad=True)
+        # list_neigh = torch.tensor(np.load("nblist.npy"), device=self.device)
+        # image_dR = image_dR.reshape(1, 108, 100, 3)
+        # list_neigh = list_neigh.reshape(1, 108, 100)
+        # list_neigh = list_neigh + 1
+
         torch.autograd.set_detect_anomaly(True)
         batch_size = image_dR.shape[0]
         natoms = image_dR.shape[1]
         neighbor_num = image_dR.shape[2]
-        import ipdb;ipdb.set_trace()
+        # np.save("torch_image_dR.npy", image_dR.cpu().detach().numpy())
+        
         mask = list_neigh > 0
-        dR2 = torch.zeros_like(list_neigh)
-        Rij = torch.zeros_like(list_neigh)
+        dR2 = torch.zeros_like(list_neigh, dtype=torch.double)
+        Rij = torch.zeros_like(list_neigh, dtype=torch.double)
         dR2[mask] = torch.sum(image_dR[mask] * image_dR[mask], -1) #[2,108,100]
         Rij[mask] = torch.sqrt(dR2[mask])
 
@@ -261,10 +269,13 @@ class DeepMD(nn.Module):
 
         davg = torch.tensor(self.stat[0], device=self.device)
         dstd = torch.tensor(self.stat[1], device=self.device)
-        
+        # davg = torch.tensor(np.load('davg.npy'), device=self.device)
+        # dstd = torch.tensor(np.load('dstd.npy'), device=self.device)
         Ri, Ri_d = self.smooth(image_dR, nr, Ri_xyz, mask, inr, davg, dstd)
+        # np.save("torch_Ri.npy", Ri.cpu().detach().numpy())
+        # import ipdb;ipdb.set_trace()
+        # np.save("torch_Ri_d.npy", Ri_d.cpu().detach().numpy())
         S_Rij = Ri[:, :, :, 0].unsqueeze(-1)
-        # import ipdb; ipdb.set_trace()
 
         G = self.embeding_net(S_Rij)
         tmpA = torch.matmul(Ri.transpose(-2, -1), G)
@@ -273,8 +284,12 @@ class DeepMD(nn.Module):
 
         DR = torch.matmul(tmpA.transpose(-2, -1), tmpB)
         DR = DR.reshape(batch_size, natoms, -1)
+        # np.save("torch_DR.npy", DR.cpu().detach().numpy())
+        # import ipdb;ipdb.set_trace()
 
         Ei = self.fitting_net(DR)
+        # np.save("torch_Ei.npy", Ei.cpu().detach().numpy())
+        # import ipdb;ipdb.set_trace()
         Etot = torch.sum(Ei, 1)
 
         mask = torch.ones_like(Ei)
@@ -298,9 +313,12 @@ class DeepMD(nn.Module):
                     tmpA = dE[batch_idx, i, :, neighbor_id*4:neighbor_id*4+4]
                     tmpB = Ri_d[batch_idx, i, neighbor_id*4:neighbor_id*4+4]
                     F[batch_idx, neigh_tmp] += torch.matmul(tmpA, tmpB).squeeze(0)    
+        # np.save("torch_force.npy", F.cpu().detach().numpy())
+        # import ipdb;ipdb.set_trace()
+
         print("Ei[0, 5] & Etot[0] & Force[0, 5, :]:")
         print(Ei[0, 5].item())
-        print(Etot[0, 0].item())
+        print(Etot[0].item())
         print(F[0, 5].tolist())
         # import ipdb;ipdb.set_trace()
         return Etot, Ei, F               
