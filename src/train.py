@@ -51,7 +51,7 @@ opt_momentum = float(0)
 opt_regular_wd = float(0)
 opt_scheduler = 'NONE'
 opt_epochs = 1000
-opt_lr = float(0.1)
+opt_lr = float(0.01)
 opt_gamma = float(0.9)
 opt_step = 100
 opt_batch_size = pm.batch_size
@@ -589,7 +589,7 @@ def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
     # loss = loss_Ei
     #info("loss = %.16f (loss_etot = %.16f, loss_force = %.16f, RMSE_etot = %.16f, RMSE_force = %.16f)" %(loss, loss_Etot, loss_F, loss_Etot ** 0.5, loss_F ** 0.5))
     
-    start_lr = 0.1
+    start_lr = 0.01
     w_f = 1
     w_e = 0
     w_eg = 0
@@ -776,7 +776,7 @@ info("scheduler: opt_autograd = %s" %opt_autograd)
 
 train_data_path = pm.train_data_path
 torch_train_data = get_torch_data(pm.natoms, train_data_path)
-loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=True)
+loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=False)
 
 if opt_deepmd:
     davg, dstd, ener_shift = torch_train_data.get_stat()
@@ -987,7 +987,7 @@ if pm.isNNfinetuning == True:
         checkpoint = torch.load(opt_latest_file,map_location=device)
         '''
         跟deepmd对齐时的模型转换，直接从latest.pt continue时 注释下面一段
-        '''
+        
         weight_path = "/home/husiyu/software/deepMD/deepmd-kit-gpu/dataset/cu1/data"
         # dict_keys(['global_step:0', 'descrpt_attr/t_avg:0', 'descrpt_attr/t_std:0', 'filter_type_0/matrix_1_0:0', 'filter_type_0/bias_1_0:0', 'filter_type_0/matrix_2_0:0', 'filter_type_0/bias_2_0:0', 'filter_type_0/matrix_3_0:0', 'filter_type_0/bias_3_0:0', 'layer_0_type_0/matrix:0', 'layer_0_type_0/bias:0', 'layer_1_type_0/matrix:0', 'layer_1_type_0/bias:0', 'layer_1_type_0/idt:0', 'layer_2_type_0/matrix:0', 'layer_2_type_0/bias:0', 'layer_2_type_0/idt:0', 'final_layer_type_0/matrix:0', 'final_layer_type_0/bias:0', 'beta1_power:0', 'beta2_power:0'])
         # odict_keys(['embeding_net.weights.weight0', 'embeding_net.weights.weight1', 'embeding_net.weights.weight2', 'embeding_net.bias.bias0', 'embeding_net.bias.bias1', 'embeding_net.bias.bias2', 'embeding_net.resnet_dt.resnet_dt0', 'embeding_net.resnet_dt.resnet_dt1', 'embeding_net.resnet_dt.resnet_dt2', 'fitting_net.weights.weight0', 'fitting_net.weights.weight1', 'fitting_net.weights.weight2', 'fitting_net.weights.weight3', 'fitting_net.bias.bias0', 'fitting_net.bias.bias1', 'fitting_net.bias.bias2', 'fitting_net.bias.bias3'])
@@ -1015,9 +1015,9 @@ if pm.isNNfinetuning == True:
             if 'fitting_net.bias' in name or 'resnet' in name:
                 copying = copying.unsqueeze(0)
             model_weights[name] = copying
-        
+       
         # import ipdb; ipdb.set_trace() 
-
+        '''
         model.load_state_dict(checkpoint['model'])
         # optimizer.load_state_dict(checkpoint['optimizer'])
         start_epoch=checkpoint['epoch'] + 1

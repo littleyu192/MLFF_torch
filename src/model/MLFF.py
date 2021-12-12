@@ -174,6 +174,7 @@ class MLFF(nn.Module):
             temp_image = image[:, natoms_index[i]:natoms_index[i+1]]
             temp_result_Ei = torch.zeros((batch_size, natoms_index[i+1])).to(self.device)
             temp_result_dEi_dFeat = torch.zeros((batch_size, natoms_index[i+1], self.dim_feat)).to(self.device)
+            # import ipdb;ipdb.set_trace()
             temp_result_Ei, temp_result_dEi_dFeat = self.net(temp_image)
             if(i==0):
                 Ei = temp_result_Ei 
@@ -181,9 +182,6 @@ class MLFF(nn.Module):
             else:
                 Ei = torch.cat((Ei, temp_result_Ei), dim=1)    #[64,1]
                 dE = torch.cat((dE, temp_result_dEi_dFeat), dim=1)
-
-        Etot = torch.sum(Ei, 1)
-        Force = torch.zeros((batch_size, natoms_index[-1], 3)).to(self.device)
 
         # here we use the infinite cell (in Rcut) view to calc F_atom_i
         # the formula is: sum dE(all neighbor atoms in Rcut)/dR_(this atom)
@@ -209,11 +207,10 @@ class MLFF(nn.Module):
                 a = dE[batch_idx, atom_idx].unsqueeze(1)
                 b = dfeat[batch_idx, i, neighbor_idx]
                 Force[batch_idx, i, :] = torch.matmul(a, b).sum([0, 1])
-        # print("Ei[0,1] & Force[0,1,:]:")
-        # print(result_Ei[0,1])
-        # print(Force[0,1,:])
-        # print(Etot[0,0])
-        # import ipdb;ipdb.set_trace()
+        print("Ei[0,5] & Force[0,5,:]:")
+        print(Force[0,5,:])
+        print(Etot[0,0])
+        import ipdb;ipdb.set_trace()
         return Etot, Ei, Force
 
 '''

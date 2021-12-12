@@ -437,7 +437,7 @@ def calFeatGrid():
 def r_feat_csv(f_feat):
     """ read feature and energy from pandas data
     """
-    df   = pd.read_csv(f_feat,header=None,index_col=False,dtype=pm.feature_dtype, encoding= 'unicode_escape')
+    df   = pd.read_csv(f_feat,header=None,index_col=False,dtype=pm.feature_dtype, encoding= 'unicode_escape', engine = "python")
     itypes = df[1].values.astype(int)
     engy = df[2].values
     feat = df.drop([0,1,2],axis=1).values.astype("float64")

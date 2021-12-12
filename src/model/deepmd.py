@@ -263,7 +263,7 @@ class DeepMD(nn.Module):
         Ri_xyz = torch.zeros((batch_size, natoms, neighbor_num, 3), device=self.device)
         dR2_copy = dR2.unsqueeze(-1).repeat(1, 1, 1, 3)
 
-        nr[mask] = dR2[mask] / Rij[mask]       # ?
+        nr[mask] = dR2[mask] / Rij[mask]
         Ri_xyz[mask] = image_dR[mask] / dR2_copy[mask]
         inr[mask] = 1 / Rij[mask]
 

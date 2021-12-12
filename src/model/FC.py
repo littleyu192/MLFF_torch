@@ -204,4 +204,3 @@ class f_FC(nn.Module):
         res1 = dE
 
         return res0, res1
-

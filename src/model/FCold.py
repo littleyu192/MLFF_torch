@@ -242,7 +242,7 @@ class MLFFNet(nn.Module):
         end = time.time()
         # print("cal ei de time:", cal_ei_de - start, 's')
         # print("cal force time:", end - cal_ei_de, 's')
-        return Etot, force, Ei, Egroup
+        return Etot,  Ei, force
 
     def get_egroup(self, Ei, Egroup_weight, divider):
         batch_size = Ei.shape[0]
