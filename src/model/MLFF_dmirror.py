@@ -100,9 +100,18 @@ class MLFF_dmirror(nn.Module):
         # from 1, and 0 means empty neighbor slot. result_dEi_dFeat_fortran
         # matches this in it's atom dimension
         #
-        n_a_idx_fortran = neighbor.type(torch.int64).reshape(batch_size * self.natoms * self.nneighbors)
+        # n_a_ofs_fortran_b: offset of neighbor's atom index in the batched
+        # atom list, the offset step value for each image is (natoms + 1)
+        # to match our fortran style atom index accommodation
+        #
+        # n_a_idx_fortran_b: neighbor's atom index in the batched atom list
+        #
+        n_a_idx_fortran = neighbor.reshape(batch_size * self.natoms * self.nneighbors)
+        n_a_ofs_fortran_b = torch.arange(0, batch_size * (self.natoms + 1), self.natoms + 1)\
+                            .repeat_interleave(self.natoms * self.nneighbors).to(self.device)
+        n_a_idx_fortran_b = n_a_idx_fortran.type(torch.int64) + n_a_ofs_fortran_b
         dEi_neighbors = result_dEi_dFeat_fortran\
-                        .reshape(batch_size * (self.natoms + 1), self.dim_feat)[n_a_idx_fortran,]\
+                        .reshape(batch_size * (self.natoms + 1), self.dim_feat)[n_a_idx_fortran_b,]\
                         .reshape(batch_size, self.natoms, self.nneighbors, 1, self.dim_feat)
         Force = torch.matmul(dEi_neighbors, dfeat).sum([2, 3])
 
