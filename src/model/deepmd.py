@@ -15,6 +15,7 @@ import parameters as pm
 # import prepare as pp
 # pp.readFeatnum()
 from model.embedding import EmbedingNet, FittingNet
+import op
 # logging and our extension
 import logging
 logging_level_DUMP = 5
@@ -251,7 +252,7 @@ class DeepMD(nn.Module):
         natoms = image_dR.shape[1]
         neighbor_num = image_dR.shape[2]
         # np.save("torch_image_dR.npy", image_dR.cpu().detach().numpy())
-        
+
         mask = list_neigh > 0
         dR2 = torch.zeros_like(list_neigh, dtype=torch.double)
         Rij = torch.zeros_like(list_neigh, dtype=torch.double)
@@ -302,24 +303,29 @@ class DeepMD(nn.Module):
         F = torch.matmul(dE, Ri_d).squeeze(-2) # batch natom 3
         F = F * (-1)
 
-        for batch_idx in range(batch_size):
-            for i in range(natoms):
-                # get atom_idx & neighbor_idx
-                i_neighbor = list_neigh[batch_idx, i]  #[100]
-                neighbor_idx = i_neighbor.nonzero().squeeze().type(torch.int64)  #[78]
-                atom_idx = i_neighbor[neighbor_idx].type(torch.int64) - 1
-                # calculate Force
-                for neigh_tmp, neighbor_id in zip(atom_idx, neighbor_idx):
-                    tmpA = dE[batch_idx, i, :, neighbor_id*4:neighbor_id*4+4]
-                    tmpB = Ri_d[batch_idx, i, neighbor_id*4:neighbor_id*4+4]
-                    F[batch_idx, neigh_tmp] += torch.matmul(tmpA, tmpB).squeeze(0)    
-        # np.save("torch_force.npy", F.cpu().detach().numpy())
-        # import ipdb;ipdb.set_trace()
+        list_neigh = (list_neigh - 1).type(torch.int)
+        op.calculate_force(list_neigh, dE, Ri_d, batch_size, natoms, 100, F)
+        # import ipdb; ipdb.set_trace()
 
-        print("Ei[0, 5] & Etot[0] & Force[0, 5, :]:")
-        print(Ei[0, 5].item())
+
+        # for batch_idx in range(batch_size):
+        #     for i in range(natoms):
+        #         # get atom_idx & neighbor_idx
+        #         i_neighbor = list_neigh[batch_idx, i]  #[100]
+        #         neighbor_idx = i_neighbor.nonzero().squeeze().type(torch.int64)  #[78]
+        #         atom_idx = i_neighbor[neighbor_idx].type(torch.int64) - 1
+        #         # calculate Force
+        #         for neigh_tmp, neighbor_id in zip(atom_idx, neighbor_idx):
+        #             tmpA = dE[batch_idx, i, :, neighbor_id*4:neighbor_id*4+4]
+        #             tmpB = Ri_d[batch_idx, i, neighbor_id*4:neighbor_id*4+4]
+        #             F_back[batch_idx, neigh_tmp] += torch.matmul(tmpA, tmpB).squeeze(0)    
+        # np.save("torch_force.npy", F.cpu().detach().numpy())
+        import ipdb;ipdb.set_trace()
+
+        print("Ei[0, 0] & Etot[0] & Force[0, 0, :]:")
+        print(Ei[0, 0].item())
         print(Etot[0].item())
-        print(F[0, 5].tolist())
+        print(F[0, 0].tolist())
         # import ipdb;ipdb.set_trace()
         return Etot, Ei, F               
 

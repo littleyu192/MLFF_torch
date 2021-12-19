@@ -81,7 +81,7 @@ def write_natoms_dfeat():
             for mm in pm.use_Ftype:
                 f_train_dfeat[mm].writelines(str(os.path.join(system, 'dfeat.fbin.Ftype'+str(
                     mm)))+', '+str(i+1)+', '+str(dfeat_names[mm][int(Imgcount+i), 1])+'\n')
-
+                    
         for i in testImg:
             f_test_natom.writelines(str(int(natom))+' '+str(int(natom))+'\n')
             for mm in pm.use_Ftype:

@@ -104,8 +104,9 @@ class FittingNet(nn.Module):
                 self.resnet_dt["resnet_dt" + str(i-1)] = nn.Parameter(resnet_dt, requires_grad=True)
         
         i = len(self.network_size) - 1
-        
-        self.weights["weight" + str(i-1)] = nn.Parameter(torch.randn(self.network_size[i-1], self.network_size[i]), requires_grad=True) 
+        wij = torch.randn(self.network_size[i-1], self.network_size[i])
+        normal(wij, mean=0, std=1)
+        self.weights["weight" + str(i-1)] = nn.Parameter(wij, requires_grad=True) 
         if self.cfg['bias']:
             bias_init = torch.randn(1, self.network_size[i])
             normal(bias_init, mean=ener_shift, std=1.0)
