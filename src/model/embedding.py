@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import collections
 from torch.nn.init import normal_ as normal
+import numpy as np
 
 # logging and our extension
 import logging
@@ -42,7 +43,7 @@ class EmbedingNet(nn.Module):
         # 初始化权重 normalization
         for i in range(1, len(self.network_size)):
             wij = torch.Tensor(self.network_size[i-1], self.network_size[i])
-            normal(wij, mean=0, std=1)
+            normal(wij, mean=0, std=(1.0 / np.sqrt(self.network_size[i-1] + self.network_size[i])))
             self.weights["weight" + str(i-1)] = nn.Parameter(wij, requires_grad=True) 
             if self.cfg['bias']:
                 bias = torch.Tensor(1, self.network_size[i])
@@ -50,7 +51,7 @@ class EmbedingNet(nn.Module):
                 self.bias["bias" + str(i-1)] = nn.Parameter(bias, requires_grad=True) 
             if self.cfg['resnet_dt']:
                 resnet_dt = torch.Tensor(1, self.network_size[i])
-                normal(resnet_dt, mean=0, std=1)
+                normal(resnet_dt, mean=1, std=0.001)
                 self.resnet_dt["resnet_dt" + str(i-1)] = nn.Parameter(resnet_dt, requires_grad=True)
 
 
@@ -92,7 +93,7 @@ class FittingNet(nn.Module):
 
         for i in range(1, len(self.network_size)-1):
             wij = torch.Tensor(self.network_size[i-1], self.network_size[i])
-            normal(wij, mean=0, std=1)
+            normal(wij, mean=0, std=(1.0 / np.sqrt(self.network_size[i-1] + self.network_size[i])))
             self.weights["weight" + str(i-1)] = nn.Parameter(wij, requires_grad=True) 
             if self.cfg['bias']:
                 bias = torch.Tensor(1, self.network_size[i])
@@ -100,12 +101,12 @@ class FittingNet(nn.Module):
                 self.bias["bias" + str(i-1)] = nn.Parameter(bias, requires_grad=True)
             if i > 1 and self.cfg['resnet_dt']:
                 resnet_dt = torch.Tensor(1, self.network_size[i])
-                normal(resnet_dt, mean=0, std=1)
+                normal(resnet_dt, mean=0.1, std=0.001)
                 self.resnet_dt["resnet_dt" + str(i-1)] = nn.Parameter(resnet_dt, requires_grad=True)
         
         i = len(self.network_size) - 1
         wij = torch.randn(self.network_size[i-1], self.network_size[i])
-        normal(wij, mean=0, std=1)
+        normal(wij, mean=0, std=(1.0 / np.sqrt(self.network_size[i-1] + self.network_size[i])))
         self.weights["weight" + str(i-1)] = nn.Parameter(wij, requires_grad=True) 
         if self.cfg['bias']:
             bias_init = torch.randn(1, self.network_size[i])

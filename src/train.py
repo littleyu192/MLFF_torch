@@ -13,7 +13,7 @@ from torch.nn.modules import loss
 import torch.optim as optim
 from torch.nn.parameter import Parameter
 from torch.utils.data import Dataset, DataLoader
-
+from loss.AutomaticWeightedLoss import AutomaticWeightedLoss
 from model.LN import LNNet
 from model.MLFF import preMLFF, MLFF
 from model.FCold import preMLFFNet, MLFFNet
@@ -50,9 +50,9 @@ opt_optimizer = 'ADAM'
 opt_momentum = float(0)
 opt_regular_wd = float(0)
 opt_scheduler = 'NONE'
-opt_epochs = 1000
-opt_lr = float(0.01)
-opt_gamma = float(0.9)
+opt_epochs = 10000
+opt_lr = float(0.001)
+opt_gamma = float(0.99)
 opt_step = 100
 opt_batch_size = pm.batch_size
 opt_dtype = pm.training_dtype
@@ -372,7 +372,7 @@ else:
 def get_loss_func(start_lr, real_lr, has_fi, lossFi, has_etot, loss_Etot, has_egroup, loss_Egroup, has_ei, loss_Ei):
     start_pref_egroup = 0.02
     limit_pref_egroup = 1.0
-    start_pref_F = 1000
+    start_pref_F = 1000  #1000
     limit_pref_F = 1.0
     start_pref_etot = 0.02   
     limit_pref_etot = 1.0  
@@ -386,16 +386,16 @@ def get_loss_func(start_lr, real_lr, has_fi, lossFi, has_etot, loss_Etot, has_eg
     if has_fi:
         l2_loss += pref_fi * lossFi
     if has_etot:
-        l2_loss += pref_etot * loss_Etot
+        l2_loss += 0.009259259259 * pref_etot * loss_Etot  # 1/natoms
     if has_egroup :
         l2_loss += pref_egroup * loss_Egroup
     if has_ei :
-        l2_loss += pref_ei * loss_Ei
+        l2_loss += pref_ei * loss_Ei 
     # data = [learning_rate, loss_Egroup, lossFi, loss_Etot, l2_loss];
     # save_prefactor_file(pm.dir_work+"prefactor_loss.csv", data)
     # print("=====real learning rate=====")
     # print(real_lr)
-    return l2_loss
+    return math.sqrt(l2_loss)
 
 
 def pretrain(sample_batches, premodel, optimizer, criterion):
@@ -441,7 +441,7 @@ def pretrain(sample_batches, premodel, optimizer, criterion):
     loss = w_e * loss_Etot + w_ei * loss_Ei
     return loss, loss_Etot, loss_Ei
 
-def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
+def train(i_batch, sample_batches, model, optimizer, criterion, last_epoch, real_lr):
     # floating part of sample_batches, cast to specified opt_dtype
     #
     if (opt_dtype == 'float64'):
@@ -579,31 +579,43 @@ def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
     #loss = pm.rtLossF * criterion(force_predict, Force_label) + pm.rtLossEtot * criterion(Etot_predict, Etot_label) + pm.rtLossE * criterion(Egroup_predict, Egroup_label)
     #
     # Etot_label.shape = [batch_size, 1], while Etot_predict.shape = [batch_size], so squeeze Etot_label to match
-    #
     
+    # shift 之后的 label
+    # Ei_label = Ei_label - 5133.92272
+    # Etot_label = Etot_label - 554464.1386
+
     loss_F = criterion(Force_predict, Force_label)
     loss_Etot = criterion(Etot_predict, Etot_label)
     loss_Ei = criterion(Ei_predict, Ei_label)
-    w_ei = 1
-    loss = pm.rtLossF * loss_F+ pm.rtLossEtot * loss_Etot + w_ei * loss_Ei
-    # loss = loss_Ei
+
+    # if i_batch % 2:
+    #     loss = loss_Ei + loss_Etot
+    # else:
+    #     loss = loss_F
+
+    # w_ei = 1
+    # loss = pm.rtLossF * loss_F+ pm.rtLossEtot * loss_Etot + w_ei * loss_Ei
+    # loss = loss_F   # torch.sqrt(loss_F)   # torch.sqrt(loss_Etot)
     #info("loss = %.16f (loss_etot = %.16f, loss_force = %.16f, RMSE_etot = %.16f, RMSE_force = %.16f)" %(loss, loss_Etot, loss_F, loss_Etot ** 0.5, loss_F ** 0.5))
     
-    start_lr = 0.01
+    start_lr = opt_lr
     w_f = 1
-    w_e = 0
+    w_e = 1
     w_eg = 0
     loss_Egroup = 0
-    w_ei = 1
+    w_ei = 0
     loss = get_loss_func(start_lr, real_lr, w_f, loss_F, w_e, loss_Etot, w_eg, loss_Egroup, w_ei, loss_Ei)
 
-    #w_f = loss_Etot / (loss_Etot + loss_F)
-    #w_e = 1 - w_f
-    #w_f = pm.rtLossF
-    #w_e = pm.rtLossE
-    #w_f = 0
-    #w_e = 1
-    #loss = w_e * criterion(Etot_predict, Etot_label) + w_f * criterion(force_predict, Force_label)
+    # loss = awl(loss_Etot, loss_Ei, loss_F)
+    # print(awl.parameters())
+
+    # w_f = loss_Etot / (loss_Etot + loss_F)
+    # w_e = 1 - w_f
+    # w_f = pm.rtLossF
+    # w_e = pm.rtLossE
+    # w_f = 0
+    # w_e = 1
+    # loss = w_e * criterion(Etot_predict, Etot_label) + w_f * criterion(Force_predict, Force_label) + loss_Ei
     #print("etot MSE loss: " + str(loss_Etot))
     #print("force MSE loss: " + str(loss_F))
     
@@ -776,7 +788,7 @@ info("scheduler: opt_autograd = %s" %opt_autograd)
 
 train_data_path = pm.train_data_path
 torch_train_data = get_torch_data(pm.natoms, train_data_path)
-loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=False)
+loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=True)
 
 if opt_deepmd:
     davg, dstd, ener_shift = torch_train_data.get_stat()
@@ -974,6 +986,7 @@ if pm.isNNfinetuning == True:
                     dump(p)
         # model = MLFFNet(data_scalers)
     model.to(device)
+    # import ipdb; ipdb.set_trace()
     # if opt_follow_mode==True:
     #     checkpoint = torch.load(opt_model_file,map_location=device)
     #     model.load_state_dict(checkpoint['model'],strict=False)
@@ -988,7 +1001,8 @@ if pm.isNNfinetuning == True:
         '''
         跟deepmd对齐时的模型转换，直接从latest.pt continue时 注释下面一段
         
-        weight_path = "/home/husiyu/software/deepMD/deepmd-kit-gpu/dataset/cu1/data"
+        # weight_path = "/home/husiyu/software/deepMD/deepmd-kit-gpu/dataset/cu1/data"  # 小样本测试用
+        weight_path = "/home/husiyu/software/deepMD/deepmd-kit-gpu/dataset/cu1000/data"
         # dict_keys(['global_step:0', 'descrpt_attr/t_avg:0', 'descrpt_attr/t_std:0', 'filter_type_0/matrix_1_0:0', 'filter_type_0/bias_1_0:0', 'filter_type_0/matrix_2_0:0', 'filter_type_0/bias_2_0:0', 'filter_type_0/matrix_3_0:0', 'filter_type_0/bias_3_0:0', 'layer_0_type_0/matrix:0', 'layer_0_type_0/bias:0', 'layer_1_type_0/matrix:0', 'layer_1_type_0/bias:0', 'layer_1_type_0/idt:0', 'layer_2_type_0/matrix:0', 'layer_2_type_0/bias:0', 'layer_2_type_0/idt:0', 'final_layer_type_0/matrix:0', 'final_layer_type_0/bias:0', 'beta1_power:0', 'beta2_power:0'])
         # odict_keys(['embeding_net.weights.weight0', 'embeding_net.weights.weight1', 'embeding_net.weights.weight2', 'embeding_net.bias.bias0', 'embeding_net.bias.bias1', 'embeding_net.bias.bias2', 'embeding_net.resnet_dt.resnet_dt0', 'embeding_net.resnet_dt.resnet_dt1', 'embeding_net.resnet_dt.resnet_dt2', 'fitting_net.weights.weight0', 'fitting_net.weights.weight1', 'fitting_net.weights.weight2', 'fitting_net.weights.weight3', 'fitting_net.bias.bias0', 'fitting_net.bias.bias1', 'fitting_net.bias.bias2', 'fitting_net.bias.bias3'])
         map_relation = {"embeding_net.weights.weight0" : "filter_type_0/matrix_1_0:0",  #(1,25)
@@ -1033,9 +1047,18 @@ if pm.isNNfinetuning == True:
 
     # set model parameter properties, do not apply weight decay to bias parameter
     # except for LBFGS, which do not support pre-parameter options
-    model_parameters = [
-                    {'params': (p for name, p in model.named_parameters() if 'bias' not in name)},
-                    {'params': (p for name, p in model.named_parameters() if 'bias' in name), 'weight_decay': 0.}]
+    # model_parameters = [
+    #                 {'params': (p for name, p in model.named_parameters() if 'bias' not in name)},
+    #                 {'params': (p for name, p in model.named_parameters() if 'bias' in name), 'weight_decay': 0.}]
+    
+    # awl = AutomaticWeightedLoss(3)	
+    # optimizer = optim.Adam([
+    #             {'params': model.parameters()},
+    #             {'params': awl.parameters(), 'weight_decay': 0}
+    #         ])
+
+    model_parameters = model.parameters()
+    # import ipdb; ipdb.set_trace()
     
 
     if (opt_optimizer == 'SGD'):
@@ -1061,9 +1084,9 @@ if pm.isNNfinetuning == True:
     else:
         error("unsupported optimizer: %s" %opt_optimizer)
         raise RuntimeError("unsupported optimizer: %s" %opt_optimizer)
-    if (opt_recover_mode == True):
-        optimizer.load_state_dict(checkpoint['optimizer'])
-    
+    # if (opt_recover_mode == True):
+    #     optimizer.load_state_dict(checkpoint['optimizer'])
+
     # TODO: LBFGS is not done yet
     # FIXME: train process should be better re-arranged to 
     #        support this closure cleanly
@@ -1122,16 +1145,18 @@ if pm.isNNfinetuning == True:
         loss_F = 0.
         for i_batch, sample_batches in enumerate(loader_train):
             batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
-                train(sample_batches, model, optimizer, nn.MSELoss(), last_epoch, lr)
+                train(i_batch, sample_batches, model, optimizer, nn.MSELoss(), last_epoch, lr)
+            print("batch loss:" + str(batch_loss.item()))
+            print("batch mse ei:" + str(batch_loss_Ei.item()))
             print("batch mse etot:" + str(batch_loss_Etot.item()))
             print("batch mse F:" + str(batch_loss_F.item()))
             print("=============================")
             nr_batch_sample = sample_batches['input_feat'].shape[0]
             debug("nr_batch_sample = %s" %nr_batch_sample)
-            loss += batch_loss * nr_batch_sample
-            loss_Etot += batch_loss_Etot * nr_batch_sample
-            loss_Ei += batch_loss_Ei * nr_batch_sample
-            loss_F += batch_loss_F * nr_batch_sample
+            loss += batch_loss.item() * nr_batch_sample
+            loss_Etot += batch_loss_Etot.item() * nr_batch_sample
+            loss_Ei += batch_loss_Ei.item() * nr_batch_sample
+            loss_F += batch_loss_F.item() * nr_batch_sample
             nr_total_sample += nr_batch_sample
 
             # OneCycleLR scheduler steps() at each batch
@@ -1144,9 +1169,9 @@ if pm.isNNfinetuning == True:
         loss_Ei /= nr_total_sample
         loss_F /= nr_total_sample
         RMSE_Etot = loss_Etot ** 0.5
-        RMSE_Egroup = loss_Ei ** 0.5
+        RMSE_Ei = loss_Ei ** 0.5
         RMSE_F = loss_F ** 0.5
-        info("epoch_loss = %.16f (loss_Etot = %.16f, loss_F = %.16f, RMSE_Etot = %.16f, RMSE_F = %.16f)" %(loss, loss_Etot, loss_F, RMSE_Etot, RMSE_F))
+        info("epoch_loss = %.16f (loss_Etot = %.16f, loss_F = %.16f, RMSE_Etot = %.16f, RMSE_Ei = %.16f, RMSE_F = %.16f)" %(loss, loss_Etot, loss_F, RMSE_Etot, RMSE_Ei, RMSE_F))
         # update tensorboard
         if ((opt_journal_cycle > 0) and ((epoch) % opt_journal_cycle == 0)):
             if (writer is not None):
@@ -1156,15 +1181,16 @@ if pm.isNNfinetuning == True:
                 writer.add_scalar('train_loss_Ei', loss_Ei, epoch)
                 writer.add_scalar('train_loss_F', loss_F, epoch)
                 writer.add_scalar('train_RMSE_Etot', RMSE_Etot, epoch)
-                writer.add_scalar('train_RMSE_Ei', RMSE_Egroup, epoch)
+                writer.add_scalar('train_RMSE_Ei', RMSE_Ei, epoch)
                 writer.add_scalar('train_RMSE_F', RMSE_F, epoch)
-            
-        # print('Finetuning stage: epoch = {}, step = {}, train_function_err_avg = {:.8f}, train_epoch_force_square_loss = {:.8f}, \
-        #     train_epoch_etot_square_loss = {:.8f}, train_epoch_egroup_square_loss = {:.8f}, lr = {}, time cost = {}, \
-        #     training force rmse = {:.8f}, training etot rmse = {:.8f}, training egroup rmse = {:.8f}'.format(epoch, n_iter, \
-        #         train_function_err_avg, train_epoch_force_square_loss, train_epoch_etot_square_loss, train_epoch_egroup_square_loss, \
-        #             lr, time_cost, train_force_rmse_loss, train_etot_rmse_loss, train_egroup_rmse_loss)) 
-        # print("loss :" + )
+
+        iprint = 10 #隔几个epoch记录一次误差
+        f_err_log=opt_session_dir+'loss.dat'
+        if epoch // iprint == 1:
+            fid_err_log = open(f_err_log, 'w')
+        else:
+            fid_err_log = open(f_err_log, 'a')
+        fid_err_log.write('%d %e %e %e %e %e \n'%(epoch, loss, RMSE_Etot, RMSE_Ei, RMSE_F, lr))    
 
         #valid_loss_function_err = 0
         # valid_epoch_force_square_loss = 0
@@ -1191,11 +1217,11 @@ if pm.isNNfinetuning == True:
         if opt_save_model == True: 
             state = {'model': model.state_dict(),'optimizer':optimizer.state_dict(),'epoch':epoch, 'loss': loss}
             file_name = opt_model_dir + 'latest.pt'
-            if epoch % 1 == 0:
+            if epoch % 100 == 0:
                 file_name = opt_model_dir + str(epoch) + '.pt'
             torch.save(state, file_name)
 
-        # 打印dict info
+        # 打印 dict info
         # for name, parameter in model.named_parameters():
         #     print(name)
         #     print(parameter.shape)

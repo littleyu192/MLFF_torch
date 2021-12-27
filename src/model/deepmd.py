@@ -9,6 +9,7 @@ from torch.nn import init
 from torch.autograd import Variable
 import sys, os
 import datetime
+import time
 import math
 sys.path.append(os.getcwd())
 import parameters as pm    
@@ -252,7 +253,7 @@ class DeepMD(nn.Module):
         natoms = image_dR.shape[1]
         neighbor_num = image_dR.shape[2]
         # np.save("torch_image_dR.npy", image_dR.cpu().detach().numpy())
-
+        start_preprocess = time.time()
         mask = list_neigh > 0
         dR2 = torch.zeros_like(list_neigh, dtype=torch.double)
         Rij = torch.zeros_like(list_neigh, dtype=torch.double)
@@ -272,13 +273,19 @@ class DeepMD(nn.Module):
         dstd = torch.tensor(self.stat[1], device=self.device)
         # davg = torch.tensor(np.load('davg.npy'), device=self.device)
         # dstd = torch.tensor(np.load('dstd.npy'), device=self.device)
+        # start_smooth = time.time()
+        # print("preprocessing time:", start_smooth - start_preprocess, 's')
         Ri, Ri_d = self.smooth(image_dR, nr, Ri_xyz, mask, inr, davg, dstd)
         # np.save("torch_Ri.npy", Ri.cpu().detach().numpy())
         # import ipdb;ipdb.set_trace()
         # np.save("torch_Ri_d.npy", Ri_d.cpu().detach().numpy())
         S_Rij = Ri[:, :, :, 0].unsqueeze(-1)
 
+        # start_embedding = time.time()
         G = self.embeding_net(S_Rij)
+
+        # start_mm = time.time()
+        # print("smooth time:", start_mm - start_smooth, 's')
         tmpA = torch.matmul(Ri.transpose(-2, -1), G)
         tmpA *= 0.01 # batch 108 4 100
         tmpB = tmpA[:, :, :, :16]
@@ -288,11 +295,16 @@ class DeepMD(nn.Module):
         # np.save("torch_DR.npy", DR.cpu().detach().numpy())
         # import ipdb;ipdb.set_trace()
 
+        # start_fitting = time.time()
+        # print("matrix multiplication time:", start_fitting - start_mm, 's')
         Ei = self.fitting_net(DR)
         # np.save("torch_Ei.npy", Ei.cpu().detach().numpy())
         # import ipdb;ipdb.set_trace()
         Etot = torch.sum(Ei, 1)
 
+        # F = torch.zeros((batch_size, natoms, 3), device=self.device)
+        # start_autograd = time.time()
+        # print("fitting time:", start_autograd - start_fitting, 's')
         mask = torch.ones_like(Ei)
         dE = torch.autograd.grad(Ei, Ri, grad_outputs=mask, retain_graph=True, create_graph=True)
         dE = torch.stack(list(dE), dim=0).squeeze(0)  #[:,:,:,:-1] #[2,108,100,4]-->[2,108,100,3]
@@ -300,13 +312,17 @@ class DeepMD(nn.Module):
         Ri_d = Ri_d.reshape(batch_size, natoms, -1, 3)
         dE = dE.reshape(batch_size, natoms, 1, -1)
 
+        # start_force = time.time()
+        # print("autograd time:", start_force - start_autograd, 's')
         F = torch.matmul(dE, Ri_d).squeeze(-2) # batch natom 3
         F = F * (-1)
+        # F_back = F
 
         list_neigh = (list_neigh - 1).type(torch.int)
         op.calculate_force(list_neigh, dE, Ri_d, batch_size, natoms, 100, F)
+        # end_force = time.time()
+        # print("customized op force time:", end_force - start_force, 's')
         # import ipdb; ipdb.set_trace()
-
 
         # for batch_idx in range(batch_size):
         #     for i in range(natoms):
@@ -318,15 +334,17 @@ class DeepMD(nn.Module):
         #         for neigh_tmp, neighbor_id in zip(atom_idx, neighbor_idx):
         #             tmpA = dE[batch_idx, i, :, neighbor_id*4:neighbor_id*4+4]
         #             tmpB = Ri_d[batch_idx, i, neighbor_id*4:neighbor_id*4+4]
-        #             F_back[batch_idx, neigh_tmp] += torch.matmul(tmpA, tmpB).squeeze(0)    
+        #             F_back[batch_idx, neigh_tmp] += torch.matmul(tmpA, tmpB).squeeze(0)   
         # np.save("torch_force.npy", F.cpu().detach().numpy())
-        import ipdb;ipdb.set_trace()
+        # end_force_pytorch = time.time()
+        # print("torch force time:", end_force_pytorch - end_force, 's')
+        # import ipdb;ipdb.set_trace()
 
-        print("Ei[0, 0] & Etot[0] & Force[0, 0, :]:")
+        # print("Ei[0, 0] & Etot[0] & Force[0, 0, :]:")
         print(Ei[0, 0].item())
         print(Etot[0].item())
         print(F[0, 0].tolist())
-        # import ipdb;ipdb.set_trace()
+        
         return Etot, Ei, F               
 
         # # autograd_time = datetime.datetime.now()
@@ -372,4 +390,3 @@ class DeepMD(nn.Module):
         # # print("fitting net time:")
         # # print((calcF_time - autograd_time).seconds)
 
-        
