@@ -395,8 +395,18 @@ def get_loss_func(start_lr, real_lr, has_fi, lossFi, has_etot, loss_Etot, has_eg
     # save_prefactor_file(pm.dir_work+"prefactor_loss.csv", data)
     # print("=====real learning rate=====")
     # print(real_lr)
-    return math.sqrt(l2_loss)
+    l2_loss = torch.sqrt(l2_loss)
+    return l2_loss
 
+
+# 第iter次迭代时进行计算并更新学习率
+def adjust_lr(iter, start_lr=0.001, stop_lr=3.51e-8):
+    stop_step = 1000000
+    decay_step=5000
+    decay_rate = np.exp(np.log(stop_lr/start_lr) / (stop_step/decay_step))
+    real_lr = start_lr * np.power(decay_rate, (iter//decay_step))
+    return real_lr
+	
 
 def pretrain(sample_batches, premodel, optimizer, criterion):
     error=0
@@ -1144,8 +1154,14 @@ if pm.isNNfinetuning == True:
         loss_Ei = 0.
         loss_F = 0.
         for i_batch, sample_batches in enumerate(loader_train):
+
+            global_step = epoch * len(loader_train) + i_batch
+            real_lr = adjust_lr(global_step)
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = real_lr
+
             batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
-                train(i_batch, sample_batches, model, optimizer, nn.MSELoss(), last_epoch, lr)
+                train(i_batch, sample_batches, model, optimizer, nn.MSELoss(), last_epoch, real_lr)
             print("batch loss:" + str(batch_loss.item()))
             print("batch mse ei:" + str(batch_loss_Ei.item()))
             print("batch mse etot:" + str(batch_loss_Etot.item()))
@@ -1190,7 +1206,7 @@ if pm.isNNfinetuning == True:
             fid_err_log = open(f_err_log, 'w')
         else:
             fid_err_log = open(f_err_log, 'a')
-        fid_err_log.write('%d %e %e %e %e %e \n'%(epoch, loss, RMSE_Etot, RMSE_Ei, RMSE_F, lr))    
+        fid_err_log.write('%d %e %e %e %e %e \n'%(epoch, loss, RMSE_Etot, RMSE_Ei, RMSE_F, real_lr))    
 
         #valid_loss_function_err = 0
         # valid_epoch_force_square_loss = 0
