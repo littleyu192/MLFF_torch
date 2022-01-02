@@ -242,11 +242,13 @@ class DeepMD(nn.Module):
         
     def forward(self, image_dR, list_neigh):
         # starttime = datetime.datetime.now()
-        # image_dR = torch.tensor(np.load("rij.npy"), device=self.device, requires_grad=True)
-        # list_neigh = torch.tensor(np.load("nblist.npy"), device=self.device)
-        # image_dR = image_dR.reshape(1, 108, 100, 3)
-        # list_neigh = list_neigh.reshape(1, 108, 100)
-        # list_neigh = list_neigh + 1
+        # recover from deepmd
+        import ipdb;ipdb.set_trace()
+        image_dR = torch.tensor(np.load("deepmd_image_dR.npy"), device=self.device, requires_grad=True)
+        list_neigh = torch.tensor(np.load("deepmd_nblist.npy"), device=self.device)
+        image_dR = image_dR.reshape(1, 108, 100, 3)
+        list_neigh = list_neigh.reshape(1, 108, 100)
+        list_neigh = list_neigh + 1
 
         torch.autograd.set_detect_anomaly(True)
         batch_size = image_dR.shape[0]
@@ -271,13 +273,14 @@ class DeepMD(nn.Module):
 
         davg = torch.tensor(self.stat[0], device=self.device)
         dstd = torch.tensor(self.stat[1], device=self.device)
-        # davg = torch.tensor(np.load('davg.npy'), device=self.device)
-        # dstd = torch.tensor(np.load('dstd.npy'), device=self.device)
+        davg = torch.tensor(np.load('davg.npy'), device=self.device)
+        dstd = torch.tensor(np.load('dstd.npy'), device=self.device)
+        davg = davg.reshape(100, 4)
+        dstd = dstd.reshape(100, 4)
         # start_smooth = time.time()
         # print("preprocessing time:", start_smooth - start_preprocess, 's')
         Ri, Ri_d = self.smooth(image_dR, nr, Ri_xyz, mask, inr, davg, dstd)
         # np.save("torch_Ri.npy", Ri.cpu().detach().numpy())
-        # import ipdb;ipdb.set_trace()
         # np.save("torch_Ri_d.npy", Ri_d.cpu().detach().numpy())
         S_Rij = Ri[:, :, :, 0].unsqueeze(-1)
 
@@ -298,7 +301,7 @@ class DeepMD(nn.Module):
         # start_fitting = time.time()
         # print("matrix multiplication time:", start_fitting - start_mm, 's')
         Ei = self.fitting_net(DR)
-        # np.save("torch_Ei.npy", Ei.cpu().detach().numpy())
+        np.save("torch_Ei.npy", Ei.cpu().detach().numpy())
         # import ipdb;ipdb.set_trace()
         Etot = torch.sum(Ei, 1)
 
@@ -344,6 +347,7 @@ class DeepMD(nn.Module):
         print(Ei[0, 0].item())
         print(Etot[0].item())
         print(F[0, 0].tolist())
+        # import ipdb;ipdb.set_trace()
         
         return Etot, Ei, F               
 

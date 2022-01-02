@@ -63,6 +63,7 @@ class EmbedingNet(nn.Module):
                 hiden = torch.matmul(x, self.weights['weight' + str(i-1)])
             
             hiden = self.cfg['activation'](hiden)
+            
             if self.network_size[i] == self.network_size[i-1]:
                 if self.cfg['resnet_dt']:
                     x = hiden * self.resnet_dt['resnet_dt' + str(i-1)] + x

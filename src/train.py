@@ -393,9 +393,14 @@ def get_loss_func(start_lr, real_lr, has_fi, lossFi, has_etot, loss_Etot, has_eg
         l2_loss += pref_ei * loss_Ei 
     # data = [learning_rate, loss_Egroup, lossFi, loss_Etot, l2_loss];
     # save_prefactor_file(pm.dir_work+"prefactor_loss.csv", data)
-    # print("=====real learning rate=====")
-    # print(real_lr)
-    l2_loss = torch.sqrt(l2_loss)
+    print("=====print in loss function=====")
+    print(real_lr)   #0.001
+    print(start_lr)   #0.001
+    print(pref_etot)  #0.020000000000000018
+    print(loss_Etot)  #311052.875
+    print(pref_fi)    #1000
+    print(lossFi)     #0
+    # l2_loss = torch.sqrt(l2_loss)
     return l2_loss
 
 
@@ -591,12 +596,18 @@ def train(i_batch, sample_batches, model, optimizer, criterion, last_epoch, real
     # Etot_label.shape = [batch_size, 1], while Etot_predict.shape = [batch_size], so squeeze Etot_label to match
     
     # shift 之后的 label
-    # Ei_label = Ei_label - 5133.92272
-    # Etot_label = Etot_label - 554464.1386
+    Ei_label = Ei_label - 5133.92272
+    Etot_label = Etot_label - 554464.1386
 
-    loss_F = criterion(Force_predict, Force_label)
-    loss_Etot = criterion(Etot_predict, Etot_label)
+    dp_force_label = torch.tensor(np.load("deepmd_force_hat.npy"), device=device)
+    dp_etot_label = torch.tensor(np.load("deepmd_ei_hat.npy"), device=device)
+    loss_F = criterion(Force_predict, dp_force_label.reshape(1,108,3))
+    loss_Etot = criterion(Etot_predict, dp_etot_label.reshape(1,1))
+    # loss_F = criterion(Force_predict, Force_label)
+    # loss_Etot = criterion(Etot_predict, Etot_label)
     loss_Ei = criterion(Ei_predict, Ei_label)
+    # import ipdb;ipdb.set_trace()
+    loss_Egroup = 0
 
     # if i_batch % 2:
     #     loss = loss_Ei + loss_Etot
@@ -612,10 +623,11 @@ def train(i_batch, sample_batches, model, optimizer, criterion, last_epoch, real
     w_f = 1
     w_e = 1
     w_eg = 0
-    loss_Egroup = 0
     w_ei = 0
+    
     loss = get_loss_func(start_lr, real_lr, w_f, loss_F, w_e, loss_Etot, w_eg, loss_Egroup, w_ei, loss_Ei)
-
+    print("the backward loss")
+    print(loss.item())
     # loss = awl(loss_Etot, loss_Ei, loss_F)
     # print(awl.parameters())
 
@@ -798,7 +810,7 @@ info("scheduler: opt_autograd = %s" %opt_autograd)
 
 train_data_path = pm.train_data_path
 torch_train_data = get_torch_data(pm.natoms, train_data_path)
-loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=True)
+loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=False)
 
 if opt_deepmd:
     davg, dstd, ener_shift = torch_train_data.get_stat()
@@ -1008,11 +1020,11 @@ if pm.isNNfinetuning == True:
             raise RuntimeError("you must run follow-mode from an existing session")
         opt_latest_file = opt_model_dir+'latest.pt'
         checkpoint = torch.load(opt_latest_file,map_location=device)
-        '''
-        跟deepmd对齐时的模型转换，直接从latest.pt continue时 注释下面一段
         
-        # weight_path = "/home/husiyu/software/deepMD/deepmd-kit-gpu/dataset/cu1/data"  # 小样本测试用
-        weight_path = "/home/husiyu/software/deepMD/deepmd-kit-gpu/dataset/cu1000/data"
+        # 跟deepmd对齐时的模型转换，直接从latest.pt continue时 注释下面一段
+        
+        weight_path = "/home/husiyu/software/deepMD/deepmd-kit-gpu/dataset/cu1/data"  # 小样本测试用
+        # weight_path = "/home/husiyu/software/deepMD/deepmd-kit-gpu/dataset/cu1000/data"
         # dict_keys(['global_step:0', 'descrpt_attr/t_avg:0', 'descrpt_attr/t_std:0', 'filter_type_0/matrix_1_0:0', 'filter_type_0/bias_1_0:0', 'filter_type_0/matrix_2_0:0', 'filter_type_0/bias_2_0:0', 'filter_type_0/matrix_3_0:0', 'filter_type_0/bias_3_0:0', 'layer_0_type_0/matrix:0', 'layer_0_type_0/bias:0', 'layer_1_type_0/matrix:0', 'layer_1_type_0/bias:0', 'layer_1_type_0/idt:0', 'layer_2_type_0/matrix:0', 'layer_2_type_0/bias:0', 'layer_2_type_0/idt:0', 'final_layer_type_0/matrix:0', 'final_layer_type_0/bias:0', 'beta1_power:0', 'beta2_power:0'])
         # odict_keys(['embeding_net.weights.weight0', 'embeding_net.weights.weight1', 'embeding_net.weights.weight2', 'embeding_net.bias.bias0', 'embeding_net.bias.bias1', 'embeding_net.bias.bias2', 'embeding_net.resnet_dt.resnet_dt0', 'embeding_net.resnet_dt.resnet_dt1', 'embeding_net.resnet_dt.resnet_dt2', 'fitting_net.weights.weight0', 'fitting_net.weights.weight1', 'fitting_net.weights.weight2', 'fitting_net.weights.weight3', 'fitting_net.bias.bias0', 'fitting_net.bias.bias1', 'fitting_net.bias.bias2', 'fitting_net.bias.bias3'])
         map_relation = {"embeding_net.weights.weight0" : "filter_type_0/matrix_1_0:0",  #(1,25)
@@ -1041,7 +1053,7 @@ if pm.isNNfinetuning == True:
             model_weights[name] = copying
        
         # import ipdb; ipdb.set_trace() 
-        '''
+        
         model.load_state_dict(checkpoint['model'])
         # optimizer.load_state_dict(checkpoint['optimizer'])
         start_epoch=checkpoint['epoch'] + 1
@@ -1159,7 +1171,7 @@ if pm.isNNfinetuning == True:
             real_lr = adjust_lr(global_step)
             for param_group in optimizer.param_groups:
                 param_group['lr'] = real_lr
-
+            
             batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
                 train(i_batch, sample_batches, model, optimizer, nn.MSELoss(), last_epoch, real_lr)
             print("batch loss:" + str(batch_loss.item()))
@@ -1178,6 +1190,12 @@ if pm.isNNfinetuning == True:
             # OneCycleLR scheduler steps() at each batch
             if (opt_scheduler == 'OC'):
                 scheduler.step()
+
+            # 打印权重的梯度
+            for name, parameter in model.named_parameters():
+                print(name)
+                print(parameter.grad.data)
+                import ipdb;ipdb.set_trace()
 
         # epoch loss update
         loss /= nr_total_sample
@@ -1208,7 +1226,7 @@ if pm.isNNfinetuning == True:
             fid_err_log = open(f_err_log, 'a')
         fid_err_log.write('%d %e %e %e %e %e \n'%(epoch, loss, RMSE_Etot, RMSE_Ei, RMSE_F, real_lr))    
 
-        #valid_loss_function_err = 0
+        # valid_loss_function_err = 0
         # valid_epoch_force_square_loss = 0
         # valid_epoch_etot_square_loss = 0
         # valid_epoch_egroup_square_loss = 0
@@ -1247,7 +1265,6 @@ if pm.isNNfinetuning == True:
         #     #     fid_err_log = open(f_err_log, 'w')
         #     # else:
         #     #     fid_err_log = open(f_err_log, 'a')
-        # import ipdb;ipdb.set_trace()
         #     np.savetxt(fid_err_log, parameter.cpu().detach().numpy())
             
 

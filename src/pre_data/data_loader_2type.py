@@ -225,12 +225,14 @@ class MovementDataset(Dataset):
 
         image_dR = torch.tensor(image_dR, device=self.device)
         list_neigh = torch.tensor(list_neigh, device=self.device)
-
-        # image_dR = torch.tensor(np.load("rij.npy"), device=self.device)
-        # list_neigh = torch.tensor(np.load("nblist.npy"), device=self.device)
-        # image_dR = image_dR.reshape(1, 108, 100, 3)
-        # list_neigh = list_neigh.reshape(1, 108, 100)
-        # list_neigh = list_neigh + 1
+        
+        # recover from dpmd
+        image_dR = torch.tensor(np.load("deepmd_image_dR.npy"), device=self.device)
+        list_neigh = torch.tensor(np.load("deepmd_nblist.npy"), device=self.device)
+        image_dR = image_dR.reshape(1, 108, 100, 3)
+        list_neigh = list_neigh.reshape(1, 108, 100)
+        list_neigh = list_neigh + 1
+        image_num = 1
 
         # deepmd neighbor id 从 0 开始，MLFF从1开始
         mask = list_neigh > 0
