@@ -17,6 +17,7 @@ import parameters as pm
 # pp.readFeatnum()
 from model.embedding import EmbedingNet, FittingNet
 import op
+from model.calculate_force import CalculateForce
 # logging and our extension
 import logging
 logging_level_DUMP = 5
@@ -243,7 +244,6 @@ class DeepMD(nn.Module):
     def forward(self, image_dR, list_neigh):
         # starttime = datetime.datetime.now()
         # recover from deepmd
-        import ipdb;ipdb.set_trace()
         image_dR = torch.tensor(np.load("deepmd_image_dR.npy"), device=self.device, requires_grad=True)
         list_neigh = torch.tensor(np.load("deepmd_nblist.npy"), device=self.device)
         image_dR = image_dR.reshape(1, 108, 100, 3)
@@ -322,7 +322,9 @@ class DeepMD(nn.Module):
         # F_back = F
 
         list_neigh = (list_neigh - 1).type(torch.int)
-        op.calculate_force(list_neigh, dE, Ri_d, batch_size, natoms, 100, F)
+        # import ipdb; ipdb.set_trace()
+        F = CalculateForce.apply(list_neigh, dE, Ri_d, F)
+        # op.calculate_force(list_neigh, dE, Ri_d, batch_size, natoms, 100, F)
         # end_force = time.time()
         # print("customized op force time:", end_force - start_force, 's')
         # import ipdb; ipdb.set_trace()
@@ -349,7 +351,7 @@ class DeepMD(nn.Module):
         print(F[0, 0].tolist())
         # import ipdb;ipdb.set_trace()
         
-        return Etot, Ei, F               
+        return Etot, Ei, F        
 
         # # autograd_time = datetime.datetime.now()
         # # print("auto grad time:")

@@ -25,6 +25,6 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
           "calculate force kernel warpper");
 }
 
-TORCH_LIBRARY(add2, m) {
+TORCH_LIBRARY(op, m) {
     m.def("calculate_force", torch_launch_calculate_force);
 }
