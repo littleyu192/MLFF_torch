@@ -227,12 +227,12 @@ class MovementDataset(Dataset):
         list_neigh = torch.tensor(list_neigh, device=self.device)
         
         # recover from dpmd
-        image_dR = torch.tensor(np.load("deepmd_image_dR.npy"), device=self.device)
-        list_neigh = torch.tensor(np.load("deepmd_nblist.npy"), device=self.device)
-        image_dR = image_dR.reshape(1, 108, 100, 3)
-        list_neigh = list_neigh.reshape(1, 108, 100)
-        list_neigh = list_neigh + 1
-        image_num = 1
+        # image_dR = torch.tensor(np.load("deepmd_image_dR.npy"), device=self.device)
+        # list_neigh = torch.tensor(np.load("deepmd_nblist.npy"), device=self.device)
+        # image_dR = image_dR.reshape(1, 108, 100, 3)
+        # list_neigh = list_neigh.reshape(1, 108, 100)
+        # list_neigh = list_neigh + 1
+        # image_num = 1
 
         # deepmd neighbor id 从 0 开始，MLFF从1开始
         mask = list_neigh > 0
@@ -298,21 +298,6 @@ class MovementDataset(Dataset):
 
 
 
-
-def get_pwmat_data(movement_filename, train_data_file_frompwmat, test_data_file_frompwmat):
-    movement_filename = pm.trainSetDir+'/MOVEMENT'
-    train_data_file_frompwmat = './train_data/final_train/train_data.csv'
-    test_data_file_frompwmat = './train_data/final_test/valid_data.csv'
-    atoms_number_in_one_image, train_samples = get_data_property(filename, pm.test_ratio)
-    if not os.path.exists(train_data_file):
-        print("==========generate train and valid data from PWmat============")
-        get_data(filename, atoms_number_in_one_image, 
-        train_data_file, valid_data_file, train_samples)   # 读取PWmat数据的etot，force
-    else:
-        print("==========train_data.csv and test_data.csv exist!==========")
-
-
-
 def get_torch_data(atoms_number_in_one_image, examplespath):
     '''
     input para:
@@ -337,7 +322,8 @@ def get_torch_data(atoms_number_in_one_image, examplespath):
     ind_img = os.path.join(examplespath+'/ind_img.npy')
 
     f_energy = os.path.join(examplespath+'/engy_scaled.npy')
-    f_force = os.path.join(examplespath+'/fors_scaled.npy') 
+    # f_force = os.path.join(examplespath+'/fors_scaled.npy') 
+    f_force = os.path.join(examplespath+'/force.npy')
 
     torch_data = MovementDataset(atoms_number_in_one_image, f_feat, f_dfeat,
                  f_egroup, f_egroup_weight, f_divider, 

@@ -60,12 +60,17 @@ def write_natoms_dfeat():
     egroup_all = egroup_all.fillna(0)
     egroup_all = egroup_all.values[:, :].astype(float)
 
+    # ep_all = pd.read_csv(os.path.join(pm.trainSetDir, 'ep.txt'), header=None).values
+
     count = 0
     Imgcount = 0
+
     feat_train = np.empty([0, feat_all.shape[1]])
     feat_test = np.empty([0, feat_all.shape[1]])
     egroup_train = np.empty([0, egroup_all.shape[1]])
     egroup_test = np.empty([0, egroup_all.shape[1]])
+    # ep_train = np.empty([0, ep_all.shape[1]])
+    # ep_test = np.empty([0, ep_all.shape[1]])
     for system in pm.sourceFileList:
 
         infodata = pd.read_csv(os.path.join(system, 'info.txt.Ftype'+str(
@@ -96,6 +101,10 @@ def write_natoms_dfeat():
             (egroup_train, egroup_all[count:(count+natom*len(trainImg)), :]), axis=0)
         egroup_test = np.concatenate((egroup_test, egroup_all[(
             count+natom*len(trainImg)):(count+natom*ImgNum), :]), axis=0)
+        # ep_train = np.concatenate(
+        #     (ep_train, ep_all[count:(count+len(trainImg)), :]), axis=0)
+        # ep_test = np.concatenate((ep_test, ep_all[(
+        #     count+len(trainImg)):(count+ImgNum), :]), axis=0)
 
         count = count+natom*ImgNum
         Imgcount = Imgcount+ImgNum
@@ -104,6 +113,8 @@ def write_natoms_dfeat():
     np.savetxt(pm.f_test_feat, feat_test, delimiter=',')
     np.savetxt(pm.f_train_egroup, egroup_train, delimiter=',')
     np.savetxt(pm.f_test_egroup, egroup_test, delimiter=',')
+    # np.savetxt(pm.f_train_ep, ep_train, delimiter=',')
+    # np.savetxt(pm.f_test_ep, ep_test, delimiter=',')
 
     f_train_natom.close()
     f_test_natom.close()
@@ -126,6 +137,13 @@ def write_dR_neigh():
     test_img = dR_neigh[index:]
     train_img.to_csv(pm.f_train_dR_neigh, header=False, index=False)
     test_img.to_csv(pm.f_test_dR_neigh, header=False, index=False)
+    # force和deepmd的对齐
+    force = pd.read_csv(os.path.join(pm.trainSetDir, "force.csv"), header=None)
+    force_train = force[:train_img_num * natom]
+    force_test = force[train_img_num * natom:]
+    force_train.to_csv(pm.f_train_force, header=False, index=False)
+    force_test.to_csv(pm.f_test_force, header=False, index=False)
+
 
 
 if __name__ == '__main__':

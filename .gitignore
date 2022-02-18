@@ -99,3 +99,5 @@ src/op/op.egg-info/dependency_links.txt
 src/op/op.egg-info/PKG-INFO
 src/op/op.egg-info/SOURCES.txt
 src/op/op.egg-info/top_level.txt
+src/op/build/lib.linux-x86_64-3.8/op_grad.cpython-38-x86_64-linux-gnu.so
+src/op/build/lib.linux-x86_64-3.8/test.cpython-38-x86_64-linux-gnu.so

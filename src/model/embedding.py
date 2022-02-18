@@ -91,7 +91,7 @@ class FittingNet(nn.Module):
             self.resnet_dt = nn.ParameterDict()
         
         self.network_size = [input_dim] + self.cfg['network_size']
-
+       
         for i in range(1, len(self.network_size)-1):
             wij = torch.Tensor(self.network_size[i-1], self.network_size[i])
             normal(wij, mean=0, std=(1.0 / np.sqrt(self.network_size[i-1] + self.network_size[i])))
@@ -112,6 +112,8 @@ class FittingNet(nn.Module):
         if self.cfg['bias']:
             bias_init = torch.randn(1, self.network_size[i])
             normal(bias_init, mean=ener_shift, std=1.0)
+            # import ipdb;ipdb.set_trace()
+            # bias_init = torch.Tensor(ener_shift)
             self.bias["bias" + str(i-1)] = nn.Parameter(bias_init, requires_grad=True)       # 初始化指定均值
         
 
