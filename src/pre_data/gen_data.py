@@ -32,7 +32,7 @@ else:
 
 def process_data(f_train_feat, f_train_dfeat, f_train_dR_neigh,
                  f_train_natoms, f_train_egroup,
-                 scalers, nn_data_path):
+                 scalers, nn_data_path): # f_train_ep):
     if not os.path.exists(nn_data_path):
         os.makedirs(nn_data_path)
     # natoms contain all atomnum of each image, format: totnatom, type1n, type2 n
@@ -175,6 +175,10 @@ def process_data(f_train_feat, f_train_dfeat, f_train_dR_neigh,
     # print(dfeat_scaled)
 
     convert_dfeat.deallo()
+
+    # ep = pd.read_csv(f_train_ep, header=None).values
+    
+    # import ipdb; ipdb.set_trace()
     
     print("feat_scaled shape" + str(feat_scaled.shape))
     print("fors_scaled shape" + str(fors_scaled.shape))
@@ -187,10 +191,41 @@ def process_data(f_train_feat, f_train_dfeat, f_train_dR_neigh,
     print("divider shape" + str(egroup.shape))
     print("dfeat_scaled shape" + str(dfeat_scaled.shape))
     
+    # neighbor 不排序
+    # if (pm.dR_neigh):
+    #     dR_neigh = pd.read_csv(f_train_dR_neigh, header=None).values.reshape(indImg[-1], pm.maxNeighborNum, 4) # 1 是 ntype
+    #     print("dR neigh shape" + str(dR_neigh.shape))
+    #     np.save(nn_data_path + "/dR_neigh.npy", dR_neigh)
+
+    # neighbor 排序，距离升序
     if (pm.dR_neigh):
-        dR_neigh = pd.read_csv(f_train_dR_neigh, header=None).values.reshape(indImg[-1], pm.maxNeighborNum, 4) # 1 是 ntype
+        # dR_neigh = pd.read_csv(f_train_dR_neigh, header=None).values.reshape(indImg[-1], pm.maxNeighborNum, 4) # 1 是 ntype
+        names = ['dx', 'dy', 'dz', 'neigh_id']
+        tmp = pd.read_csv(f_train_dR_neigh, header=None, names=names)
+        tmp['dist'] = (tmp['dx'] ** 2 + tmp['dy'] ** 2 + tmp['dz'] ** 2) ** 0.5
+        for i in range(indImg[-1]):
+            print(i)
+            if i == 0:
+                res = tmp[i*pm.maxNeighborNum:(i+1)*pm.maxNeighborNum].sort_values(by=['dist'], ascending=True)
+                zero_count = np.sum(res["neigh_id"].values == 0)
+                res = pd.concat([res[zero_count:], res[:zero_count]])
+                # import ipdb; ipdb.set_trace()
+            else:
+                second = tmp[i*pm.maxNeighborNum:(i+1)*pm.maxNeighborNum].sort_values(by=['dist'], ascending=True)
+                zero_count = np.sum(second["neigh_id"].values == 0)
+                res = pd.concat([res, second[zero_count:], second[:zero_count]])
+        res = res[names]
+        # import ipdb; ipdb.set_trace()
+        dR_neigh = res.values.reshape(indImg[-1], pm.maxNeighborNum, 4)
         print("dR neigh shape" + str(dR_neigh.shape))
         np.save(nn_data_path + "/dR_neigh.npy", dR_neigh)
+    
+    # force与deepmd对齐
+    if (pm.dR_neigh):
+        tmp = pd.read_csv(pm.f_train_force, header=None)
+        force = tmp.values
+        np.save(nn_data_path + "/force.npy", force)
+    
 
     np.save(nn_data_path + "/feat_scaled.npy", feat_scaled)
     np.save(nn_data_path + "/fors_scaled.npy", fors_scaled)
@@ -203,6 +238,7 @@ def process_data(f_train_feat, f_train_dfeat, f_train_dR_neigh,
     np.save(nn_data_path + "/divider.npy", divider)
     np.save(nn_data_path + "/dfeat_scaled.npy", dfeat_scaled)
     np.save(nn_data_path + "/ind_img.npy", np.array(indImg).reshape(-1))
+    # np.save(nn_data_path + "/ep.npy", ep)
 
 def color_print(string, fg=31, bg=49):
     print("\33[0m\33[%d;%dm%s\33[0m" %(fg, bg, string))
@@ -227,6 +263,7 @@ def main():
                  pm.f_train_egroup, 
                  data_scalers,
                  pm.train_data_path)
+                #  pm.f_train_ep)
     # scalers_test = get_scalers(pm.f_test_feat, pm.f_data_scaler, False)
     data_scalers = DataScalers(f_ds=pm.f_data_scaler,
                                    f_feat=pm.f_test_feat)
@@ -237,6 +274,7 @@ def main():
                  pm.f_test_egroup,
                  data_scalers,
                  pm.test_data_path)
+                #  pm.f_test_ep)
 
     print("")
     print("<=============== Summary of feature data file generation  ===============>")

@@ -9,6 +9,7 @@ import parameters as pm
 pm.fortranFitSourceDir = codepath + '/fit'
 import prepare as pp
 import fortran_fitting as ff
+import pandas as pd
 
 if os.path.exists('./input/'):
     pass
@@ -16,8 +17,28 @@ else:
     os.mkdir('./input/')
     os.mkdir('./output')
 
+# if True:
+#     # liuliping auto vdw_fitB.ntype
+#     print('auto creating vdw_fitB.ntype, donot use your own vdw_fitB.ntype file')
+#     print('please modify parameters.py to specify your vdw parameters')
+#     if not os.path.exists(pm.fitModelDir):
+#         os.makedirs(pm.fitModelDir)
+#     strength_rad = 0.0
+#     if pm.isFitVdw == True:
+#         strength_rad = 1.0
+#     vdw_input = {
+#         'ntypes': pm.ntypes,
+#         'nterms': 1,
+#         'atom_type': pm.atomType,
+#         'rad': [strength_rad for i in range(pm.ntypes)],
+#         'e_ave': [500.0 for i in range(pm.ntypes)],
+#         'wp': [ [0.8 for i in range(pm.ntypes*1)] for i in range(pm.ntypes)]
+#     }
+#     if hasattr(pm, 'vdwInput'):
+#         vdw_input = pm.vdwInput
+#     pp.writeVdwInput(pm.fitModelDir, vdw_input)
+
 if True:
-    # liuliping auto vdw_fitB.ntype
     print('auto creating vdw_fitB.ntype, donot use your own vdw_fitB.ntype file')
     print('please modify parameters.py to specify your vdw parameters')
     if not os.path.exists(pm.fitModelDir):
@@ -30,13 +51,12 @@ if True:
         'nterms': 1,
         'atom_type': pm.atomType,
         'rad': [strength_rad for i in range(pm.ntypes)],
-        'e_ave': [500.0 for i in range(pm.ntypes)],
-        'wp': [ [0.8 for i in range(pm.ntypes*1)] for i in range(pm.ntypes)]
+        'e_ave': [0.0 for i in range(pm.ntypes)],
+        'wp': [ [0.0 for i in range(pm.ntypes*1)] for i in range(pm.ntypes)]
     }
     if hasattr(pm, 'vdwInput'):
         vdw_input = pm.vdwInput
     pp.writeVdwInput(pm.fitModelDir, vdw_input)
-
 
 if pm.isCalcFeat:
     if os.path.exists(os.path.join(os.path.abspath(pm.trainSetDir), 'trainData.txt.Ftype1')):
@@ -136,3 +156,19 @@ if hasattr(pm, 'isNewMd100'):
             num_process = pm.md_num_process
         md100.run_md100(imodel=imodel, atom_type=pm.atomType, num_process=num_process)
 
+if pm.dR_neigh:
+    movement_path = os.path.join(pm.trainSetDir, "MOVEMENT")
+    natoms_sum = sum(pm.natoms)
+    cmd1 = "sed -n '/force/,+" + str(natoms_sum) + "p' " + movement_path + " > tmp.txt"
+    cmd2 = "sed '/force/d' tmp.txt | awk '{print $2,$3,$4}' OFS=',' > Force.txt"
+
+    # cmd1 = "sed -n '/force/,+108p' " + movement_path + " > tmp.txt"
+    # cmd2 = "sed '/force/d' tmp.txt | awk '{print $2,$3,$4}' OFS=',' > Force.txt"
+
+    os.system(cmd1)
+    os.system(cmd2)
+
+    force = pd.read_csv("Force.txt", header=None)
+    os.system("rm Force.txt tmp.txt")
+    force_path = os.path.join(pm.trainSetDir, "force.csv")
+    force.to_csv(force_path, header=False, index=False)
