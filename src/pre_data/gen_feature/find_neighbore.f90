@@ -8,7 +8,6 @@
       real*8 xatom(3,natom),AL(3,3)
       integer iatom(natom)
       real*8 dR_neigh(3,m_neigh,ntype,natom)
-      real*8 dR_neigh_tmp(4, m_neigh * ntype)
       integer iat_neigh(m_neigh,ntype,natom),list_neigh(m_neigh,ntype,natom)
       integer iat_neigh_M(m_neigh,ntype,natom)
       integer list_neigh_M(m_neigh,ntype,natom),map2neigh_M(m_neigh,ntype,natom)
@@ -17,7 +16,6 @@
       integer nperiod(3)
       integer iflag,i,j,k,num
       integer i1,i2,i3,itype
-      integer index
       integer iat_type(100)
       integer itype_atom(natom)
       real*8 d,Rc2,dx1,dx2,dx3,dx,dy,dz,dd
@@ -67,10 +65,10 @@
       dx3=xatom(3,j)-xatom(3,i)+i3
       dx=AL(1,1)*dx1+AL(1,2)*dx2+AL(1,3)*dx3
             
-      open(1445, file='./PWdata/dRneigh_detail.dat', access='append', recl=100)
-      write(1445, *) dx1, xatom(1,j), xatom(1,i), i1
-      write(1445, *) dx, AL(1,1)
-      close(1445)
+      !open(1445, file='./PWdata/dRneigh_detail.dat', access='append', recl=100)
+      !write(1445, *) dx1, xatom(1,j), xatom(1,i), i1
+      !write(1445, *) dx, AL(1,1)
+      !close(1445)
 
       dy=AL(2,1)*dx1+AL(2,2)*dx2+AL(2,3)*dx3
       dz=AL(3,1)*dx1+AL(3,2)*dx2+AL(3,3)*dx3
@@ -151,37 +149,20 @@
 
 2000  continue
 
-      write(6,*), "print m_neigh:", m_neigh
-      write(6,*), "print ntype:", ntype
-      write(6,*), "print natom:", natom
+      print *, "print m_neigh:", m_neigh
+      print *, "print ntype:", ntype
+      print *, "print natom:", natom
       open(1314, file='./PWdata/dRneigh.dat', access='append', recl=100)
       ! m_neigh,ntype,natom
-      ! write(1314, *) m_neigh,ntype,natom
       do k=1, natom
-        index = 1
         do j=1, ntype
           do i=1, m_neigh
             if (abs(dR_neigh(1, i, j, k))>1.D-8) then
-              dR_neigh_tmp(1, index) = dR_neigh(1, i, j, k)
-              dR_neigh_tmp(2, index) = dR_neigh(2, i, j, k)
-              dR_neigh_tmp(3, index) = dR_neigh(3, i, j, k)
-              dR_neigh_tmp(4, index) = list_neigh(i, j, k)
-              index = index + 1
+              write(1314, *) dR_neigh(1, i, j, k), dR_neigh(2, i, j, k), dR_neigh(3, i, j, k), list_neigh(i,j,k)
+            else
+              write(1314, *) 0,0,0,0
             end if
-            ! if (abs(dR_neigh(1, i, j, k))>1.D-8) then
-            !   write(1314, *) dR_neigh(1, i, j, k), dR_neigh(2, i, j, k), dR_neigh(3, i, j, k), list_neigh(i,j,k)
-            ! else
-            !   write(1314, *) 0,0,0,0
-            ! end if
           end do
-        end do
-        ! write(1314, *) index
-        do i = 1, m_neigh
-          if (i < index) then
-            write(1314, *) dR_neigh_tmp(1, i), dR_neigh_tmp(2, i), dR_neigh_tmp(3, i), dR_neigh_tmp(4, i)
-          else
-            write(1314, *) 0,0,0,0
-          end if
         end do
       end do
       close(1314)

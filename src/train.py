@@ -409,7 +409,7 @@ def adjust_lr(iter, start_lr=opt_lr, stop_lr=3.51e-8):
     return real_lr
 	
 
-def train(i_batch, sample_batches, model, optimizer, criterion, last_epoch, real_lr):
+def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
     if (opt_dtype == 'float64'):
         Ei_label = Variable(sample_batches['output_energy'][:,:,:].double().to(device))
         Force_label = Variable(sample_batches['output_force'][:,:,:].double().to(device))   #[40,108,3]
@@ -797,7 +797,7 @@ for epoch in range(start_epoch, n_epoch + 1):
         # optimizer.param_groups[1]['lr'] = real_lr / 108
         
         batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
-            train(i_batch, sample_batches, model, optimizer, nn.MSELoss(), last_epoch, real_lr)
+            train(sample_batches, model, optimizer, nn.MSELoss(), last_epoch, real_lr)
         
         print("batch loss:" + str(batch_loss.item()))
         # print("batch mse ei:" + str(batch_loss_Ei.item()))

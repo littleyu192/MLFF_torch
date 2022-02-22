@@ -158,12 +158,8 @@ if hasattr(pm, 'isNewMd100'):
 
 if pm.dR_neigh:
     movement_path = os.path.join(pm.trainSetDir, "MOVEMENT")
-    natoms_sum = sum(pm.natoms)
-    cmd1 = "sed -n '/force/,+" + str(natoms_sum) + "p' " + movement_path + " > tmp.txt"
+    cmd1 = "sed -n '/force/,+108p' " + movement_path + " > tmp.txt"
     cmd2 = "sed '/force/d' tmp.txt | awk '{print $2,$3,$4}' OFS=',' > Force.txt"
-
-    # cmd1 = "sed -n '/force/,+108p' " + movement_path + " > tmp.txt"
-    # cmd2 = "sed '/force/d' tmp.txt | awk '{print $2,$3,$4}' OFS=',' > Force.txt"
 
     os.system(cmd1)
     os.system(cmd2)

@@ -1,4 +1,8 @@
 # other configration
+/demo
+!/demo/cu/PWdata/MOVEMENT
+!/demo/cu/parameters.py
+
 /data
 /dataMD
 /cu/*

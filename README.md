@@ -15,15 +15,20 @@ with conda:
 	# create conda env
 	conda create -n *name* python=3.8
 	conda activate *name*
-	conda install -c conda-forge cupy cudatoolkit=11.1 cudnn cutensor nccl
-	conda install pytorch torchvision torchaudio -c pytorch-lts
+	conda install astunparse numpy ninja pyyaml mkl mkl-include setuptools cmake cffi typing_extensions future six requests dataclasses
+	conda install -c pytorch magma-cuda110  # use the magma-cuda* that matches your CUDA version
+	git clone --recursive https://github.com/pytorch/pytorch
+	cd pytorch
+	# if you are updating an existing checkout
+	git submodule sync
+	git submodule update --init --recursive --jobs 0
+	export CMAKE_PREFIX_PATH=${CONDA_PREFIX:-"$(dirname $(which conda))/../"}
+	python setup.py install
+
 	# compiler
-	cd src
+	cd /the/path/the/MLFF_torch/src
 	./build.sh
-    # export MLFF bin to bashrc
-    vim ~/.bashrc
     export PATH=the/path/to/MLFF_torch/src/bin:$PATH
-    source ~/.bashrc
     conda deactivate *name*
     
     
