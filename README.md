@@ -17,6 +17,7 @@ with conda:
 	conda activate *name*
 	conda install astunparse numpy ninja pyyaml mkl mkl-include setuptools cmake cffi typing_extensions future six requests dataclasses
 	conda install -c pytorch magma-cuda110  # use the magma-cuda* that matches your CUDA version
+
 	git clone --recursive https://github.com/pytorch/pytorch
 	cd pytorch
 	# if you are updating an existing checkout
@@ -29,6 +30,7 @@ with conda:
 	cd /the/path/the/MLFF_torch/src
 	./build.sh
     export PATH=the/path/to/MLFF_torch/src/bin:$PATH
+	cd op && python setup.py install
     conda deactivate *name*
     
     
@@ -42,18 +44,14 @@ with dorcker:
 ### Usage example 
 
 	# generate features
-	cd the/path/to/data    # in parameter.py, make sure isCalcFeat=True && isFitLinModel=True
+	cd the/path/to/data    # in parameter.py, make sure isCalcFeat=True && isFitVdw=False
 	python the/path/to/MLFF_torch/src/bin/mlff.py
-	python the/path/to/MLFF_torch/src/bin/seper.py  # in parameter.py, test_ratio = 0.2 for default
-	python the/path/to/MLFF_torch/src/bin/gen_data.py 
+	python the/path/to/MLFF_torch/src/bin/seper.py  # in parameters.py, test_ratio = 0.2 for default
+	python the/path/to/MLFF_torch/src/bin/gen_data.py
 	# model train
-	# make sure isFitVdw=True && isCalcFeat=True && isFitLinModel=True && isNNfinetuning=True
-	python the/path/to/MLFF_torch/src/train.py
+	python the/path/to/MLFF_torch/src/train.py --deepmd=True -n DeepMD_cfg_dp -s record
 	# model test
-	# make sure isNewMd100=True and others set to be false
-	# add: md_num_process = * && is_md100_egroup = False && is_md100_show_X11_fig = False
-	python the/path/to/MLFF_torch/src/test/read_wij.py  ./FC3model_mini_force/3layers_MLFFNet.pt  #model dir
-	python the/path/to/MLFF_torch/src/mlff.py
+	
 ## License 
 
 If you use this code in any future publications, please cite this:
