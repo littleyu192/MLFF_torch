@@ -198,7 +198,6 @@ def process_data(f_train_feat, f_train_dfeat, f_train_dR_neigh,
     #     np.save(nn_data_path + "/dR_neigh.npy", dR_neigh)
 
     # neighbor 升序排列
-    
     if (pm.dR_neigh):
         # dR_neigh = pd.read_csv(f_train_dR_neigh, header=None).values.reshape(indImg[-1], pm.maxNeighborNum, 4) # 1 是 ntype
         names = ['dx', 'dy', 'dz', 'neigh_id']
