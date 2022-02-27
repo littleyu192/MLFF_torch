@@ -15,11 +15,10 @@ import torch.optim as optim
 from torch.nn.parameter import Parameter
 from torch.utils.data import Dataset, DataLoader
 from loss.AutomaticWeightedLoss import AutomaticWeightedLoss
-from model.LN import LNNet
-from model.MLFF import preMLFF, MLFF
-from model.FCold import preMLFFNet, MLFFNet
+from model.MLFF import MLFF
+from model.FCold import MLFFNet
 
-from model.deepmd import preDeepMD, DeepMD
+from model.deepmd import DeepMD
 import torch.utils.data as Data
 from torch.autograd import Variable
 import math
@@ -508,10 +507,10 @@ def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
     # dp_etot_label = torch.tensor(np.load("/home/husiyu/software/MLFFdataset/cu_f1_mini/deepmd_etot_hat.npy"), device=device)
     # loss_F = criterion(Force_predict, dp_force_label.reshape(1,108,3))
     # loss_Etot = criterion(Etot_predict, dp_etot_label.reshape(1,1))
-    # import ipdb;ipdb.set_trace()
     
-    loss_F = criterion(Force_predict, -1*Force_label)
+    loss_F = criterion(Force_predict, Force_label)
     loss_Etot = criterion(Etot_predict, Etot_label)
+    # loss_Etot = torch.zeros_like(loss_Etot)
     # loss_Ei = criterion(Ei_predict, Ei_label)
     # loss_Egroup = criterion(Egroup_predict, Egroup_label)
     loss_Ei = 0
@@ -529,8 +528,14 @@ def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
     w_ei = 0
     
     loss, pref_f, pref_e = get_loss_func(start_lr, real_lr, w_f, loss_F, w_e, loss_Etot, w_eg, loss_Egroup, w_ei, loss_Ei)
+    # loss = loss_Etot
+
     loss.backward()
+    # param = {}
+    # for name, parameter in model.named_parameters():
+    #     param[name] = parameter.grad.cpu().detach().numpy()
     optimizer.step()
+    # import ipdb; ipdb.set_trace()
     info("loss = %.16f (loss_etot = %.16f, loss_force = %.16f, RMSE_etot = %.16f, RMSE_force = %.16f)"\
      %(loss, loss_Etot, loss_F, loss_Etot ** 0.5, loss_F ** 0.5))
     # f_err_log = '/home/husiyu/software/MLFFdataset/cu_f1_neigh/0212_b32_R/iter_lr.dat'
@@ -630,15 +635,15 @@ info("Scheduler: opt_LR_T_max = %s" %opt_LR_T_max)
 info("scheduler: opt_autograd = %s" %opt_autograd)
 
 train_data_path = pm.train_data_path
-torch_train_data = get_torch_data(pm.natoms, train_data_path)
-loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=True)
+torch_train_data = get_torch_data(sum(pm.natoms), train_data_path)
+loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=False)
 
 if opt_deepmd:
     davg, dstd, ener_shift = torch_train_data.get_stat()
     stat = [davg, dstd, ener_shift]
 
 valid_data_path=pm.test_data_path
-torch_valid_data = get_torch_data(pm.natoms, valid_data_path)
+torch_valid_data = get_torch_data(sum(pm.natoms), valid_data_path)
 loader_valid = Data.DataLoader(torch_valid_data, batch_size=1, shuffle=True)
 davg, dstd, ener_shift = torch_valid_data.get_stat()
 
@@ -799,11 +804,11 @@ for epoch in range(start_epoch, n_epoch + 1):
         batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
             train(sample_batches, model, optimizer, nn.MSELoss(), last_epoch, real_lr)
         
-        print("batch loss:" + str(batch_loss.item()))
-        # print("batch mse ei:" + str(batch_loss_Ei.item()))
-        print("batch mse etot:" + str(batch_loss_Etot.item()))
-        print("batch mse F:" + str(batch_loss_F.item()))
-        print("=============================")
+        # print("batch loss:" + str(batch_loss.item()))
+        # # print("batch mse ei:" + str(batch_loss_Ei.item()))
+        # print("batch mse etot:" + str(batch_loss_Etot.item()))
+        # print("batch mse F:" + str(batch_loss_F.item()))
+        # print("=============================")
 
         iter = iter + 1
         iprint = 100 #隔几个iteration记录一次误差
@@ -881,7 +886,7 @@ for epoch in range(start_epoch, n_epoch + 1):
             writer.add_scalar('train_RMSE_F', RMSE_F, epoch)
 
 # ==========================part4:模型validation==========================
-    if epoch > 1:
+    if epoch > 2000:
         nr_total_sample = 0
         valid_loss = 0.
         valid_loss_Etot = 0.
@@ -913,7 +918,7 @@ for epoch in range(start_epoch, n_epoch + 1):
         if not os.path.exists(f_err_log):
             fid_err_log = open(f_err_log, 'w')
             fid_err_log.write('epoch\t valid_RMSE_Etot\t valid_RMSE_Ei\t valid_RMSE_F')
-        elif i_batch % iprint == 0:
+        elif epoch % iprint == 0:
             fid_err_log = open(f_err_log, 'a')
             fid_err_log.write('%d %e %e %e \n'%(epoch, valid_RMSE_Etot, valid_RMSE_Ei, valid_RMSE_F))
         

@@ -1,8 +1,10 @@
 # other configration
 /demo
-!/demo/cu/PWdata/MOVEMENT
+!/demo/cu/PWdata/MOVEMNT
 !/demo/cu/parameters.py
-
+!/demo/cuo/PWdata/MOVEMNT
+!/demo/cuo/parameters.py
+/dataset
 /data
 /dataMD
 /cu/*

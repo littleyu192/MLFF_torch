@@ -203,8 +203,7 @@ def process_data(f_train_feat, f_train_dfeat, f_train_dR_neigh,
         names = ['dx', 'dy', 'dz', 'neigh_id']
         tmp = pd.read_csv(f_train_dR_neigh, header=None, names=names)
         tmp['dist'] = (tmp['dx'] ** 2 + tmp['dy'] ** 2 + tmp['dz'] ** 2) ** 0.5
-        for i in range(indImg[-1]):
-            print(i)
+        for i in range(indImg[-1] * len(pm.atomType)):
             if i == 0:
                 res = tmp[i*pm.maxNeighborNum:(i+1)*pm.maxNeighborNum].sort_values(by=['dist'], ascending=True)
                 zero_count = np.sum(res["neigh_id"].values == 0)
@@ -215,8 +214,7 @@ def process_data(f_train_feat, f_train_dfeat, f_train_dR_neigh,
                 zero_count = np.sum(second["neigh_id"].values == 0)
                 res = pd.concat([res, second[zero_count:], second[:zero_count]])
         res = res[names]
-        # import ipdb; ipdb.set_trace()
-        dR_neigh = res.values.reshape(indImg[-1], pm.maxNeighborNum, 4)
+        dR_neigh = res.values.reshape(indImg[-1], len(pm.atomType), pm.maxNeighborNum, 4)
         print("dR neigh shape" + str(dR_neigh.shape))
         np.save(nn_data_path + "/dR_neigh.npy", dR_neigh)
     

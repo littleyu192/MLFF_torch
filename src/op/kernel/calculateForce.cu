@@ -95,9 +95,9 @@ void launch_calculate_force(
 #endif
 
 #if 1
-    const int LEN = 128;
-    if (neigh_num > 128) {
-        std::cout << "Error, neigh num > 128, not supported!" << std::endl;
+    const int LEN = 256;
+    if (neigh_num > 256) {
+        std::cout << "Error, neigh num > 256, not supported!" << std::endl;
     }
     dim3 block_grid(natoms, batch_size);
     dim3 thread_grid(LEN, 3);

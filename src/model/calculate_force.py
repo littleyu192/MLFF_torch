@@ -9,7 +9,7 @@ class CalculateForce(Function):
         dims = list_neigh.shape
         batch_size = dims[0]
         natoms = dims[1]
-        neigh_num = dims[2]
+        neigh_num = dims[2] * dims[3]
         ctx.save_for_backward(list_neigh, dE, Ri_d)
         op.calculate_force(list_neigh, dE, Ri_d, batch_size, natoms, neigh_num, F)
         return F
@@ -23,7 +23,7 @@ class CalculateForce(Function):
         dims = list_neigh.shape
         batch_size = dims[0]
         natoms = dims[1]
-        neigh_num = dims[2]
+        neigh_num = dims[2] * dims[3]
         grad = torch.zeros_like(dE)
         op_grad.calculate_force_grad(list_neigh, Ri_d, grad_output, batch_size, natoms, neigh_num, grad)
         return (None, grad, None, None)
