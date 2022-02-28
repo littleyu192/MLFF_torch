@@ -3,6 +3,7 @@ from builtins import print
 from re import S
 import numpy as np
 import torch
+from torch import embedding
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import init
@@ -62,7 +63,8 @@ class DeepMD(nn.Module):
         self.fitting_net = nn.ModuleList()
         # self.embeding_net = EmbedingNet(self.net_cfg['embeding_net'], magic)
         for i in range(self.ntypes):
-            self.embeding_net.append(EmbedingNet(self.net_cfg['embeding_net'], magic))
+            for j in range(self.ntypes):
+                self.embeding_net.append(EmbedingNet(self.net_cfg['embeding_net'], magic))
             fitting_net_input_dim = self.net_cfg['embeding_net']['network_size'][-1]
             self.fitting_net.append(FittingNet(self.net_cfg['fitting_net'], 16 * fitting_net_input_dim, self.stat[2][i], magic))
 
@@ -225,7 +227,8 @@ class DeepMD(nn.Module):
         for ntype in range(self.ntypes):
             for ntype_1 in range(self.ntypes):
                 S_Rij = Ri[:, atom_sum:atom_sum+self.natoms[ntype], ntype_1*neighbor_num:(ntype_1+1)*neighbor_num, 0].unsqueeze(-1)
-                G = self.embeding_net[ntype_1](S_Rij)
+                embedding_index = ntype * self.ntypes + ntype_1
+                G = self.embeding_net[embedding_index](S_Rij)
                 tmp_a = Ri[:, atom_sum:atom_sum+self.natoms[ntype], ntype_1*neighbor_num:(ntype_1+1)*neighbor_num].transpose(-2, -1)
                 tmp_b = torch.matmul(tmp_a, G)
                 if ntype_1 == 0:
