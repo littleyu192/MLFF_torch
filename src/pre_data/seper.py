@@ -123,6 +123,7 @@ def write_natoms_dfeat():
         f_test_dfeat[i].close()
 
 
+
 def write_dR_neigh():
     # 需要生成一个自己的info文件 先用gen2b的代替
     infodata = pd.read_csv(os.path.join(pm.sourceFileList[0],'info.txt.Ftype'+str(pm.use_Ftype[0])), header=None,delim_whitespace=True).values[:,0].astype(int)
@@ -130,9 +131,9 @@ def write_dR_neigh():
     img_num = infodata[2] - (len(infodata)-3)
     train_img_num = int(img_num * (1 - pm.test_ratio))
     dR_neigh = pd.read_csv(pm.dRneigh_path, header=None, delim_whitespace=True)
-    if img_num * pm.maxNeighborNum * natom != dR_neigh.shape[0]:
+    if img_num * pm.maxNeighborNum * natom * len(pm.atomType) != dR_neigh.shape[0]:
         raise ValueError("dim not match")
-    index = train_img_num * natom * pm.maxNeighborNum
+    index = train_img_num * natom * pm.maxNeighborNum * len(pm.atomType)
     train_img = dR_neigh[:index]
     test_img = dR_neigh[index:]
     train_img.to_csv(pm.f_train_dR_neigh, header=False, index=False)

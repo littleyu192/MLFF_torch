@@ -15,11 +15,10 @@ import torch.optim as optim
 from torch.nn.parameter import Parameter
 from torch.utils.data import Dataset, DataLoader
 from loss.AutomaticWeightedLoss import AutomaticWeightedLoss
-from model.LN import LNNet
-from model.MLFF import preMLFF, MLFF
-from model.FCold import preMLFFNet, MLFFNet
+from model.MLFF import MLFF
+from model.FCold import MLFFNet
 
-from model.deepmd import preDeepMD, DeepMD
+from model.deepmd import DeepMD
 import torch.utils.data as Data
 from torch.autograd import Variable
 import math
@@ -52,7 +51,7 @@ opt_momentum = float(0)
 opt_regular_wd = float(0)
 opt_scheduler = 'NONE'
 opt_epochs = 100000
-opt_lr = float(0.002)
+opt_lr = float(0.001)
 opt_gamma = float(0.99)
 opt_step = 100
 opt_batch_size = pm.batch_size
@@ -387,7 +386,7 @@ def get_loss_func(start_lr, real_lr, has_fi, lossFi, has_etot, loss_Etot, has_eg
     if has_fi:
         l2_loss += pref_fi * lossFi      # * 108
     if has_etot:
-        l2_loss +=  0.009259259259 * pref_etot * loss_Etot  # 1/natoms = 0.009259259259 * 
+        l2_loss += 0.015625 * pref_etot * loss_Etot  # 1/108 = 0.009259259259 * 
     if has_egroup :
         l2_loss += pref_egroup * loss_Egroup
     if has_ei :
@@ -508,10 +507,16 @@ def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
     # dp_etot_label = torch.tensor(np.load("/home/husiyu/software/MLFFdataset/cu_f1_mini/deepmd_etot_hat.npy"), device=device)
     # loss_F = criterion(Force_predict, dp_force_label.reshape(1,108,3))
     # loss_Etot = criterion(Etot_predict, dp_etot_label.reshape(1,1))
+    # dp_force_label = torch.tensor(np.load("/home/husiyu/software/MLFFdataset/CuO_mini/deepmd_force_hat.npy"), device=device)
+    # dp_etot_label = torch.tensor(np.load("/home/husiyu/software/MLFFdataset/CuO_mini/deepmd_etot_hat.npy"), device=device)
+    # # import ipdb;ipdb.set_trace()
+    # loss_F = criterion(Force_predict, dp_force_label.reshape(1,64,3))
+    # loss_Etot = criterion(Etot_predict, dp_etot_label.reshape(1,1))
     # import ipdb;ipdb.set_trace()
-    
-    loss_F = criterion(Force_predict, -1*Force_label)
+    loss_F = criterion(Force_predict, Force_label)
     loss_Etot = criterion(Etot_predict, Etot_label)
+
+    # loss_Etot = torch.zeros_like(loss_Etot)
     # loss_Ei = criterion(Ei_predict, Ei_label)
     # loss_Egroup = criterion(Egroup_predict, Egroup_label)
     loss_Ei = 0
@@ -529,17 +534,26 @@ def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
     w_ei = 0
     
     loss, pref_f, pref_e = get_loss_func(start_lr, real_lr, w_f, loss_F, w_e, loss_Etot, w_eg, loss_Egroup, w_ei, loss_Ei)
+    # loss = loss_Etot
+
     loss.backward()
+
+    # param = {}
+    # for name, parameter in model.named_parameters():
+    #     param[name] = parameter.grad.cpu().detach().numpy()
+    #     print(param[name])
+    # import ipdb; ipdb.set_trace()
+
     optimizer.step()
     info("loss = %.16f (loss_etot = %.16f, loss_force = %.16f, RMSE_etot = %.16f, RMSE_force = %.16f)"\
      %(loss, loss_Etot, loss_F, loss_Etot ** 0.5, loss_F ** 0.5))
-    # f_err_log = '/home/husiyu/software/MLFFdataset/cu_f1_neigh/0212_b32_R/iter_lr.dat'
-    # # if i_batch == 1:
-    # #     fid_err_log = open(f_err_log, 'a')
-    # #     fid_err_log.write('iter\t total_loss\t mse_fi\t pref_fi\t lr\t mse_etot\t pref_etot\n')
-    # # else:
-    # fid_err_log = open(f_err_log, 'a')
-    # fid_err_log.write('%d %e %e %e %e %e %e \n'%(i_batch, loss, loss_F, pref_f, real_lr, loss_Etot, pref_e))
+    f_err_log = '/home/husiyu/software/MLFFdataset/CuO_mini/0228_R/iter_lr.dat'
+    # if i_batch == 1:
+    #     fid_err_log = open(f_err_log, 'a')
+    #     fid_err_log.write('iter\t total_loss\t mse_fi\t pref_fi\t lr\t mse_etot\t pref_etot\n')
+    # else:
+    fid_err_log = open(f_err_log, 'a')
+    fid_err_log.write('%d %e %e %e %e %e %e \n'%(i_batch, loss, loss_F, pref_f, real_lr, loss_Etot, pref_e))
 
     return loss, loss_Etot, loss_Ei, loss_F
 
@@ -630,15 +644,15 @@ info("Scheduler: opt_LR_T_max = %s" %opt_LR_T_max)
 info("scheduler: opt_autograd = %s" %opt_autograd)
 
 train_data_path = pm.train_data_path
-torch_train_data = get_torch_data(pm.natoms, train_data_path)
-loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=True)
+torch_train_data = get_torch_data(sum(pm.natoms), train_data_path)
+loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=False)
 
 if opt_deepmd:
     davg, dstd, ener_shift = torch_train_data.get_stat()
     stat = [davg, dstd, ener_shift]
 
 valid_data_path=pm.test_data_path
-torch_valid_data = get_torch_data(pm.natoms, valid_data_path)
+torch_valid_data = get_torch_data(sum(pm.natoms), valid_data_path)
 loader_valid = Data.DataLoader(torch_valid_data, batch_size=1, shuffle=True)
 davg, dstd, ener_shift = torch_valid_data.get_stat()
 
@@ -678,43 +692,107 @@ if (opt_recover_mode == True):
         raise RuntimeError("you must run follow-mode from an existing session")
     opt_latest_file = opt_model_dir+'latest.pt'
     checkpoint = torch.load(opt_latest_file,map_location=device)
-    
+
     # 跟deepmd对齐时的模型转换，直接从latest.pt continue时 注释下面一段
     '''
-    weight_path = "/home/husiyu/software/deepMD/deepmd-kit-gpu/dataset/cu1/data" 
+    # 单元素 recover
     # weight_path = "/home/husiyu/software/deepMD/deepmd-kit-gpu/dataset/cu1000/data"
     # dict_keys(['global_step:0', 'descrpt_attr/t_avg:0', 'descrpt_attr/t_std:0', 'filter_type_0/matrix_1_0:0', 'filter_type_0/bias_1_0:0', 'filter_type_0/matrix_2_0:0', 'filter_type_0/bias_2_0:0', 'filter_type_0/matrix_3_0:0', 'filter_type_0/bias_3_0:0', 'layer_0_type_0/matrix:0', 'layer_0_type_0/bias:0', 'layer_1_type_0/matrix:0', 'layer_1_type_0/bias:0', 'layer_1_type_0/idt:0', 'layer_2_type_0/matrix:0', 'layer_2_type_0/bias:0', 'layer_2_type_0/idt:0', 'final_layer_type_0/matrix:0', 'final_layer_type_0/bias:0', 'beta1_power:0', 'beta2_power:0'])
     # odict_keys(['embeding_net.weights.weight0', 'embeding_net.weights.weight1', 'embeding_net.weights.weight2', 'embeding_net.bias.bias0', 'embeding_net.bias.bias1', 'embeding_net.bias.bias2', 'embeding_net.resnet_dt.resnet_dt0', 'embeding_net.resnet_dt.resnet_dt1', 'embeding_net.resnet_dt.resnet_dt2', 'fitting_net.weights.weight0', 'fitting_net.weights.weight1', 'fitting_net.weights.weight2', 'fitting_net.weights.weight3', 'fitting_net.bias.bias0', 'fitting_net.bias.bias1', 'fitting_net.bias.bias2', 'fitting_net.bias.bias3'])
-    map_relation = {"embeding_net.weights.weight0" : "filter_type_0/matrix_1_0:0",  #(1,25)
-                    "embeding_net.bias.bias0" : "filter_type_0/bias_1_0:0",         #(1,25)
-                    "embeding_net.weights.weight1" : "filter_type_0/matrix_2_0:0",  #(25, 50)
-                    "embeding_net.bias.bias1" : "filter_type_0/bias_2_0:0",         #(1,50)
-                    "embeding_net.weights.weight2" : "filter_type_0/matrix_3_0:0",  #(50,100)
-                    "embeding_net.bias.bias2" : "filter_type_0/bias_3_0:0",        #(1,100)
-                    "fitting_net.weights.weight0" : "layer_0_type_0/matrix:0",     #(1600, 240)
-                    "fitting_net.bias.bias0" : "layer_0_type_0/bias:0",            #(1,240)-->(240,)
-                    "fitting_net.weights.weight1" : "layer_1_type_0/matrix:0",     #(240, 240)
-                    "fitting_net.bias.bias1" : "layer_1_type_0/bias:0",            #(1,240)-->(240,)
-                    "fitting_net.resnet_dt.resnet_dt1":"layer_1_type_0/idt:0",             # (1,240):(240,)
-                    "fitting_net.weights.weight2" : "layer_2_type_0/matrix:0",     #(240, 240)
-                    "fitting_net.bias.bias2" : "layer_2_type_0/bias:0",            #(1,240)-->(240,)
-                    "fitting_net.resnet_dt.resnet_dt2":"layer_2_type_0/idt:0",             #(240,) 
-                    "fitting_net.weights.weight3" : "final_layer_type_0/matrix:0", #(240, 1)
-                    "fitting_net.bias.bias3" : "final_layer_type_0/bias:0",        #(1,1)-->(1,)
+    # weight_path = "/home/husiyu/software/deepMD/deepmd-kit-gpu/dataset/cu1/data" 
+    # map_relation = {"embeding_net.weights.weight0" : "filter_type_0/matrix_1_0:0",  #(1,25)
+    #                 "embeding_net.bias.bias0" : "filter_type_0/bias_1_0:0",         #(1,25)
+    #                 "embeding_net.weights.weight1" : "filter_type_0/matrix_2_0:0",  #(25, 50)
+    #                 "embeding_net.bias.bias1" : "filter_type_0/bias_2_0:0",         #(1,50)
+    #                 "embeding_net.weights.weight2" : "filter_type_0/matrix_3_0:0",  #(50,100)
+    #                 "embeding_net.bias.bias2" : "filter_type_0/bias_3_0:0",        #(1,100)
+    #                 "fitting_net.weights.weight0" : "layer_0_type_0/matrix:0",     #(1600, 240)
+    #                 "fitting_net.bias.bias0" : "layer_0_type_0/bias:0",            #(1,240)-->(240,)
+    #                 "fitting_net.weights.weight1" : "layer_1_type_0/matrix:0",     #(240, 240)
+    #                 "fitting_net.bias.bias1" : "layer_1_type_0/bias:0",            #(1,240)-->(240,)
+    #                 "fitting_net.resnet_dt.resnet_dt1":"layer_1_type_0/idt:0",             # (1,240):(240,)
+    #                 "fitting_net.weights.weight2" : "layer_2_type_0/matrix:0",     #(240, 240)
+    #                 "fitting_net.bias.bias2" : "layer_2_type_0/bias:0",            #(1,240)-->(240,)
+    #                 "fitting_net.resnet_dt.resnet_dt2":"layer_2_type_0/idt:0",             #(240,) 
+    #                 "fitting_net.weights.weight3" : "final_layer_type_0/matrix:0", #(240, 1)
+    #                 "fitting_net.bias.bias3" : "final_layer_type_0/bias:0",        #(1,1)-->(1,)
+    # }
+    # deepmd_weight = np.load(weight_path + "/weights.npy", allow_pickle='TRUE').item()
+    # model_weights = checkpoint['model']
+    # for name, value in model_weights.items():
+    #     copying = torch.from_numpy(deepmd_weight[map_relation[name]])
+    #     if 'fitting_net.bias' in name or 'resnet' in name:
+    #         copying = copying.unsqueeze(0)
+    #     model_weights[name] = copying
+
+    # 多元素 recover
+    weight_path = "/home/husiyu/software/deepMD/deepmd-kit-gpu/dataset/cuo1/data" 
+    map_relation = {"embeding_net.0.weights.weight0" : "filter_type_0/matrix_1_0:0",  #(1,25)
+                    "embeding_net.0.bias.bias0" : "filter_type_0/bias_1_0:0",         #(1,25)
+                    "embeding_net.0.weights.weight1" : "filter_type_0/matrix_2_0:0",  #(25, 50)
+                    "embeding_net.0.bias.bias1" : "filter_type_0/bias_2_0:0",         #(1,50)
+                    "embeding_net.0.weights.weight2" : "filter_type_0/matrix_3_0:0",  #(50,100)
+                    "embeding_net.0.bias.bias2" : "filter_type_0/bias_3_0:0",        #(1,100)
+
+                    "embeding_net.1.weights.weight0" : "filter_type_0/matrix_1_1:0",  #(1,25)
+                    "embeding_net.1.bias.bias0" : "filter_type_0/bias_1_1:0",         #(1,25)
+                    "embeding_net.1.weights.weight1" : "filter_type_0/matrix_2_1:0",  #(25, 50)
+                    "embeding_net.1.bias.bias1" : "filter_type_0/bias_2_1:0",         #(1,50)
+                    "embeding_net.1.weights.weight2" : "filter_type_0/matrix_3_1:0",  #(50,100)
+                    "embeding_net.1.bias.bias2" : "filter_type_0/bias_3_1:0",        #(1,100)
+
+                    # 此处 torch 里的keys需要更新
+                    "embeding_net.2.weights.weight0" : "filter_type_1/matrix_1_0:0",  #(1,25)
+                    "embeding_net.2.bias.bias0" : "filter_type_1/bias_1_0:0",         #(1,25)
+                    "embeding_net.2.weights.weight1" : "filter_type_1/matrix_2_0:0",  #(25, 50)
+                    "embeding_net.2.bias.bias1" : "filter_type_1/bias_2_0:0",         #(1,50)
+                    "embeding_net.2.weights.weight2" : "filter_type_1/matrix_3_0:0",  #(50,100)
+                    "embeding_net.2.bias.bias2" : "filter_type_1/bias_3_0:0",        #(1,100)
+
+                    "embeding_net.3.weights.weight0" : "filter_type_1/matrix_1_1:0",  #(1,25)
+                    "embeding_net.3.bias.bias0" : "filter_type_1/bias_1_1:0",         #(1,25)
+                    "embeding_net.3.weights.weight1" : "filter_type_1/matrix_2_1:0",  #(25, 50)
+                    "embeding_net.3.bias.bias1" : "filter_type_1/bias_2_1:0",         #(1,50)
+                    "embeding_net.3.weights.weight2" : "filter_type_1/matrix_3_1:0",  #(50,100)
+                    "embeding_net.3.bias.bias2" : "filter_type_1/bias_3_1:0",        #(1,100)
+
+                    "fitting_net.0.weights.weight0" : "layer_0_type_0/matrix:0",     #(1600, 240)
+                    "fitting_net.0.bias.bias0" : "layer_0_type_0/bias:0",            #(1,240)-->(240,)
+                    "fitting_net.0.weights.weight1" : "layer_1_type_0/matrix:0",     #(240, 240)
+                    "fitting_net.0.bias.bias1" : "layer_1_type_0/bias:0",            #(1,240)-->(240,)
+                    "fitting_net.0.resnet_dt.resnet_dt1":"layer_1_type_0/idt:0",             # (1,240):(240,)
+                    "fitting_net.0.weights.weight2" : "layer_2_type_0/matrix:0",     #(240, 240)
+                    "fitting_net.0.bias.bias2" : "layer_2_type_0/bias:0",            #(1,240)-->(240,)
+                    "fitting_net.0.resnet_dt.resnet_dt2":"layer_2_type_0/idt:0",             #(240,) 
+                    "fitting_net.0.weights.weight3" : "final_layer_type_0/matrix:0", #(240, 1)
+                    "fitting_net.0.bias.bias3" : "final_layer_type_0/bias:0",        #(1,1)-->(1,)
+
+                    "fitting_net.1.weights.weight0" : "layer_0_type_1/matrix:0",     #(1600, 240)
+                    "fitting_net.1.bias.bias0" : "layer_0_type_1/bias:0",            #(1,240)-->(240,)
+                    "fitting_net.1.weights.weight1" : "layer_1_type_1/matrix:0",     #(240, 240)
+                    "fitting_net.1.bias.bias1" : "layer_1_type_1/bias:0",            #(1,240)-->(240,)
+                    "fitting_net.1.resnet_dt.resnet_dt1":"layer_1_type_1/idt:0",             # (1,240):(240,)
+                    "fitting_net.1.weights.weight2" : "layer_2_type_1/matrix:0",     #(240, 240)
+                    "fitting_net.1.bias.bias2" : "layer_2_type_1/bias:0",            #(1,240)-->(240,)
+                    "fitting_net.1.resnet_dt.resnet_dt2":"layer_2_type_1/idt:0",             #(240,) 
+                    "fitting_net.1.weights.weight3" : "final_layer_type_1/matrix:0", #(240, 1)
+                    "fitting_net.1.bias.bias3" : "final_layer_type_1/bias:0",        #(1,1)-->(1,)
     }
+
+
     deepmd_weight = np.load(weight_path + "/weights.npy", allow_pickle='TRUE').item()
     model_weights = checkpoint['model']
     for name, value in model_weights.items():
         copying = torch.from_numpy(deepmd_weight[map_relation[name]])
-        if 'fitting_net.bias' in name or 'resnet' in name:
+        if ('fitting_net' in name and 'bias' in name) or 'resnet' in name:
             copying = copying.unsqueeze(0)
-        model_weights[name] = copying
-    # import ipdb; ipdb.set_trace() 
+        model_weights[name] = copying 
     # model_weights["fitting_net.bias.bias3"] = model_weights["fitting_net.bias.bias3"] + 5133.62
     start_epoch = 1
     '''
     model.load_state_dict(checkpoint['model'])
     start_epoch = checkpoint['epoch'] + 1
+    
 
 #if torch.cuda.device_count() > 1:
 #    model = nn.DataParallel(model)
@@ -799,11 +877,11 @@ for epoch in range(start_epoch, n_epoch + 1):
         batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
             train(sample_batches, model, optimizer, nn.MSELoss(), last_epoch, real_lr)
         
-        print("batch loss:" + str(batch_loss.item()))
-        # print("batch mse ei:" + str(batch_loss_Ei.item()))
-        print("batch mse etot:" + str(batch_loss_Etot.item()))
-        print("batch mse F:" + str(batch_loss_F.item()))
-        print("=============================")
+        # print("batch loss:" + str(batch_loss.item()))
+        # # print("batch mse ei:" + str(batch_loss_Ei.item()))
+        # print("batch mse etot:" + str(batch_loss_Etot.item()))
+        # print("batch mse F:" + str(batch_loss_F.item()))
+        # print("=============================")
 
         iter = iter + 1
         iprint = 100 #隔几个iteration记录一次误差
@@ -881,7 +959,7 @@ for epoch in range(start_epoch, n_epoch + 1):
             writer.add_scalar('train_RMSE_F', RMSE_F, epoch)
 
 # ==========================part4:模型validation==========================
-    if epoch > 1:
+    if epoch > 10:
         nr_total_sample = 0
         valid_loss = 0.
         valid_loss_Etot = 0.
@@ -913,7 +991,7 @@ for epoch in range(start_epoch, n_epoch + 1):
         if not os.path.exists(f_err_log):
             fid_err_log = open(f_err_log, 'w')
             fid_err_log.write('epoch\t valid_RMSE_Etot\t valid_RMSE_Ei\t valid_RMSE_F')
-        elif i_batch % iprint == 0:
+        elif epoch % iprint == 0:
             fid_err_log = open(f_err_log, 'a')
             fid_err_log.write('%d %e %e %e \n'%(epoch, valid_RMSE_Etot, valid_RMSE_Ei, valid_RMSE_F))
         

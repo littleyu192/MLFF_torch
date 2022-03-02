@@ -169,5 +169,3 @@
 
       return
       end subroutine find_neighbore
-      
-
