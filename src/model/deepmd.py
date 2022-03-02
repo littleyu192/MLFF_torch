@@ -145,9 +145,20 @@ class DeepMD(nn.Module):
         vv_copy = vv.unsqueeze(-1).repeat(1, 1, 1, 4)
         Ri[mask] *= vv_copy[mask]
 
-        Ri = (Ri - davg) / dstd
-        dstd = dstd.unsqueeze(-1).repeat(1, 1, 3)
-        Ri_d = Ri_d / dstd 
+        for ntype in range(self.ntypes):
+            atom_num_ntype = self.natoms[ntype]
+            davg_ntype = davg[ntype].reshape(-1, 4).squeeze().repeat(atom_num_ntype, 1, 1) #[32,100,4]
+            dstd_ntype = dstd[ntype].reshape(-1, 4).squeeze().repeat(atom_num_ntype, 1, 1) #[32,100,4]
+            if ntype == 0:
+                davg_res = davg_ntype
+                dstd_res = dstd_ntype
+            else:
+                davg_res = torch.concat((davg_res, davg_ntype), dim=0)
+                dstd_res = torch.concat((dstd_res, dstd_ntype), dim=0)
+            
+        Ri = (Ri - davg_res) / dstd_res  #[1,64,200,4]
+        dstd_res = dstd_res.unsqueeze(-1).repeat(1, 1, 1, 3)
+        Ri_d = Ri_d / dstd_res 
         
         # res[mask_2] = 0.5 * torch.cos(math.pi * (x[mask_2]-10)/(25-10)) + 0.5 * torch.ones_like(x[mask_2])
         return Ri, Ri_d
@@ -166,12 +177,21 @@ class DeepMD(nn.Module):
         
     def forward(self, image_dR, list_neigh, Egroup_weight, divider):
         # starttime = datetime.datetime.now()
-        # recover from deepmd
+        # recover from deepmd 单元素
         # image_dR = torch.tensor(np.load("deepmd_image_dR.npy"), device=self.device, requires_grad=True)
         # list_neigh = torch.tensor(np.load("deepmd_nblist.npy"), device=self.device)
         # image_dR = image_dR.reshape(1, 108, 100, 3)
         # list_neigh = list_neigh.reshape(1, 108, 100)
         # list_neigh = list_neigh + 1
+
+        # # recover from deepmd 多元素
+        # image_dR = torch.tensor(np.load("deepmd_image_dR.npy"), device=self.device, requires_grad=True)
+        # list_neigh = torch.tensor(np.load("deepmd_nblist.npy"), device=self.device)
+        # image_dR = image_dR.reshape(1, 64, 2, 100, 3)
+        # list_neigh = list_neigh.reshape(1, 64, 2, 100)
+        # list_neigh = list_neigh + 1
+        # self.stat[0] = np.load("deepmd_davg.npy")  #[2,800]
+        # self.stat[1] = np.load("deepmd_dstd.npy")   #[2,800]
 
         # image_dR  dims (batch_size, natoms, ntypes, neighbor_num, 3)
         # list_neigh  dims (batch_size, natoms, ntypes, neighbor_num)
@@ -181,46 +201,26 @@ class DeepMD(nn.Module):
         natoms_sum = image_dR.shape[1]
         neighbor_num = image_dR.shape[3]
 
-        for ntype in range(self.ntypes):
-            image_dR_ntype = image_dR[:, :, ntype]
-            list_neigh_ntype = list_neigh[:, :, ntype]
+        list_neigh_reshape = list_neigh.reshape(batch_size, natoms_sum, -1)  #[1,64,200]
+        image_dR_reshape = image_dR.reshape(batch_size, natoms_sum, -1, 3)  #[1,64,200,3]
+        mask = list_neigh_reshape > 0
+        dR2 = torch.zeros_like(list_neigh_reshape, dtype=torch.double)  
+        Rij = torch.zeros_like(list_neigh_reshape, dtype=torch.double)
+        dR2[mask] = torch.sum(image_dR_reshape[mask] * image_dR_reshape[mask], -1) #[1,64,200]
+        Rij[mask] = torch.sqrt(dR2[mask]) #[1,64,200]
 
-            mask = list_neigh_ntype > 0
-            dR2 = torch.zeros_like(list_neigh_ntype, dtype=torch.double)
-            Rij = torch.zeros_like(list_neigh_ntype, dtype=torch.double)
-            dR2[mask] = torch.sum(image_dR_ntype[mask] * image_dR_ntype[mask], -1) #[2,108,100]
-            Rij[mask] = torch.sqrt(dR2[mask])
+        nr = torch.zeros_like(dR2)
+        inr = torch.zeros_like(dR2)
+        dR2_copy = dR2.unsqueeze(-1).repeat(1, 1, 1, 3) #[1,64,200,3]
+        Ri_xyz = torch.zeros_like(dR2_copy)
 
-            nr = torch.zeros_like(dR2)
-            inr = torch.zeros_like(dR2)
-            Ri_xyz = torch.zeros((batch_size, natoms_sum, neighbor_num, 3), device=self.device, dtype=torch.float64)
-            dR2_copy = dR2.unsqueeze(-1).repeat(1, 1, 1, 3)
+        nr[mask] = dR2[mask] / Rij[mask]  #[1,64,200]
+        Ri_xyz[mask] = image_dR_reshape[mask] / dR2_copy[mask] #[1,64,200,3]
+        inr[mask] = 1 / Rij[mask]
 
-            nr[mask] = dR2[mask] / Rij[mask]
-            Ri_xyz[mask] = image_dR_ntype[mask] / dR2_copy[mask]
-            inr[mask] = 1 / Rij[mask]
-
-            davg = torch.tensor(self.stat[0][ntype], device=self.device)
-            dstd = torch.tensor(self.stat[1][ntype], device=self.device)
-            # import ipdb;ipdb.set_trace()
-            # import ipdb;ipdb.set_trace()
-            # recover form deepmd 
-            # davg = torch.tensor(np.load('davg.npy'), device=self.device)
-            # dstd = torch.tensor(np.load('dstd.npy'), device=self.device)
-            # davg = davg.reshape(100, 4)
-            # dstd = dstd.reshape(100, 4)
-            
-            # start_smooth = time.time()
-            # print("preprocessing time:", start_smooth - start_preprocess, 's')
-
-            # Ri, Ri_d = self.smooth(image_dR_ntype, nr, Ri_xyz, mask, inr, davg, dstd)
-            Ri_ntype, Ri_d_ntype = self.smooth(image_dR_ntype, nr, Ri_xyz, mask, inr, davg, dstd)
-            if ntype == 0:
-                Ri = Ri_ntype
-                Ri_d = Ri_d_ntype
-            else:
-                Ri = torch.concat((Ri, Ri_ntype), dim=2)
-                Ri_d = torch.concat((Ri_d, Ri_d_ntype), dim=2)
+        davg = torch.tensor(self.stat[0], device=self.device)  #[2,100,4]
+        dstd = torch.tensor(self.stat[1], device=self.device)  #[2,100,4]
+        Ri, Ri_d = self.smooth(image_dR_reshape, nr, Ri_xyz, mask, inr, davg, dstd) #[1,64,200,4]
         
         atom_sum = 0
 
@@ -238,11 +238,11 @@ class DeepMD(nn.Module):
             xyz_scater_a = xyz_scater_a * 4.0 / (neighbor_num * self.ntypes * 4)
             xyz_scater_b = xyz_scater_a[:, :, :, :16]
             DR_ntype = torch.matmul(xyz_scater_a.transpose(-2, -1), xyz_scater_b)
+            DR_ntype = DR_ntype.reshape(batch_size, self.natoms[ntype], -1)
             if ntype == 0:
                 DR = DR_ntype
             else:
                 DR = torch.concat((DR, DR_ntype), dim=1)
-            DR_ntype = DR_ntype.reshape(batch_size, self.natoms[ntype], -1)
             Ei_ntype = self.fitting_net[ntype](DR_ntype)
             if ntype == 0:
                 Ei = Ei_ntype
@@ -255,6 +255,7 @@ class DeepMD(nn.Module):
         # F = torch.zeros((batch_size, natoms, 3), device=self.device)
         # start_autograd = time.time()
         # print("fitting time:", start_autograd - start_fitting, 's')
+
         mask = torch.ones_like(Ei)
         # # dE = torch.autograd.grad(Ei, Ri, grad_outputs=mask, create_graph=True)
         dE = torch.autograd.grad(Ei, Ri, grad_outputs=mask, retain_graph=True, create_graph=True)
@@ -262,10 +263,7 @@ class DeepMD(nn.Module):
 
         Ri_d = Ri_d.reshape(batch_size, natoms_sum, -1, 3)
         dE = dE.reshape(batch_size, natoms_sum, 1, -1)
-        # param = {}
-        # for name, parameter in self.named_parameters():
-        #     param[name] = parameter.cpu().detach().numpy()
-        
+
         # start_force = time.time()
         # print("autograd time:", start_force - start_autograd, 's')
         F = torch.matmul(dE, Ri_d).squeeze(-2) # batch natom 3
@@ -275,6 +273,7 @@ class DeepMD(nn.Module):
 
         list_neigh = (list_neigh - 1).type(torch.int)
         F = CalculateForce.apply(list_neigh, dE, Ri_d, F)
+
         return Etot, Ei, F
         
 
