@@ -41,6 +41,7 @@ opt_force_cpu = False
 opt_magic = False
 opt_follow_mode = False
 opt_recover_mode = False
+opt_shuffle_data = False
 opt_net_cfg = 'default'
 opt_act = 'sigmoid'
 opt_optimizer = 'ADAM'
@@ -84,8 +85,9 @@ opt_LR_min_lr = 0.
 opt_LR_T_max = None
 
 opts,args = getopt.getopt(sys.argv[1:],
-    '-h-c-m-f-p-n:-a:-z:-v:-w:-u:-e:-l:-g:-t:-b:-d:-r:-s:-o:-i:-j:',
-    ['help','cpu','magic','follow','net_cfg=','act=','optimizer=','momentum',
+    '-h-c-m-f-p-S-n:-a:-z:-v:-w:-u:-e:-l:-g:-t:-b:-d:-r:-s:-o:-i:-j:',
+    ['help','cpu','magic','follow','recover','shuffle',
+     'net_cfg=','act=','optimizer=','momentum',
      'weight_decay=','scheduler=','epochs=','lr=','gamma=','step=',
      'batch_size=','dtype=','rseed=','session=','log_level=',
      'file_log_level=','j_cycle=','init_b','save_model',
@@ -102,6 +104,7 @@ for opt_name,opt_value in opts:
         print("     -m, --magic                 :  a magic flag for your testing code")
         print("     -f, --follow                :  follow a previous trained model file")
         print("     -p, --recover               :  breakpoint training")
+        print("     -S, --shuffle               :  shuffle training set during each epoch")
         print("     -n cfg, --net_cfg=cfg       :  if -f/--follow is not set, specify network cfg in parameters.py")
         print("                                    eg: -n MLFF_dmirror_cfg1")
         print("                                    if -f/--follow is set, specify the model image file name")
@@ -160,13 +163,15 @@ for opt_name,opt_value in opts:
         opt_force_cpu = True
     elif opt_name in ('-m','--magic'):
         opt_magic = True
+    elif opt_name in ('-f','--follow'):
+        opt_follow_mode = True
+        # opt_follow_epoch = int(opt_value)
     elif opt_name in ('-p','--recover'):
         opt_recover_mode = True
         print(opt_recover_mode)
         # opt_follow_epoch = int(opt_value)
-    elif opt_name in ('-f','--follow'):
-        opt_follow_mode = True
-        # opt_follow_epoch = int(opt_value)
+    elif opt_name in ('-S','--shuffle'):
+        opt_shuffle_data = True
     elif opt_name in ('-n','--net_cfg'):
         opt_net_cfg = opt_value
     elif opt_name in ('-a','--act'):
@@ -644,7 +649,10 @@ info("Scheduler: opt_LR_T_max = %s" %opt_LR_T_max)
 
 train_data_path=pm.train_data_path
 torch_train_data = get_torch_data(pm.natoms, train_data_path)
-loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=False)
+if (opt_shuffle_data == True):
+    loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=True)
+else:
+    loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=False)
 
 valid_data_path=pm.test_data_path
 torch_valid_data = get_torch_data(pm.natoms, valid_data_path)
