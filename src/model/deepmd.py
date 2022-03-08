@@ -183,15 +183,15 @@ class DeepMD(nn.Module):
         # image_dR = image_dR.reshape(1, 108, 100, 3)
         # list_neigh = list_neigh.reshape(1, 108, 100)
         # list_neigh = list_neigh + 1
-
+        
         # # recover from deepmd 多元素
-        # image_dR = torch.tensor(np.load("deepmd_image_dR.npy"), device=self.device, requires_grad=True)
-        # list_neigh = torch.tensor(np.load("deepmd_nblist.npy"), device=self.device)
+        # image_dR = torch.tensor(np.load("/home/husiyu/software/deepMD/deepmd-kit-gpu/dataset/cuo1/data/deepmd_image_dR.npy"), device=self.device, requires_grad=True)
+        # list_neigh = torch.tensor(np.load("/home/husiyu/software/deepMD/deepmd-kit-gpu/dataset/cuo1/data/deepmd_nblist.npy"), device=self.device)
         # image_dR = image_dR.reshape(1, 64, 2, 100, 3)
         # list_neigh = list_neigh.reshape(1, 64, 2, 100)
         # list_neigh = list_neigh + 1
-        # self.stat[0] = np.load("deepmd_davg.npy")  #[2,800]
-        # self.stat[1] = np.load("deepmd_dstd.npy")   #[2,800]
+        # self.stat[0] = np.load("/home/husiyu/software/deepMD/deepmd-kit-gpu/dataset/cuo1/data/deepmd_davg.npy")  #[2,800]
+        # self.stat[1] = np.load("/home/husiyu/software/deepMD/deepmd-kit-gpu/dataset/cuo1/data/deepmd_dstd.npy")   #[2,800]
 
         # image_dR  dims (batch_size, natoms, ntypes, neighbor_num, 3)
         # list_neigh  dims (batch_size, natoms, ntypes, neighbor_num)
@@ -277,27 +277,27 @@ class DeepMD(nn.Module):
         return Etot, Ei, F
         
 
-        # # for batch_idx in range(batch_size):
-        # #     for i in range(natoms):
-        # #         # get atom_idx & neighbor_idx
-        # #         i_neighbor = list_neigh[batch_idx, i]  #[100]
-        # #         neighbor_idx = i_neighbor.nonzero().squeeze().type(torch.int64)  #[78]
-        # #         atom_idx = i_neighbor[neighbor_idx].type(torch.int64) - 1
-        # #         # calculate Force
-        # #         for neigh_tmp, neighbor_id in zip(atom_idx, neighbor_idx):
-        # #             tmpA = dE[batch_idx, i, :, neighbor_id*4:neighbor_id*4+4]
-        # #             tmpB = Ri_d[batch_idx, i, neighbor_id*4:neighbor_id*4+4]
-        # #             F_back[batch_idx, neigh_tmp] += torch.matmul(tmpA, tmpB).squeeze(0)   
-        # # F = F_back
-        # # np.save("torch_force.npy", F.cpu().detach().numpy())
-        # # end_force_pytorch = time.time()
-        # # print("torch force time:", end_force_pytorch - end_force, 's')
-        # # import ipdb;ipdb.set_trace()
+        # for batch_idx in range(batch_size):
+        #     for i in range(natoms):
+        #         # get atom_idx & neighbor_idx
+        #         i_neighbor = list_neigh[batch_idx, i]  #[100]
+        #         neighbor_idx = i_neighbor.nonzero().squeeze().type(torch.int64)  #[78]
+        #         atom_idx = i_neighbor[neighbor_idx].type(torch.int64) - 1
+        #         # calculate Force
+        #         for neigh_tmp, neighbor_id in zip(atom_idx, neighbor_idx):
+        #             tmpA = dE[batch_idx, i, :, neighbor_id*4:neighbor_id*4+4]
+        #             tmpB = Ri_d[batch_idx, i, neighbor_id*4:neighbor_id*4+4]
+        #             F_back[batch_idx, neigh_tmp] += torch.matmul(tmpA, tmpB).squeeze(0)   
+        # F = F_back
+        # np.save("torch_force.npy", F.cpu().detach().numpy())
+        # end_force_pytorch = time.time()
+        # print("torch force time:", end_force_pytorch - end_force, 's')
+        # import ipdb;ipdb.set_trace()
 
-        # # print("Ei[0, 0] & Etot[0] & Force[0, 0, :]:")
-        # # print(Ei[0, 0].item())
-        # # print(Etot[0].item())
-        # # print(F[0, 0].tolist())
-        # # import ipdb;ipdb.set_trace()
+        # print("Ei[0, 0] & Etot[0] & Force[0, 0, :]:")
+        # print(Ei[0, 0].item())
+        # print(Etot[0].item())
+        # print(F[0, 0].tolist())
+        # import ipdb;ipdb.set_trace()
         
         # return Etot, Ei, F
