@@ -16,8 +16,8 @@ import torch.optim as optim
 from torch.nn.parameter import Parameter
 from torch.utils.data import Dataset, DataLoader
 from loss.AutomaticWeightedLoss import AutomaticWeightedLoss
-from model.MLFF import MLFF
-from model.FCold import MLFFNet
+from model.MLFF_v1 import MLFF
+from model.MLFF import MLFFNet
 
 from optimizer.kalmanfilter import KalmanFilter
 
@@ -735,7 +735,6 @@ info("scheduler: opt_autograd = %s" %opt_autograd)
 train_data_path = pm.train_data_path
 torch_train_data = get_torch_data(sum(pm.natoms), train_data_path)
 loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=True)
-
 if opt_deepmd:
     davg, dstd, ener_shift = torch_train_data.get_stat()
     stat = [davg, dstd, ener_shift]
@@ -743,7 +742,8 @@ if opt_deepmd:
 valid_data_path=pm.test_data_path
 torch_valid_data = get_torch_data(sum(pm.natoms), valid_data_path)
 loader_valid = Data.DataLoader(torch_valid_data, batch_size=1, shuffle=True)
-davg, dstd, ener_shift = torch_valid_data.get_stat()
+if opt_deepmd:
+    davg, dstd, ener_shift = torch_valid_data.get_stat()
 
 # 模型多卡并行
 # if torch.cuda.device_count() > 1:
@@ -760,7 +760,9 @@ data_scalers = DataScalers(f_ds=pm.f_data_scaler, f_feat=pm.f_train_feat, load=T
 if opt_deepmd:
     model = DeepMD(opt_net_cfg, opt_act, device, stat, opt_magic)
 else:
-    model = MLFF(opt_net_cfg, opt_act, device, opt_magic, opt_autograd)
+    model = MLFFNet(data_scalers, device)
+    # model = MLFF(opt_net_cfg, opt_act, device, opt_magic, opt_autograd)
+
     # this is a temp fix for a quick test
     if (opt_init_b == True):
         for name, p in model.named_parameters():

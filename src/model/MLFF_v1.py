@@ -138,7 +138,7 @@ class MLFF(nn.Module):
             temp_result_dEi_dFeat = torch.zeros((batch_size, natoms_index[i+1], self.dim_feat)).to(self.device)
             temp_result_Ei, temp_result_dEi_dFeat = self.net(temp_image)
             if(i==0):
-                 Ei= temp_result_Ei 
+                Ei= temp_result_Ei 
                 dE = temp_result_dEi_dFeat
             else:
                 Ei = torch.cat((Ei, temp_result_Ei), dim=1)    #[64,1]
