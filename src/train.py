@@ -39,6 +39,10 @@ import time
 import getopt
 import getpass
 
+from sklearn.preprocessing import MinMaxScaler
+from joblib import dump, load
+from sklearn.feature_selection import VarianceThreshold
+
 # logging and our extension
 import logging
 logging_level_DUMP = 5
@@ -376,6 +380,7 @@ else:
 
 
 def get_loss_func(start_lr, real_lr, has_fi, lossFi, has_etot, loss_Etot, has_egroup, loss_Egroup, has_ei, loss_Ei):
+    real_lr = real_lr / math.sqrt(pm.batch_size)
     start_pref_egroup = 0.02
     limit_pref_egroup = 1.0
     start_pref_F = 1000  #1000
@@ -479,12 +484,12 @@ def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
     # import ipdb;ipdb.set_trace()
 
     if opt_deepmd:
-        Etot_predict, Ei_predict, Force_predict = model(dR, dR_neigh_list, egroup_weight, divider)
+        Etot_predict, Ei_predict, Force_predict = model(dR, dfeat, dR_neigh_list, egroup_weight, divider)
     else:
         Etot_predict, Ei_predict, Force_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
     
     optimizer.zero_grad()
-    # Egroup_predict = model.get_egroup(Ei_predict, egroup_weight, divider)   #[40,108,1]
+    # Egroup_predict = model.get_egroup(egroup_weight, divider)   #[40,108,1]
 
     # Etot_deviation = Etot_predict - Etot_label     # [40,1]
     dump("etot predict =============================================>")
@@ -533,10 +538,10 @@ def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
     loss_Egroup = 0
     
 
-    if loss_Etot.item() > 1e5:
-        print("a debug")
-        import ipdb;ipdb.set_trace()
-        return torch.zeros(1), torch.zeros(1), torch.zeros(1), torch.zeros(1)
+    # if loss_Etot.item() > 1e5:
+    #     print("a debug")
+    #     import ipdb;ipdb.set_trace()
+    #     return torch.zeros(1), torch.zeros(1), torch.zeros(1), torch.zeros(1)
     
     start_lr = opt_lr
     w_f = 1
@@ -619,17 +624,20 @@ def train_kalman(sample_batches, model, optimizer, criterion, last_epoch, real_l
     dump(neighbor)
 
     if opt_deepmd:
-        Etot_predict, Ei_predict, Force_predict = model(dR, dR_neigh_list, egroup_weight, divider)
+        Etot_predict, Ei_predict, Force_predict = model(dR, dfeat, dR_neigh_list, egroup_weight, divider)
+        kalman = KalmanFilter(model, kalman_lambda=0.98, kalman_nue=0.99870, device=device)
+        kalman_inputs = [dR, dfeat, dR_neigh_list, egroup_weight, divider]
     else:
         Etot_predict, Ei_predict, Force_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
-    
-    kalman = KalmanFilter(model, kalman_lambda=0.98, kalman_nue=0.99870, device=device)
-    kalman_inputs = [input_data, dfeat, neighbor, egroup_weight, divider]
+        kalman = KalmanFilter(model, kalman_lambda=0.98, kalman_nue=0.99870, device=device)
+        kalman_inputs = [input_data, dfeat, neighbor, egroup_weight, divider]
+   
     kalman.update_energy(kalman_inputs, Etot_label)
     kalman.update_force(kalman_inputs, Force_label)
+    kalman.update_egroup(kalman_inputs, Egroup_label)
 
     if opt_deepmd:
-        Etot_predict, Ei_predict, Force_predict = model(dR, dR_neigh_list, egroup_weight, divider)
+        Etot_predict, Ei_predict, Force_predict = model(dR, dfeat, dR_neigh_list, egroup_weight, divider)
     else:
         Etot_predict, Ei_predict, Force_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
 
@@ -663,7 +671,7 @@ def valid(sample_batches, model, criterion):
 
     model.train()
     if opt_deepmd:
-        Etot_predict, Ei_predict, Force_predict = model(dR, dR_neigh_list, egroup_weight, divider)
+        Etot_predict, Ei_predict, Force_predict = model(dR, dfeat, dR_neigh_list, egroup_weight, divider)
     else:
         Etot_predict, Ei_predict, Force_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
     
@@ -734,13 +742,46 @@ info("scheduler: opt_autograd = %s" %opt_autograd)
 
 train_data_path = pm.train_data_path
 torch_train_data = get_torch_data(sum(pm.natoms), train_data_path)
+
+
+valid_data_path=pm.test_data_path
+torch_valid_data = get_torch_data(sum(pm.natoms), valid_data_path)
+
+
+# ===================for scaler feature and dfeature==========================
+'''
+WARNING!!! Now it is a demo code for scale system with only one element!
+for multi element system, we should scaler for each element, just as for every element.
+'''
+if pm.is_scale:
+    if pm.use_storage_scaler:
+        scaler=load('scaler.pkl')
+        torch_train_data.feat=scaler.transform(torch_train_data.feat)
+    else:
+        scaler=MinMaxScaler()
+        torch_train_data.feat = scaler.fit_transform(torch_train_data.feat)
+    dfeat_tmp = torch_train_data.dfeat
+    dfeat_tmp = dfeat_tmp.transpose(0, 1, 3, 2)
+    dfeat_tmp = dfeat_tmp * scaler.scale_
+    dfeat_tmp = dfeat_tmp.transpose(0, 1, 3, 2)
+    torch_train_data.dfeat = dfeat_tmp
+
+    if pm.storage_scaler:
+        dump(scaler, 'scaler.pkl')
+
+    torch_valid_data.feat = scaler.transform(torch_valid_data.feat)
+    dfeat_tmp = torch_valid_data.dfeat
+    dfeat_tmp = dfeat_tmp.transpose(0, 1, 3, 2)
+    dfeat_tmp = dfeat_tmp * scaler.scale_
+    dfeat_tmp = dfeat_tmp.transpose(0, 1, 3, 2)
+    torch_valid_data.dfeat = dfeat_tmp
+
+
 loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=True)
 if opt_deepmd:
     davg, dstd, ener_shift = torch_train_data.get_stat()
     stat = [davg, dstd, ener_shift]
 
-valid_data_path=pm.test_data_path
-torch_valid_data = get_torch_data(sum(pm.natoms), valid_data_path)
 loader_valid = Data.DataLoader(torch_valid_data, batch_size=1, shuffle=True)
 if opt_deepmd:
     davg, dstd, ener_shift = torch_valid_data.get_stat()
@@ -960,15 +1001,18 @@ for epoch in range(start_epoch, n_epoch + 1):
         debug("nr_batch_sample = %s" %nr_batch_sample)
         global_step = (epoch - 1) * len(loader_train) + i_batch * nr_batch_sample
         real_lr = adjust_lr(global_step)
+        # real_lr = real_lr * pm.batch_size  # batch size = 4时 linear *4
+        real_lr = real_lr * math.sqrt(pm.batch_size)  # batch size = 4时 sqrt *2
         for param_group in optimizer.param_groups:
             param_group['lr'] = real_lr
         # optimizer.param_groups[0]['lr'] = real_lr
         # optimizer.param_groups[1]['lr'] = real_lr / 108
+        
         if pm.use_Kalman == False:
             batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
                 train(sample_batches, model, optimizer, nn.MSELoss(), last_epoch, real_lr)
         elif pm.use_Kalman == True:
-            real_lr = 0.0001
+            real_lr = 0.001
             batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
                 train_kalman(sample_batches, model, optimizer, nn.MSELoss(), last_epoch, real_lr)
 

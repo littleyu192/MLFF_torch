@@ -202,14 +202,16 @@ class MLFFNet(nn.Module):
                         .reshape(batch_size * (natom+1), dim_feat)[n_a_idx_fortran_b,]\
                         .reshape(batch_size, natom, neighbor_num, 1, dim_feat)
         Force = torch.matmul(dEi_neighbors.to(self.device), dfeat).sum([2, 3])
-
+        self.Ei = Ei
+        self.Etot = Etot
+        self.Force = Force
         return Etot, Ei, Force
 
-    def get_egroup(self, Ei, Egroup_weight, divider):
-        batch_size = Ei.shape[0]
-        Egroup = torch.zeros_like(Ei)
+    def get_egroup(self, Egroup_weight, divider):
+        batch_size = self.Ei.shape[0]
+        Egroup = torch.zeros_like(self.Ei)
         for i in range(batch_size):
-            Etot1 = Ei[i]
+            Etot1 = self.Ei[i]
             weight_inner = Egroup_weight[i]
             E_inner = torch.matmul(weight_inner, Etot1)
             Egroup[i] = E_inner

@@ -164,18 +164,18 @@ class DeepMD(nn.Module):
         return Ri, Ri_d
 
 
-    def get_egroup(self, Ei, Egroup_weight, divider):
-        batch_size = Ei.shape[0]
-        Egroup = torch.zeros_like(Ei)
+    def get_egroup(self, Egroup_weight, divider):
+        batch_size = self.Ei.shape[0]
+        Egroup = torch.zeros_like(self.Ei)
         for i in range(batch_size):
-            Etot1 = Ei[i]
+            Etot1 = self.Ei[i]
             weight_inner = Egroup_weight[i]
             E_inner = torch.matmul(weight_inner, Etot1)
             Egroup[i] = E_inner
         Egroup_out = torch.divide(Egroup, divider)
         return Egroup_out
         
-    def forward(self, image_dR, list_neigh, Egroup_weight, divider):
+    def forward(self, image_dR, dfeat, list_neigh, Egroup_weight, divider):
         # starttime = datetime.datetime.now()
         # recover from deepmd 单元素
         # image_dR = torch.tensor(np.load("deepmd_image_dR.npy"), device=self.device, requires_grad=True)
@@ -273,7 +273,7 @@ class DeepMD(nn.Module):
 
         list_neigh = (list_neigh - 1).type(torch.int)
         F = CalculateForce.apply(list_neigh, dE, Ri_d, F)
-
+        self.Ei = Ei
         return Etot, Ei, F
         
 
