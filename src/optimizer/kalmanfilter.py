@@ -19,6 +19,8 @@ class KalmanFilter(nn.Module):
         self.natoms_sum = sum(pm.natoms)
         self.n_select = 24
         self.Force_group_num = 6
+        self.n_select_eg = 12
+        self.Force_group_num_eg = 3
         self.__init_P()
 
     
@@ -37,7 +39,6 @@ class KalmanFilter(nn.Module):
         A = 1 / (self.kalman_lambda + torch.matmul(torch.matmul(H.T, self.P), H))
         K = torch.matmul(self.P, H)
         K = torch.matmul(K, A)
-
         '''
         2. update weights
         '''
@@ -48,13 +49,11 @@ class KalmanFilter(nn.Module):
             end_index = self.weights_index[i+1]
             param.data = weights[start_index:end_index].reshape(param.data.T.shape).T
             i += 1
-
         '''
         3. update P
         '''
         self.P = (1 / self.kalman_lambda) * (self.P - torch.matmul(torch.matmul(K, H.T), self.P))
         self.P = (self.P + self.P.T) / 2
-       
         '''
         4. update kalman_lambda
         '''
@@ -65,11 +64,40 @@ class KalmanFilter(nn.Module):
                 param.grad.zero_()
 
         torch.cuda.empty_cache()
+    
+    def __get_random_index(self, Force_label, n_select, Force_group_num):
+        total_atom=0
+        atom_list=[0]
+        select_list=[]
+        random_index=[[[],[]] for i in range(math.ceil(n_select/Force_group_num))]
+
+        for i in range(len(pm.natoms)):
+            total_atom+=pm.natoms[i]
+            atom_list.append(total_atom)
+        random_list=list(range(total_atom))
+        for i in range(n_select):
+            select_list.append(random_list.pop(random.randint(0, total_atom-i-1)))
+
+        tmp=0
+        tmp2=0
+        Force_shape = Force_label.shape[0] * Force_label.shape[1]
+        tmp_1=list(range(Force_label.shape[0]))
+        tmp_2=select_list
+        for i in tmp_1:
+            for k in tmp_2:
+                random_index[tmp][0].append(i)
+                random_index[tmp][1].append(k)
+                tmp2+=1
+                if tmp2%Force_group_num==0:
+                    tmp+=1
+                if tmp2==Force_shape:
+                    break
+        return random_index
 
     def update_energy(self, inputs, Etot_label):
         time_start = time.time()
         Etot_predict, Ei_predict, force_predict = self.model(inputs[0], inputs[1], inputs[2], inputs[3], inputs[4])
-        errore = Etot_label.item() - Etot_predict.item()#well this is the bug.we should use item()!!!!
+        errore = Etot_label.item() - Etot_predict.item()
         errore = errore / self.natoms_sum
         if errore < 0:
             errore = -1.0 * errore
@@ -93,41 +121,18 @@ class KalmanFilter(nn.Module):
 
     def update_force(self, inputs, Force_label):
         time_start = time.time()
-        select_list=[]
-        random_list=list(range(self.natoms_sum))
-        for i in range(self.n_select):
-            select_list.append(random_list.pop(random.randint(0, self.natoms_sum - i - 1)))
-        torch.cuda.empty_cache()
-        error=0
-        tmp=0
-        weights_index=[]
-        b_index=[]
-        tmp=0
-        tmp2=0
-        Force_shape = Force_label.shape[0] * Force_label.shape[1]
-        random_index=[[[],[]] for i in range(math.ceil(self.n_select/self.Force_group_num))]
-        tmp_1=list(range(Force_label.shape[0]))
-        tmp_2=select_list
         
-        for i in tmp_1:
-            for k in tmp_2:
-                random_index[tmp][0].append(i)
-                random_index[tmp][1].append(k)
-                tmp2+=1
-                if tmp2 % self.Force_group_num==0:
-                    tmp+=1
-                if tmp2==Force_shape:
-                    break
 
         '''
         now we begin to group
         NOTICE! for every force, we should repeat calculate Fatom
         because every step the weight will update, and the same dfeat/dR and de/df will get different Fatom
         '''
+        random_index=self.__get_random_index(Force_label, self.n_select, self.Force_group_num)
 
-        for index_i in range(len(random_index)):
+        for index_i in range(len(random_index)):  # 4
             error = 0
-            for index_ii in range(len(random_index[index_i][0])):
+            for index_ii in range(len(random_index[index_i][0])): # 6
                 for j in range(3):
                     #error = 0 #if we use group , it should not be init
                     Etot_predict, Ei_predict, force_predict = self.model(inputs[0], inputs[1], inputs[2], inputs[3], inputs[4])
@@ -143,7 +148,7 @@ class KalmanFilter(nn.Module):
 
             num = len(random_index[index_i][0])
             error = (error / (num * 3.0)) / self.natoms_sum
-
+            
             tmp_grad = 0
             i = 0
             for name, param in self.model.named_parameters():
@@ -166,4 +171,47 @@ class KalmanFilter(nn.Module):
         torch.cuda.empty_cache()
         time_end = time.time()
         print("update Force time:", time_end - time_start, 's')
+
+
+    def update_egroup(self, inputs, Egroup_label, update_weight=0.1):
+
+        random_index=self.__get_random_index(Egroup_label, self.n_select_eg, self.Force_group_num_eg)
+
+        for index_i in range(len(random_index)):
+            error = 0
+            for index_ii in range(len(random_index[index_i][0])):
+
+                Egroup_predict = self.model.get_egroup(inputs[3], inputs[4]) #egroup_weights, divider
+
+                error_tmp = update_weight*(Egroup_label[random_index[index_i][0][index_ii]][random_index[index_i][1][index_ii]][0] - Egroup_predict[random_index[index_i][0][index_ii]][random_index[index_i][1][index_ii]][0])
+                if error_tmp < 0:
+                    error_tmp = -1.0 * error_tmp
+                    error += error_tmp
+                    (update_weight*(-1.0 * Egroup_predict[random_index[index_i][0][index_ii]][random_index[index_i][1][index_ii]][0])).backward(retain_graph=True)
+                else:
+                    error += error_tmp
+                    (update_weight*(Egroup_predict[random_index[index_i][0][index_ii]][random_index[index_i][1][index_ii]][0])).backward(retain_graph=True)
+
+            num=len(random_index[index_i][0])
+            error=error/num
+
+            tmp_grad=0
+            i = 0
+            for name, param in self.model.named_parameters():
+                if i == 0:
+                    tmp_grad=param.grad
+                    if tmp_grad==None:
+                        tmp_grad=torch.tensor([0.0])
+                    H = (tmp_grad / num).T.reshape(tmp_grad.nelement(), 1)
+                    weights = param.data.T.reshape(param.data.nelement(), 1)
+                else:
+                    tmp_grad=param.grad
+                    if tmp_grad==None:
+                        tmp_grad=torch.tensor([0.0])
+                    H = torch.cat((H, (tmp_grad / num).T.reshape(tmp_grad.nelement(), 1)))
+                    weights = torch.cat((weights, param.data.T.reshape(param.data.nelement(), 1)))
+                i += 1
+            self.__update(H, error, weights)
+
+        torch.cuda.empty_cache()
 
