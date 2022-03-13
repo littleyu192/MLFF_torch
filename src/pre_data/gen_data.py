@@ -49,11 +49,14 @@ def process_data(f_train_feat, f_train_dfeat, f_train_dR_neigh,
     # pd.set_option('display.float_format',lambda x : '%.15f' % x)
     pd.options.display.float_format = '${:,.15f}'.format
     itypes, feat, engy = prepare.r_feat_csv(f_train_feat)
-    feat_scaled = scalers.pre_feat(feat, itypes)
-    engy_scaled = scalers.pre_engy(engy, itypes)
-    
-    # feat_scaled = pre_feat(scalers, feat, itypes)
-    # engy_scaled = engy
+
+    # 进行scale
+    # feat_scaled = scalers.pre_feat(feat, itypes)
+    # engy_scaled = scalers.pre_engy(engy, itypes)
+    # 不scale
+    feat_scaled = feat
+    engy_scaled = engy
+
     egroup, divider, egroup_weight = prepare.r_egroup_csv(f_train_egroup)
     if os.path.exists(os.path.join(pm.dir_work, 'weight_for_cases')):
         weight_all = pd.read_csv(os.path.join(pm.dir_work, 'weight_for_cases'),
@@ -68,8 +71,10 @@ def process_data(f_train_feat, f_train_dfeat, f_train_dR_neigh,
         itype = pm.atomType[i]
         feat_scale_a[:, i] = scalers.scalers[itype].feat_scaler.a
     feat_scale_a = np.asfortranarray(feat_scale_a)  # scaler 的 a参数
-    # feat_scale_a=np.ones((nfeat0m,pm.ntypes))   #如果不做scale，赋值为1?
-    # feat_scale_a = np.asfortranarray(feat_scale_a)
+
+    feat_scale_a=np.ones((nfeat0m,pm.ntypes))   #如果不做scale，赋值为1?
+    feat_scale_a = np.asfortranarray(feat_scale_a)
+    
     init = pm.use_Ftype[0]
     
 
