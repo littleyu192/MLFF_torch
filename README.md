@@ -10,7 +10,7 @@
 
 export MKLROOT=/the/path/to/mkl
 
-```
+```sh
 with conda:
 	# create conda env
 	conda create -n *name* python=3.8
@@ -42,16 +42,36 @@ with dorcker:
 ```
 
 ### Usage example 
-
+```sh
 	# generate features
 	cd the/path/to/data    # in parameter.py, make sure isCalcFeat=True && isFitVdw=False
 	python the/path/to/MLFF_torch/src/bin/mlff.py
 	python the/path/to/MLFF_torch/src/bin/seper.py  # in parameters.py, test_ratio = 0.2 for default
 	python the/path/to/MLFF_torch/src/bin/gen_data.py
-	# model train
+	# model train, mannul in MLFF_torch/dataset/cu1000/parameters*.py
+	# if you want use deepmd model in training
+	cp parameters_dp.py parameters.py
 	python the/path/to/MLFF_torch/src/train.py --deepmd=True -n DeepMD_cfg_dp -s record
+	# if you want use MLP by kalmane filter
+	or python the/path/to/MLFF_torch/src/train.py -n MLFF_dmirror_cfg -s record 
 	# model test
-	
+```
+
+### Code contribution guide
+```sh
+	git checkout master
+	git pull origin master
+	git checkout -b your_branch_name  # e.g., hsy_dev
+	# start your code in your branch
+	# if your're ready to pull request
+	git checkout master
+	git pull origin master
+	git checkout your_branch_name
+	git rebase origin/master
+	git push origin your_branch_name
+	# in github, click pull request
+```
+
 ## License 
 
 If you use this code in any future publications, please cite this:
