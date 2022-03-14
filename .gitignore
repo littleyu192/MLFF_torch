@@ -1,6 +1,6 @@
 # other configration
 /demo
-!/demo/cu1646
+!/demo/cu1646/*
 !/demo/cu/PWdata/MOVEMNT
 !/demo/cu/parameters_dp.py
 !/demo/cu/parameters_kf.py
