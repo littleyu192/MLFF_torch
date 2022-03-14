@@ -1,10 +1,17 @@
 # other configration
 /demo
+!/demo/cu1646/*
 !/demo/cu/PWdata/MOVEMNT
-!/demo/cu/parameters.py
+!/demo/cu/parameters_dp.py
+!/demo/cu/parameters_kf.py
 !/demo/cuo/PWdata/MOVEMNT
 !/demo/cuo/parameters.py
 /dataset
+!/dataset/SiC/PWdata/MOVEMENT
+!/dataset/surface_Li/PWdata/MOVEMENT
+!/dataset/li100/PWdata/MOVEMENT
+!/dataset/CuO/PWdata/MOVEMENT
+
 /data
 /dataMD
 /cu/*
