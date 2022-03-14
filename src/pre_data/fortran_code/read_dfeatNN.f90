@@ -30,8 +30,8 @@ module read_dfeatnn
         integer(4) :: len_dir
         integer(4) :: i,itype1,j1
         integer(4) :: ntype_t,nterm,itype_t
-        character(80),parameter :: vdw_path0="vdw_fitB.ntype"
-        character(200) :: vdw_path=trim(vdw_path0)
+        character(500),parameter :: vdw_path0="vdw_fitB.ntype"
+        character(500) :: vdw_path=trim(vdw_path0)
         fit_dir_simp=trim(adjustl(fit_dir_input))
         len_dir=len(fit_dir_simp)
         if (len_dir/=0 .and. fit_dir_simp/='.')then
@@ -99,7 +99,7 @@ module read_dfeatnn
         integer(4),allocatable,dimension(:) :: num_neigh    
         real*8,allocatable,dimension(:,:) :: xatom
         
-        character(len=80) dfeatDirname
+        character(len=500) dfeatDirname
 
         dfeatDirname=trim(adjustl(dfeatDir))
         ! write(*,*) dfeatDirname
@@ -249,5 +249,3 @@ module read_dfeatnn
   
 
 end module read_dfeatnn
-  
-  
