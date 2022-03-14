@@ -1,56 +1,37 @@
-# other configration
-/demo
-!/demo/cu1646/*
-!/demo/cu/PWdata/MOVEMNT
-!/demo/cu/parameters_dp.py
-!/demo/cu/parameters_kf.py
-!/demo/cuo/PWdata/MOVEMNT
-!/demo/cuo/parameters.py
+
+demo/cu1646/*
+!demo/cu1646/PWdata
+!demo/cu1646/*.py
+demo/cu1646/PWdata/
+# !demo/cu1646/PWdata/MOVEMENT
+
+demo/cuo/*
+!demo/cuo/PWdata
+!demo/cuo/*.py
+demo/cuo/PWdata/
+# !demo/cuo/PWdata/MOVEMENT
+
+demo/cuo1000/*
+!demo/cuo1000/PWdata
+!demo/cuo1000/*.py
+demo/cuo1000/PWdata/
+# !demo/cuo1000/PWdata/MOVEMENT
+
 /dataset
 !/dataset/SiC/PWdata/MOVEMENT
 !/dataset/surface_Li/PWdata/MOVEMENT
 !/dataset/li100/PWdata/MOVEMENT
 !/dataset/CuO/PWdata/MOVEMENT
-
-/data
-/dataMD
-/cu/*
-!/cu/parameters.py
-!/cu/PWdata/MOVEMENT
-/CuO/*
-!/CuO/parameters.py
-!/CuO/PWdata/MOVEMENT
-/zwt/*
-!/zwt/parameters.py
-!/zwt/PWdata/MOVEMENT
-/cu1000
-/cu1000_12
-/cu1000_5
-/cu1000_6
-/cu1000_7
-/cu1000_8
-
-/li10
-/Li
-/dataMD
 # model file
 *.pt
 *.dat
-# eval file
-/eval/cu/*
-/eval/CuO/*
-/eval/zwt/*
-/eval/data_cu/*
+*.so
+src/bin/*
 
 # Byte-compiled / optimized / DLL files
 *.py[cod]
 *__pycache__/
 *pytest_cache/
-
-# pytorch run output files
-/data/runs/
-/cu/runs/
-/cu1
 
 # object file
 *.o
@@ -73,21 +54,14 @@
 *pytest_cache/
 
 ##
-# for directories that should compile on oneself's
-# local environment
-# 
-/src/bin/
-/src/lib/
-
-##
 # for running intermediate directories
 #
-**/PWdata/*
-!**/PWdata/MOVEMENT
-**/fread_dfeat/
-**/input/
-**/output/
-**/runs/
+# **/PWdata/*
+# !**/PWdata/MOVEMENT
+# **/fread_dfeat/
+# **/input/
+# **/output/
+# **/runs/
 
 # NOTE: for all other directories and files, one
 # should carefully select which directory and
@@ -114,3 +88,5 @@ src/op/op.egg-info/SOURCES.txt
 src/op/op.egg-info/top_level.txt
 src/op/build/lib.linux-x86_64-3.8/op_grad.cpython-38-x86_64-linux-gnu.so
 src/op/build/lib.linux-x86_64-3.8/test.cpython-38-x86_64-linux-gnu.so
+
+
