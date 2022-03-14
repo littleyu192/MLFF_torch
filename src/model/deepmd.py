@@ -67,6 +67,17 @@ class DeepMD(nn.Module):
                 self.embeding_net.append(EmbedingNet(self.net_cfg['embeding_net'], magic))
             fitting_net_input_dim = self.net_cfg['embeding_net']['network_size'][-1]
             self.fitting_net.append(FittingNet(self.net_cfg['fitting_net'], 16 * fitting_net_input_dim, self.stat[2][i], magic))
+        
+        # if pm.transformer:
+        # if True:
+        #     self.transform_layer = nn.TransformerEncoderLayer(d_model=1600,
+        #                                                         nhead=8,
+        #                                                         dim_feedforward=3200,
+        #                                                         dropout=0.1,
+        #                                                         batch_first=True)
+        #     self.transform = nn.ModuleList()
+        #     for i in range(self.ntypes):
+        #         self.transform.append(nn.TransformerEncoder(self.transform_layer, 6))
 
     
     def smooth(self, image_dR, x, Ri_xyz, mask, inr, davg, dstd):
@@ -244,6 +255,10 @@ class DeepMD(nn.Module):
             else:
                 DR = torch.concat((DR, DR_ntype), dim=1)
             Ei_ntype = self.fitting_net[ntype](DR_ntype)
+            
+            # transform_out = self.transform[ntype](DR_ntype)
+            # Ei_ntype = self.fitting_net[ntype](transform_out)
+
             if ntype == 0:
                 Ei = Ei_ntype
             else:
