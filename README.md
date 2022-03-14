@@ -53,7 +53,8 @@ with dorcker:
 	cp parameters_dp.py parameters.py
 	python the/path/to/MLFF_torch/src/train.py --deepmd=True -n DeepMD_cfg_dp -s record
 	# if you want use MLP by kalmane filter
-	or python the/path/to/MLFF_torch/src/train.py -n MLFF_dmirror_cfg -s record 
+	cp parameters_kf.py parameters.py
+	or python the/path/to/MLFF_torch/src/train.py -s record 
 	# model test
 ```
 
