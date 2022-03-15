@@ -777,12 +777,12 @@ if pm.is_scale:
     torch_valid_data.dfeat = dfeat_tmp
 
 
-loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=True)
+loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=True,num_workers=int(os.environ['OMP_NUM_THREADS']))
 if opt_deepmd:
     davg, dstd, ener_shift = torch_train_data.get_stat()
     stat = [davg, dstd, ener_shift]
 
-loader_valid = Data.DataLoader(torch_valid_data, batch_size=1, shuffle=True)
+loader_valid = Data.DataLoader(torch_valid_data, batch_size=1, shuffle=True,num_workers=int(os.environ['OMP_NUM_THREADS']))
 if opt_deepmd:
     davg, dstd, ener_shift = torch_valid_data.get_stat()
 
