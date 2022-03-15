@@ -380,7 +380,6 @@ else:
 
 
 def get_loss_func(start_lr, real_lr, has_fi, lossFi, has_etot, loss_Etot, has_egroup, loss_Egroup, has_ei, loss_Ei):
-    real_lr = real_lr / math.sqrt(pm.batch_size)
     start_pref_egroup = 0.02
     limit_pref_egroup = 1.0
     start_pref_F = 1000  #1000
@@ -576,7 +575,7 @@ def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
 
     return loss, loss_Etot, loss_Ei, loss_F
 
-def train_kalman(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
+def train_kalman(sample_batches, model, kalman, criterion, last_epoch, real_lr):
     if (opt_dtype == 'float64'):
         Ei_label = Variable(sample_batches['output_energy'][:,:,:].double().to(device))
         Force_label = Variable(sample_batches['output_force'][:,:,:].double().to(device))   #[40,108,3]
@@ -625,11 +624,9 @@ def train_kalman(sample_batches, model, optimizer, criterion, last_epoch, real_l
 
     if opt_deepmd:
         Etot_predict, Ei_predict, Force_predict = model(dR, dfeat, dR_neigh_list, egroup_weight, divider)
-        kalman = KalmanFilter(model, kalman_lambda=0.98, kalman_nue=0.99870, device=device)
         kalman_inputs = [dR, dfeat, dR_neigh_list, egroup_weight, divider]
     else:
         Etot_predict, Ei_predict, Force_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
-        kalman = KalmanFilter(model, kalman_lambda=0.98, kalman_nue=0.99870, device=device)
         kalman_inputs = [input_data, dfeat, neighbor, egroup_weight, divider]
    
     kalman.update_energy(kalman_inputs, Etot_label)
@@ -983,6 +980,10 @@ else:
 #         ], lr=LR_base)
 
 # ==========================part3:模型training==========================
+
+if pm.use_Kalman == True:
+    kalman = KalmanFilter(model, kalman_lambda=0.98, kalman_nue=0.99870, device=device)
+
 min_loss = np.inf
 iter = 1
 print_idx = 1
@@ -1005,20 +1006,17 @@ for epoch in range(start_epoch, n_epoch + 1):
         debug("nr_batch_sample = %s" %nr_batch_sample)
         global_step = (epoch - 1) * len(loader_train) + i_batch * nr_batch_sample
         real_lr = adjust_lr(global_step)
-        # real_lr = real_lr * pm.batch_size  # batch size = 4时 linear *4
-        real_lr = real_lr * math.sqrt(pm.batch_size)  # batch size = 4时 sqrt *2
         for param_group in optimizer.param_groups:
-            param_group['lr'] = real_lr
-        # optimizer.param_groups[0]['lr'] = real_lr
-        # optimizer.param_groups[1]['lr'] = real_lr / 108
+            param_group['lr'] = real_lr * pm.batch_size
+            # param_group['lr'] = real_lr * (pm.batch_size ** 0.5)
         
         if pm.use_Kalman == False:
             batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
                 train(sample_batches, model, optimizer, nn.MSELoss(), last_epoch, real_lr)
-        elif pm.use_Kalman == True:
+        else:
             real_lr = 0.001
             batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
-                train_kalman(sample_batches, model, optimizer, nn.MSELoss(), last_epoch, real_lr)
+                train_kalman(sample_batches, model, kalman, nn.MSELoss(), last_epoch, real_lr)
 
         # print("batch loss:" + str(batch_loss.item()))
         # # print("batch mse ei:" + str(batch_loss_Ei.item()))
