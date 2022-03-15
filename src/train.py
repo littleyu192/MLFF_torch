@@ -776,13 +776,15 @@ if pm.is_scale:
     dfeat_tmp = dfeat_tmp.transpose(0, 1, 3, 2)
     torch_valid_data.dfeat = dfeat_tmp
 
-
-loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=True,num_workers=int(os.environ['OMP_NUM_THREADS']))
+worker_num = int(os.environ['OMP_NUM_THREADS']) 
+print("num of worker" + str(worker_num))
+	
+loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=True,num_workers = worker_num)
 if opt_deepmd:
     davg, dstd, ener_shift = torch_train_data.get_stat()
     stat = [davg, dstd, ener_shift]
 
-loader_valid = Data.DataLoader(torch_valid_data, batch_size=1, shuffle=True,num_workers=int(os.environ['OMP_NUM_THREADS']))
+loader_valid = Data.DataLoader(torch_valid_data, batch_size=1, shuffle=True,num_workers = worker_num)
 if opt_deepmd:
     davg, dstd, ener_shift = torch_valid_data.get_stat()
 
