@@ -985,6 +985,8 @@ else:
 # ==========================part3:模型training==========================
 min_loss = np.inf
 iter = 1
+print_idx = 1
+
 for epoch in range(start_epoch, n_epoch + 1):
     if (epoch == n_epoch):
         last_epoch = True
@@ -1025,7 +1027,7 @@ for epoch in range(start_epoch, n_epoch + 1):
         # print("=============================")
 
         iter = iter + 1
-        iprint = 100 #隔几个iteration记录一次误差
+        iprint = print_idx #隔几个iteration记录一次误差
         f_err_log = opt_session_dir+'iter_loss.dat'
         if iter == 1:
             fid_err_log = open(f_err_log, 'w')
@@ -1060,7 +1062,7 @@ for epoch in range(start_epoch, n_epoch + 1):
     info("epoch_loss = %.16f (RMSE_Etot = %.16f, RMSE_Ei = %.16f, RMSE_F = %.16f)" \
         %(loss, RMSE_Etot, RMSE_Ei, RMSE_F))
 
-    epoch_print = 10 #隔几个epoch记录一次误差
+    epoch_print = print_idx #隔几个epoch记录一次误差
     epoch_err_log = opt_session_dir+'epoch_loss.dat'
     if epoch == 1:
         f_epoch_err_log = open(epoch_err_log, 'w')
@@ -1127,7 +1129,7 @@ for epoch in range(start_epoch, n_epoch + 1):
         info("valid_loss = %.16f (valid_RMSE_Etot = %.16f, valid_RMSE_Ei = %.16f, valid_RMSE_F = %.16f)" \
              %(valid_loss, valid_RMSE_Etot, valid_RMSE_Ei, valid_RMSE_F))
 
-        iprint = 100
+        iprint = print_idx
         f_err_log =  opt_session_dir + 'iter_loss_valid.dat'
         if not os.path.exists(f_err_log):
             fid_err_log = open(f_err_log, 'w')
