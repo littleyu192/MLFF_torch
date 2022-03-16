@@ -51,11 +51,11 @@ def process_data(f_train_feat, f_train_dfeat, f_train_dR_neigh,
     itypes, feat, engy = prepare.r_feat_csv(f_train_feat)
 
     # 进行scale
-    # feat_scaled = scalers.pre_feat(feat, itypes)
-    # engy_scaled = scalers.pre_engy(engy, itypes)
+    feat_scaled = scalers.pre_feat(feat, itypes)
+    engy_scaled = scalers.pre_engy(engy, itypes)
     # 不scale
-    feat_scaled = feat
-    engy_scaled = engy
+    #feat_scaled = feat
+    #engy_scaled = engy
 
     egroup, divider, egroup_weight = prepare.r_egroup_csv(f_train_egroup)
     if os.path.exists(os.path.join(pm.dir_work, 'weight_for_cases')):
