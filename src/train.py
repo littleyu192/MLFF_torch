@@ -1133,7 +1133,7 @@ for epoch in range(start_epoch, n_epoch + 1):
         f_err_log =  opt_session_dir + 'iter_loss_valid.dat'
         if not os.path.exists(f_err_log):
             fid_err_log = open(f_err_log, 'w')
-            fid_err_log.write('epoch\t valid_RMSE_Etot\t valid_RMSE_Ei\t valid_RMSE_F')
+            fid_err_log.write('epoch\t valid_RMSE_Etot\t valid_RMSE_Ei\t valid_RMSE_F \n')
         elif epoch % iprint == 0:
             fid_err_log = open(f_err_log, 'a')
             fid_err_log.write('%d %e %e %e \n'%(epoch, valid_RMSE_Etot, valid_RMSE_Ei, valid_RMSE_F))
