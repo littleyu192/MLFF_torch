@@ -1027,7 +1027,7 @@ for epoch in range(start_epoch, n_epoch + 1):
         # print("=============================")
 
         iter = iter + 1
-        iprint = print_idx #隔几个iteration记录一次误差
+        iprint = 100 #隔几个iteration记录一次误差
         f_err_log = opt_session_dir+'iter_loss.dat'
         if iter == 1:
             fid_err_log = open(f_err_log, 'w')
