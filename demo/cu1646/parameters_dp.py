@@ -69,32 +69,15 @@ Ftype_name={1:'gen_2b_feature', 2:'gen_3b_feature',
             7:'gen_deepMD1_feature', 8:'gen_deepMD2_feature',
             }
 #use_Ftype=[1,2,3,4,5,6,7,8]
-
-
 ############ in dp data generation and training ###################
 #python the/path/to/MLFF_torch/src/train.py --deepmd=True -n DeepMD_cfg_dp -s dp_test
 use_Ftype=[1]  # in dp model, use only one type of feature in generate data
 nFeatures=24
 batch_size = 1
 dR_neigh = True
-use_Kalman = False   # if True, use KF updates weights
-is_scale = False   # in dp model,  False default 
-#use_Ftype=[1,2]
-#nFeatures=42
-#dR_neigh = False
-DeepMD_cfg = {
-    'embeding_net': {
-        'network_size': [16, 32, 64], # 第一维表示输入的维度
-	'bias': True,
-	'resnet_dt': True,
-	'activation': F.softplus,    #torch.sigmoid,
-	},
-    'fitting_net': {
-	'network_size': [120, 120, 120, 1],
-	'activation': F.softplus,    #torch.sigmoid,
-	'bias': True,
-	}
-}
+use_GKalman = False
+use_LKalman = False
+is_scale = False
 
 DeepMD_cfg_dp = {
     'embeding_net': {
@@ -126,13 +109,6 @@ DeepMD_cfg_dp_kf = {
 	}
 }
 
-MLFF_dmirror_cfg1 = [
-	('linear', nFeatures, 30, True),
-	('activation',),
-	('linear', 30, 60, True),
-	('activation',),
-	('linear', 60, 1, True)
-	]
 
 nfeat_type=len(use_Ftype)
 Ftype1_para={
@@ -323,6 +299,7 @@ flag_plt = False
 train_stage = 2      # only 1 or 2, 1 is begining training from energy and then force+energy, 2 is directly training from force+energy
 train_verb = 0       
 learning_rate= 1e-3
+
 #rtLossE      = 0.6     # weight for energy, NN fitting 各个原子能量所占的权重
 #rtLossF      = 0.2     # weight for force, NN fitting 各个原子所受力所占的权重
 #rtLossEtot   = 0.2

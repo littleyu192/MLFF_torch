@@ -32,7 +32,6 @@ mdImageFileDir=r'./MD'                              #设置md的初始image的�
 # 模型训练需打开
 isCalcFeat=True
 isFitLinModel=True
-isNNpretrain=False
 isNNfinetuning=True
 
 #isClassify=True
@@ -64,9 +63,17 @@ Ftype_name={1:'gen_2b_feature', 2:'gen_3b_feature',
             }
 # Ftype2_name='gen_3b_feature'
 #use_Ftype=[1,2,3,4,5,6,7,8]
-use_Ftype = [1]
-dR_neigh = True
+############ in dp data generation and training ###################
+#python the/path/to/MLFF_torch/src/train.py --deepmd=True -n DeepMD_cfg_dp -s dp_test
+use_Ftype=[1]  # in dp model, use only one type of feature in generate data
+nFeatures=24
 nfeat_type=len(use_Ftype)
+dR_neigh = True
+use_GKalman = False
+use_LKalman = False
+is_scale = False
+batch_size = 1
+
 
 DeepMD_cfg_dp = {
     'embeding_net': {
@@ -82,24 +89,16 @@ DeepMD_cfg_dp = {
         'bias': True,
         }
 }
-MLFF_dmirror_cfg1 = [
-    ('linear', 111, 30, True),
-    ('activation',),
-    ('linear', 30, 60, True),
-    ('activation',),
-    ('linear', 60, 1, True)
-]
 
-
-DeepMD_cfg_dp = {
+DeepMD_cfg_dp_kf = {
     'embeding_net': {
-        'network_size': [25, 50, 100],
+        'network_size': [25, 25, 25],
         'bias': True,
         'resnet_dt': False,
         'activation': torch.tanh,
          },
     'fitting_net': {
-        'network_size': [240, 240, 240, 1],
+        'network_size': [50, 50, 50, 1],
         'activation': torch.tanh,
         'resnet_dt': True,
         'bias': True,
@@ -271,7 +270,7 @@ torch_dtype = 'float32'
 activation_func='softplus'     # could choose 'softplus' and 'elup1' now
 ntypes=len(atomType)
 nLayers = 3
-nNodes = np.array([[60,60],[30,30],[1,1]])
+nNodes = np.array([[15,15],[15,15],[1,1]])
 #nLayers = 4
 #nNodes = np.array([[256,256],[256,256],[256,256],[1,1]])
 b_init=np.array([28.5,528.5])      # energy of one atom, for different types, just a rough value
@@ -287,8 +286,7 @@ flag_plt = False
 train_stage = 1      # only 1 or 2, 1 is begining training from energy and then force+energy, 2 is directly training from force+energy
 train_verb = 0       
 
-learning_rate= 1e-3
-batch_size = 1        
+learning_rate= 1e-3       
 rtLossE      = 0.8     # weight for energy, NN fitting 各个原子能量所占的权重
 rtLossF      = 0.2     # weight for force, NN fitting 各个原子所受力所占的权重
 rtLossEtot      = 0.2     # weight for Etot, NN fitting 各个原子所受力所占的权重
