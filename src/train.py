@@ -19,7 +19,7 @@ from loss.AutomaticWeightedLoss import AutomaticWeightedLoss
 from model.MLFF_v1 import MLFF
 from model.MLFF import MLFFNet
 
-from optimizer.kalmanfilter import KalmanFilter
+from optimizer.kalmanfilter import GKalmanFilter, LKalmanFilter
 
 from model.deepmd import DeepMD
 import torch.utils.data as Data
@@ -380,7 +380,6 @@ else:
 
 
 def get_loss_func(start_lr, real_lr, has_fi, lossFi, has_etot, loss_Etot, has_egroup, loss_Egroup, has_ei, loss_Ei):
-    real_lr = real_lr / math.sqrt(pm.batch_size)
     start_pref_egroup = 0.02
     limit_pref_egroup = 1.0
     start_pref_F = 1000  #1000
@@ -576,7 +575,7 @@ def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
 
     return loss, loss_Etot, loss_Ei, loss_F
 
-def train_kalman(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
+def train_kalman(sample_batches, model, kalman, criterion, last_epoch, real_lr):
     if (opt_dtype == 'float64'):
         Ei_label = Variable(sample_batches['output_energy'][:,:,:].double().to(device))
         Force_label = Variable(sample_batches['output_force'][:,:,:].double().to(device))   #[40,108,3]
@@ -625,16 +624,14 @@ def train_kalman(sample_batches, model, optimizer, criterion, last_epoch, real_l
 
     if opt_deepmd:
         Etot_predict, Ei_predict, Force_predict = model(dR, dfeat, dR_neigh_list, egroup_weight, divider)
-        kalman = KalmanFilter(model, kalman_lambda=0.98, kalman_nue=0.99870, device=device)
         kalman_inputs = [dR, dfeat, dR_neigh_list, egroup_weight, divider]
     else:
         Etot_predict, Ei_predict, Force_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
-        kalman = KalmanFilter(model, kalman_lambda=0.98, kalman_nue=0.99870, device=device)
         kalman_inputs = [input_data, dfeat, neighbor, egroup_weight, divider]
    
     kalman.update_energy(kalman_inputs, Etot_label)
     kalman.update_force(kalman_inputs, Force_label)
-    kalman.update_egroup(kalman_inputs, Egroup_label)
+    # kalman.update_egroup(kalman_inputs, Egroup_label)
 
     if opt_deepmd:
         Etot_predict, Ei_predict, Force_predict = model(dR, dfeat, dR_neigh_list, egroup_weight, divider)
@@ -983,9 +980,16 @@ else:
 #         ], lr=LR_base)
 
 # ==========================part3:模型training==========================
+
+if pm.use_GKalman == True:
+    Gkalman = GKalmanFilter(model, kalman_lambda=0.98, kalman_nue=0.99870, device=device)
+if pm.use_LKalman == True:
+    Lkalman = LKalmanFilter(model, kalman_lambda=0.98, kalman_nue=0.99870, device=device)
+
 min_loss = np.inf
 iter = 1
-print_idx = 1
+epoch_print = 1  #隔几个epoch记录一次误差
+iter_print = 100  #隔几个iteration记录一次误差
 
 for epoch in range(start_epoch, n_epoch + 1):
     if (epoch == n_epoch):
@@ -1005,20 +1009,23 @@ for epoch in range(start_epoch, n_epoch + 1):
         debug("nr_batch_sample = %s" %nr_batch_sample)
         global_step = (epoch - 1) * len(loader_train) + i_batch * nr_batch_sample
         real_lr = adjust_lr(global_step)
-        # real_lr = real_lr * pm.batch_size  # batch size = 4时 linear *4
-        real_lr = real_lr * math.sqrt(pm.batch_size)  # batch size = 4时 sqrt *2
         for param_group in optimizer.param_groups:
-            param_group['lr'] = real_lr
-        # optimizer.param_groups[0]['lr'] = real_lr
-        # optimizer.param_groups[1]['lr'] = real_lr / 108
+            param_group['lr'] = real_lr * pm.batch_size
+            # param_group['lr'] = real_lr * (pm.batch_size ** 0.5)
         
-        if pm.use_Kalman == False:
-            batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
-                train(sample_batches, model, optimizer, nn.MSELoss(), last_epoch, real_lr)
-        elif pm.use_Kalman == True:
+        if pm.use_GKalman == True:
             real_lr = 0.001
             batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
-                train_kalman(sample_batches, model, optimizer, nn.MSELoss(), last_epoch, real_lr)
+                train_kalman(sample_batches, model, Gkalman, nn.MSELoss(), last_epoch, real_lr)
+        elif pm.use_LKalman == True:
+            real_lr = 0.001
+            batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
+                train_kalman(sample_batches, model, Lkalman, nn.MSELoss(), last_epoch, real_lr)
+        else:
+            # pass
+            batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
+                train(sample_batches, model, optimizer, nn.MSELoss(), last_epoch, real_lr)
+            
 
         # print("batch loss:" + str(batch_loss.item()))
         # # print("batch mse ei:" + str(batch_loss_Ei.item()))
@@ -1027,12 +1034,11 @@ for epoch in range(start_epoch, n_epoch + 1):
         # print("=============================")
 
         iter = iter + 1
-        iprint = 100 #隔几个iteration记录一次误差
         f_err_log = opt_session_dir+'iter_loss.dat'
         if iter == 1:
             fid_err_log = open(f_err_log, 'w')
             fid_err_log.write('iter\t loss\t RMSE_Etot\t RMSE_Ei\t RMSE_F\t lr\n')
-        elif iter % iprint == 0:
+        elif iter % iter_print == 0:
             fid_err_log = open(f_err_log, 'a')
             fid_err_log.write('%d %e %e %e %e %e \n'%(iter, batch_loss, math.sqrt(batch_loss_Etot)/sum(pm.natoms), math.sqrt(batch_loss_Ei), math.sqrt(batch_loss_F), real_lr))
         else:
@@ -1062,14 +1068,13 @@ for epoch in range(start_epoch, n_epoch + 1):
     info("epoch_loss = %.16f (RMSE_Etot = %.16f, RMSE_Ei = %.16f, RMSE_F = %.16f)" \
         %(loss, RMSE_Etot, RMSE_Ei, RMSE_F))
 
-    epoch_print = print_idx #隔几个epoch记录一次误差
     epoch_err_log = opt_session_dir+'epoch_loss.dat'
     if epoch == 1:
         f_epoch_err_log = open(epoch_err_log, 'w')
         f_epoch_err_log.write('epoch\t loss\t RMSE_Etot\t RMSE_Ei\t RMSE_F\t lr\n')
     elif epoch % epoch_print == 0:
         f_epoch_err_log = open(epoch_err_log, 'a')
-        f_epoch_err_log.write('%d %e %e %e %e %e \n'%(epoch, loss, RMSE_Etot, RMSE_Ei, RMSE_F, real_lr))
+        f_epoch_err_log.write('%d %e %e %e %e %e \n'%(epoch, loss, RMSE_Etot/sum(pm.natoms), RMSE_Ei, RMSE_F, real_lr))
     else:
         pass    
 
@@ -1118,6 +1123,16 @@ for epoch in range(start_epoch, n_epoch + 1):
             valid_loss_F += batch_loss_F.item() * nr_batch_sample
             nr_total_sample += nr_batch_sample
 
+            f_err_log = opt_session_dir+'iter_loss_valid.dat'
+            if iter == 1:
+                fid_err_log = open(f_err_log, 'w')
+                fid_err_log.write('iter\t loss\t RMSE_Etot\t RMSE_Ei\t RMSE_F\t lr\n')
+            elif iter % iter_print == 0:
+                fid_err_log = open(f_err_log, 'a')
+                fid_err_log.write('%d %e %e %e %e %e \n'%(iter, batch_loss, math.sqrt(batch_loss_Etot)/sum(pm.natoms), math.sqrt(batch_loss_Ei), math.sqrt(batch_loss_F), real_lr))
+            else:
+                pass
+
         # epoch loss update
         valid_loss /= nr_total_sample
         valid_loss_Etot /= nr_total_sample
@@ -1129,14 +1144,13 @@ for epoch in range(start_epoch, n_epoch + 1):
         info("valid_loss = %.16f (valid_RMSE_Etot = %.16f, valid_RMSE_Ei = %.16f, valid_RMSE_F = %.16f)" \
              %(valid_loss, valid_RMSE_Etot, valid_RMSE_Ei, valid_RMSE_F))
 
-        iprint = print_idx
-        f_err_log =  opt_session_dir + 'iter_loss_valid.dat'
+        f_err_log =  opt_session_dir + 'epoch_loss_valid.dat'
         if not os.path.exists(f_err_log):
             fid_err_log = open(f_err_log, 'w')
-            fid_err_log.write('epoch\t valid_RMSE_Etot\t valid_RMSE_Ei\t valid_RMSE_F \n')
-        elif epoch % iprint == 0:
+            fid_err_log.write('epoch\t valid_RMSE_Etot\t valid_RMSE_Ei\t valid_RMSE_F\n')
+        elif epoch % epoch_print == 0:
             fid_err_log = open(f_err_log, 'a')
-            fid_err_log.write('%d %e %e %e \n'%(epoch, valid_RMSE_Etot, valid_RMSE_Ei, valid_RMSE_F))
+            fid_err_log.write('%d %e %e %e \n'%(epoch, valid_RMSE_Etot/sum(pm.natoms), valid_RMSE_Ei, valid_RMSE_F))
         
         if valid_loss < min_loss:
             min_loss = valid_loss
