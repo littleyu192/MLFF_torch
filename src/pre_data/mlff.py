@@ -6,7 +6,7 @@ codepath=os.path.abspath(sys.path[0])
 sys.path.append(codepath+'/../lib')
 sys.path.append(os.getcwd())
 import parameters as pm
-pm.fortranFitSourceDir = codepath + '/fit'
+#pm.fortranFitSourceDir = codepath + '/fit'
 import prepare as pp
 import fortran_fitting as ff
 import pandas as pd
