@@ -565,13 +565,13 @@ def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
     info("loss = %.16f (loss_etot = %.16f, loss_force = %.16f, RMSE_etot = %.16f, RMSE_force = %.16f)"\
      %(loss, loss_Etot, loss_F, loss_Etot ** 0.5, loss_F ** 0.5))
     # f_err_log = '/home/husiyu/software/MLFFdataset/CuO_mini/0306/iter_lr.dat'
-    f_err_log = opt_session_dir + "iter_lr.dat"
+    # f_err_log = opt_session_dir + "iter_lr.dat"
     # if i_batch == 1:
     #     fid_err_log = open(f_err_log, 'a')
     #     fid_err_log.write('iter\t total_loss\t mse_fi\t pref_fi\t lr\t mse_etot\t pref_etot\n')
     # else:
-    fid_err_log = open(f_err_log, 'a')
-    fid_err_log.write('%d %e %e %e %e %e %e \n'%(i_batch, loss, loss_F, pref_f, real_lr, loss_Etot, pref_e))
+    # fid_err_log = open(f_err_log, 'a')
+    # fid_err_log.write('%d %e %e %e %e %e %e \n'%(i_batch, loss, loss_F, pref_f, real_lr, loss_Etot, pref_e))
 
     return loss, loss_Etot, loss_Ei, loss_F
 
@@ -981,11 +981,11 @@ else:
 # ==========================part3:模型training==========================
 
 if pm.use_GKalman == True:
-    Gkalman = GKalmanFilter(model, kalman_lambda=0.98, kalman_nue=0.99870, device=device)
+    Gkalman = GKalmanFilter(model, kalman_lambda=0.98, kalman_nue=0.99870, device=device) #[0.98,0.9987];[0.9,0.9987];[0.9,1]
 if pm.use_LKalman == True:
     Lkalman = LKalmanFilter(model, kalman_lambda=0.98, kalman_nue=0.99870, device=device)
 if pm.use_SKalman == True:
-    Skalman = SKalmanFilter(model, kalman_lambda=1.98, kalman_nue=0.99870, device=device)
+    Skalman = SKalmanFilter(model, kalman_lambda=0.98, kalman_nue=0.99870, device=device)
 
 min_loss = np.inf
 iter = 1
@@ -1011,8 +1011,8 @@ for epoch in range(start_epoch, n_epoch + 1):
         global_step = (epoch - 1) * len(loader_train) + i_batch * nr_batch_sample
         real_lr = adjust_lr(global_step)
         for param_group in optimizer.param_groups:
-            param_group['lr'] = real_lr * pm.batch_size
-            # param_group['lr'] = real_lr * (pm.batch_size ** 0.5)
+            # param_group['lr'] = real_lr * pm.batch_size
+            param_group['lr'] = real_lr * (pm.batch_size ** 0.5)
         
         if pm.use_GKalman == True:
             real_lr = 0.001
