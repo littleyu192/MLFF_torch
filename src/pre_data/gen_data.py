@@ -198,7 +198,7 @@ def process_data(f_train_feat, f_train_dfeat, f_train_dR_neigh,
     
     # neighbor 不排序
     # if (pm.dR_neigh):
-    #     dR_neigh = pd.read_csv(f_train_dR_neigh, header=None).values.reshape(indImg[-1], pm.maxNeighborNum, 4) # 1 是 ntype
+    #     dR_neigh = pd.read_csv(f_train_dR_neigh, header=None).values.reshape(indImg[-1], len(pm.atomType), pm.maxNeighborNum, 4) # 1 是 ntype
     #     print("dR neigh shape" + str(dR_neigh.shape))
     #     np.save(nn_data_path + "/dR_neigh.npy", dR_neigh)
 
