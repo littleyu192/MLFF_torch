@@ -71,6 +71,7 @@ nfeat_type=len(use_Ftype)
 dR_neigh = False
 use_GKalman = True
 use_LKalman = False
+use_SKalman = False
 is_scale = True
 use_storage_scaler = False
 storage_scaler = False

@@ -86,6 +86,7 @@ Ftype_name={1:'gen_2b_feature', 2:'gen_3b_feature',
 # python the/path/to/MLFF_torch/src/train.py  -s mlff_kf
 use_GKalman = True
 use_LKalman = False
+use_SKalman = False
 use_Ftype=[3,4]
 nFeatures=26
 dR_neigh = False
