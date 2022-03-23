@@ -77,6 +77,7 @@ batch_size = 1
 dR_neigh = True
 use_GKalman = False
 use_LKalman = False
+use_SKalman = False
 is_scale = False
 
 DeepMD_cfg_dp = {
