@@ -19,7 +19,7 @@ from loss.AutomaticWeightedLoss import AutomaticWeightedLoss
 from model.MLFF_v1 import MLFF
 from model.MLFF import MLFFNet
 
-from optimizer.kalmanfilter import GKalmanFilter, LKalmanFilter
+from optimizer.kalmanfilter import GKalmanFilter, LKalmanFilter, SKalmanFilter
 
 from model.deepmd import DeepMD
 import torch.utils.data as Data
@@ -985,6 +985,8 @@ if pm.use_GKalman == True:
     Gkalman = GKalmanFilter(model, kalman_lambda=0.98, kalman_nue=0.99870, device=device)
 if pm.use_LKalman == True:
     Lkalman = LKalmanFilter(model, kalman_lambda=0.98, kalman_nue=0.99870, device=device)
+if pm.use_SKalman == True:
+    Skalman = SKalmanFilter(model, kalman_lambda=1.98, kalman_nue=0.99870, device=device)
 
 min_loss = np.inf
 iter = 1
@@ -1021,6 +1023,10 @@ for epoch in range(start_epoch, n_epoch + 1):
             real_lr = 0.001
             batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
                 train_kalman(sample_batches, model, Lkalman, nn.MSELoss(), last_epoch, real_lr)
+        elif pm.use_SKalman == True:
+            real_lr = 0.001
+            batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
+                train_kalman(sample_batches, model, Skalman, nn.MSELoss(), last_epoch, real_lr)
         else:
             # pass
             batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
