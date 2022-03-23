@@ -175,6 +175,97 @@ class DeepMD(nn.Module):
         return Ri, Ri_d
 
 
+    def smooth_v1(self, image_dR, x, Ri_xyz, mask, inr, davg, dstd):
+
+        inr2 = torch.zeros_like(inr)
+        inr3 = torch.zeros_like(inr)
+        inr4 = torch.zeros_like(inr)
+        
+        inr2[mask] = inr[mask] * inr[mask]
+        inr4[mask] = inr2[mask] * inr2[mask]
+        inr3[mask] = inr4[mask] * x[mask]
+        
+        uu = torch.zeros_like(x)
+        vv = torch.zeros_like(x)
+        dvv = torch.zeros_like(x)
+        
+        res = torch.zeros_like(x)
+
+        # x < rcut_min vv = 1
+        mask_min = x < 5.8   #set rcut=25, 10  min=0,max=30
+        mask_1 = mask & mask_min  #[2,108,100]
+        vv[mask_1] = 1
+        dvv[mask_1] = 0
+
+        # rcut_min< x < rcut_max
+        mask_max = x < 6.0
+        mask_2 = ~mask_min & mask_max & mask
+        # uu = (xx - rmin) / (rmax - rmin) ;
+        uu[mask_2] = (x[mask_2] - 5.8)/(6.0 -5.8)
+        vv[mask_2] = uu[mask_2] * uu[mask_2] * uu[mask_2] * (-6 * uu[mask_2] * uu[mask_2] + 15 * uu[mask_2] - 10) + 1
+        du = 1.0 / ( 6.0 - 5.8)
+        # dd = ( 3 * uu*uu * (-6 * uu*uu + 15 * uu - 10) + uu*uu*uu * (-12 * uu + 15) ) * du;
+        dvv[mask_2] = (3 * uu[mask_2] * uu[mask_2] * (-6 * uu[mask_2] * uu[mask_2] + 15 * uu[mask_2] -10) + uu[mask_2] * uu[mask_2] * uu[mask_2] * (-12 * uu[mask_2] + 15)) * du
+ 
+        mask_3 = ~mask_max & mask
+        vv[mask_3] = 0
+        dvv[mask_3] = 0
+
+        # change 1/Rij to 1/Rij2
+        Ri = torch.cat((inr2.unsqueeze(-1), Ri_xyz), dim=-1)
+        Ri_d = torch.zeros_like(Ri).unsqueeze(-1).repeat(1, 1, 1, 1, 3) # 2 108 100 4 3
+        tmp = torch.zeros_like(x)
+
+        # deriv of component 1/r
+        Ri_d[:, :, :, 0, 0][mask] = 2 * image_dR[:, :, :, 0][mask] * inr4[mask] * vv[mask] - Ri[:, :, :, 0][mask] * dvv[mask] * image_dR[:, :, :, 0][mask] * inr2[mask]
+        Ri_d[:, :, :, 0, 1][mask] = 2 * image_dR[:, :, :, 1][mask] * inr4[mask] * vv[mask] - Ri[:, :, :, 0][mask] * dvv[mask] * image_dR[:, :, :, 1][mask] * inr2[mask]
+        Ri_d[:, :, :, 0, 2][mask] = 2 * image_dR[:, :, :, 2][mask] * inr4[mask] * vv[mask] - Ri[:, :, :, 0][mask] * dvv[mask] * image_dR[:, :, :, 2][mask] * inr2[mask]
+        
+        # deriv of component x/r
+        tmp[mask] = (2 * image_dR[:, :, :, 0][mask] * image_dR[:, :, :, 0][mask] * inr4[mask] - inr2[mask]) * vv[mask] - Ri[:, :, :, 1][mask] * dvv[mask] * image_dR[:, :, :, 0][mask] * inr[mask]
+        Ri_d[:, :, :, 1, 0][mask] = tmp[mask]
+        tmp[mask] = (2 * image_dR[:, :, :, 0][mask] * image_dR[:, :, :, 1][mask] * inr4[mask]) * vv[mask] - Ri[:, :, :, 1][mask] * dvv[mask] * image_dR[:, :, :, 1][mask] * inr[mask]
+        Ri_d[:, :, :, 1, 1][mask] = tmp[mask]
+        tmp[mask] = (2 * image_dR[:, :, :, 0][mask] * image_dR[:, :, :, 2][mask] * inr4[mask]) * vv[mask] - Ri[:, :, :, 1][mask] * dvv[mask] * image_dR[:, :, :, 2][mask] * inr[mask]
+        Ri_d[:, :, :, 1, 2][mask] = tmp[mask]
+       
+        # deriv of component y/r
+        tmp[mask] = (2 * image_dR[:, :, :, 1][mask] * image_dR[:, :, :, 0][mask] * inr4[mask]) * vv[mask] - Ri[:, :, :, 2][mask] * dvv[mask] * image_dR[:, :, :, 0][mask] * inr[mask]
+        Ri_d[:, :, :, 2, 0][mask] = tmp[mask]
+        tmp[mask] = (2 * image_dR[:, :, :, 1][mask] * image_dR[:, :, :, 1][mask] * inr4[mask] - inr2[mask]) * vv[mask] - Ri[:, :, :, 2][mask] * dvv[mask] * image_dR[:, :, :, 1][mask] * inr[mask]
+        Ri_d[:, :, :, 2, 1][mask] = tmp[mask]
+        tmp[mask] = (2 * image_dR[:, :, :, 1][mask] * image_dR[:, :, :, 2][mask] * inr4[mask]) * vv[mask] - Ri[:, :, :, 2][mask] * dvv[mask] * image_dR[:, :, :, 2][mask] * inr[mask]
+        Ri_d[:, :, :, 2, 2][mask] = tmp[mask]
+    
+        # deriv of component z/r
+        tmp[mask] = (2 * image_dR[:, :, :, 2][mask] * image_dR[:, :, :, 0][mask] * inr4[mask]) * vv[mask] - Ri[:, :, :, 3][mask] * dvv[mask] * image_dR[:, :, :, 0][mask] * inr[mask]
+        Ri_d[:, :, :, 3, 0][mask] = tmp[mask]
+        tmp[mask] = (2 * image_dR[:, :, :, 2][mask] * image_dR[:, :, :, 1][mask] * inr4[mask]) * vv[mask] - Ri[:, :, :, 3][mask] * dvv[mask] * image_dR[:, :, :, 1][mask] * inr[mask]
+        Ri_d[:, :, :, 3, 1][mask] = tmp[mask]
+        tmp[mask] = (2 * image_dR[:, :, :, 2][mask] * image_dR[:, :, :, 2][mask] * inr4[mask] - inr2[mask]) * vv[mask] - Ri[:, :, :, 3][mask] * dvv[mask] * image_dR[:, :, :, 2][mask] * inr[mask]
+        Ri_d[:, :, :, 3, 2][mask] = tmp[mask]
+
+        vv_copy = vv.unsqueeze(-1).repeat(1, 1, 1, 4)
+        Ri[mask] *= vv_copy[mask]
+
+        for ntype in range(self.ntypes):
+            atom_num_ntype = self.natoms[ntype]
+            davg_ntype = davg[ntype].reshape(-1, 4).squeeze().repeat(atom_num_ntype, 1, 1) #[32,100,4]
+            dstd_ntype = dstd[ntype].reshape(-1, 4).squeeze().repeat(atom_num_ntype, 1, 1) #[32,100,4]
+            if ntype == 0:
+                davg_res = davg_ntype
+                dstd_res = dstd_ntype
+            else:
+                davg_res = torch.concat((davg_res, davg_ntype), dim=0)
+                dstd_res = torch.concat((dstd_res, dstd_ntype), dim=0)
+            
+        Ri = (Ri - davg_res) / dstd_res  #[1,64,200,4]
+        dstd_res = dstd_res.unsqueeze(-1).repeat(1, 1, 1, 3)
+        Ri_d = Ri_d / dstd_res 
+        
+        # res[mask_2] = 0.5 * torch.cos(math.pi * (x[mask_2]-10)/(25-10)) + 0.5 * torch.ones_like(x[mask_2])
+        return Ri, Ri_d
+
     def get_egroup(self, Egroup_weight, divider):
         batch_size = self.Ei.shape[0]
         Egroup = torch.zeros_like(self.Ei)
