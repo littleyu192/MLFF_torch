@@ -93,15 +93,16 @@ class GKalmanFilter(nn.Module):
                     break
         return random_index
 
-    def update_energy(self, inputs, Etot_label):
+    def update_energy(self, inputs, Etot_label,  update_prefactor = 1):
         time_start = time.time()
         Etot_predict, Ei_predict, force_predict = self.model(inputs[0], inputs[1], inputs[2], inputs[3], inputs[4])
         errore = Etot_label.item() - Etot_predict.item()
         errore = errore / self.natoms_sum
         if errore < 0:
-            errore = -1.0 * errore
+            errore = - update_prefactor * errore
             (-1.0 * Etot_predict).backward()
         else:
+            errore = update_prefactor * errore
             Etot_predict.backward()
         
         i = 0
@@ -118,7 +119,7 @@ class GKalmanFilter(nn.Module):
         print("update Energy time:", time_end - time_start, 's')
         
 
-    def update_force(self, inputs, Force_label):
+    def update_force(self, inputs, Force_label, update_prefactor = 1):
         time_start = time.time()
         
         '''
@@ -137,11 +138,11 @@ class GKalmanFilter(nn.Module):
                     force_predict.requires_grad_(True)
                     error_tmp = (Force_label[random_index[index_i][0][index_ii]][random_index[index_i][1][index_ii]][j] - force_predict[random_index[index_i][0][index_ii]][random_index[index_i][1][index_ii]][j])
                     if error_tmp < 0:
-                        error_tmp = -1.0 * error_tmp
+                        error_tmp = - update_prefactor * error_tmp
                         error += error_tmp
                         (-1.0 * force_predict[random_index[index_i][0][index_ii]][random_index[index_i][1][index_ii]][j]).backward(retain_graph=True)
                     else:
-                        error += error_tmp
+                        error +=  update_prefactor * error_tmp
                         (force_predict[random_index[index_i][0][index_ii]][random_index[index_i][1][index_ii]][j]).backward(retain_graph=True)
 
             num = len(random_index[index_i][0])
@@ -171,7 +172,7 @@ class GKalmanFilter(nn.Module):
         print("update Force time:", time_end - time_start, 's')
 
 
-    def update_egroup(self, inputs, Egroup_label, update_weight=0.1):
+    def update_egroup(self, inputs, Egroup_label, update_prefactor=0.1):
 
         random_index=self.__get_random_index(Egroup_label, self.n_select_eg, self.Force_group_num_eg)
 
@@ -181,14 +182,14 @@ class GKalmanFilter(nn.Module):
 
                 Egroup_predict = self.model.get_egroup(inputs[3], inputs[4]) #egroup_weights, divider
 
-                error_tmp = update_weight*(Egroup_label[random_index[index_i][0][index_ii]][random_index[index_i][1][index_ii]][0] - Egroup_predict[random_index[index_i][0][index_ii]][random_index[index_i][1][index_ii]][0])
+                error_tmp = update_prefactor*(Egroup_label[random_index[index_i][0][index_ii]][random_index[index_i][1][index_ii]][0] - Egroup_predict[random_index[index_i][0][index_ii]][random_index[index_i][1][index_ii]][0])
                 if error_tmp < 0:
                     error_tmp = -1.0 * error_tmp
                     error += error_tmp
-                    (update_weight*(-1.0 * Egroup_predict[random_index[index_i][0][index_ii]][random_index[index_i][1][index_ii]][0])).backward(retain_graph=True)
+                    (update_prefactor*(-1.0 * Egroup_predict[random_index[index_i][0][index_ii]][random_index[index_i][1][index_ii]][0])).backward(retain_graph=True)
                 else:
                     error += error_tmp
-                    (update_weight*(Egroup_predict[random_index[index_i][0][index_ii]][random_index[index_i][1][index_ii]][0])).backward(retain_graph=True)
+                    (update_prefactor*(Egroup_predict[random_index[index_i][0][index_ii]][random_index[index_i][1][index_ii]][0])).backward(retain_graph=True)
 
             num=len(random_index[index_i][0])
             error=error/num
