@@ -3,8 +3,8 @@ import os
 import torch
 import torch.nn.functional as F
 
-isCalcFeat=1
-isFitLinModel=0
+isCalcFeat=False
+isFitLinModel=False
 isClassify=False
 isRunMd=False                                   #是否训练运行md  default:False
 isRunMd_nn=False
@@ -55,39 +55,35 @@ isNNfinetuning=True
 #isFitVdw=True
 
 #NN预测时需要打开
-#isNewMd100=True
+#isNewMd100=False
 #md_num_process = 12   # mpirun -n ${md_num_process} main_MD.x
 #is_md100_egroup = False
 #is_md100_show_X11_fig = False
 
-#isRunMd100_nn=True
-#inference=True
+#isRunMd100_nn=False
+#inference=False
 #linear预测时需要打开
 # isRunMd100=True
 #add_force=True     # for NN md
 #********* for gen_feature.in *********************
-atomType=[29]                                  #铜有29个同位素,相当于29个种类的cu
+atomType=[29]                                  
 maxNeighborNum=100
 natoms=[108]
 
 iflag_PCA=0
 Rc_M=6.0                     # max of Rcut
 
-#Ftype_name={1:'gen_2b_feature',2:'gen_3b_feature'}
-# Ftype2_name='gen_3b_feature'
-#use_Ftype=[1,2]
 Ftype_name={1:'gen_2b_feature', 2:'gen_3b_feature',
             3:'gen_2bgauss_feature', 4:'gen_3bcos_feature',
             5:'gen_MTP_feature', 6:'gen_SNAP_feature',
             7:'gen_deepMD1_feature', 8:'gen_deepMD2_feature',
             }
-
-#use_Ftype=[1,2,3,4,5,6,7,8]
+	    
 use_Ftype=[1,2]
-nFeatures=42
+nFeatures = 42
 dR_neigh = False
-use_GKalman = 1
-use_LKalman = 0
+use_GKalman = False
+use_LKalman = False
 is_scale = True
 itype_Ei_mean=[166.46]
 
