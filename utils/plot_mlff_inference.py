@@ -175,8 +175,10 @@ def read_nn_movement(file_nn=r'MD/md/MOVEMENT'):
     
 if __name__ == '__main__':
     num_atoms, num_iters, dft_atomic_energy, dft_force, dft_group_energy = read_dft_movement()
-    nn_atomic_energy, nn_force, nn_group_energy = read_nn_movement()
-    print(dft_group_energy[0:100])
+    tmp_natom, tmp_niters, nn_atomic_energy, nn_force, nn_group_energy = read_dft_movement(file_dft='MOVEMENT')
+
+    #nn_atomic_energy, nn_force, nn_group_energy = read_nn_movement()
+    #print(dft_group_energy[0:100])
 
     e_min = min(min(dft_atomic_energy), min(nn_atomic_energy))
     e_max = max(max(dft_atomic_energy), max(nn_atomic_energy))
@@ -237,7 +239,8 @@ if __name__ == '__main__':
     plt.text(lim_min, lim_max-(lim_max-lim_min)*0.1,'rmse: %.3E' % (e_atomic_rms),fontsize = 8)
     # save and show
     #plt.savefig('dft_nn.png', format='png')
-
+    plt.xticks(fontsize = 8) 
+    plt.yticks(fontsize = 8)
     # plot group energy
     plt.subplot(2,2,2)
     plt.title('group energy',fontsize=10)
@@ -249,7 +252,8 @@ if __name__ == '__main__':
     plt.ylabel('MLFF group energy (eV)',fontsize=8)
     plt.text(lim_min, lim_max-(lim_max-lim_min)*0.1,'rmse: %.3E' % (e_group_rms),fontsize = 8)
     #plt.savefig('dft_nn.png', format='png')
-
+    plt.xticks(fontsize = 8) 
+    plt.yticks(fontsize = 8)
     # plot total energy
     #plt.clf()
     plt.subplot(2,2,3)
@@ -262,7 +266,8 @@ if __name__ == '__main__':
     plt.text(e_tot_min, e_tot_max - (e_tot_max - e_tot_min)*0.1,'rmse/natom: %.3E' %(e_tot_rms/num_atoms),fontsize = 8)
     plt.xlabel('DFT energy (eV)',fontsize = 8)
     plt.ylabel('MLFF energy (eV)', fontsize = 8)
-
+    plt.xticks(fontsize = 8) 
+    plt.yticks(fontsize = 8)
 
     # plot force
     plt.subplot(2,2,4)
@@ -275,8 +280,10 @@ if __name__ == '__main__':
     plt.ylabel('MLFF Force',fontsize = 8)
     plt.xlabel('DFT Force',fontsize = 8)
     # save and show
+    plt.xticks(fontsize = 8) 
+    plt.yticks(fontsize = 8)
     
     plt.subplots_adjust(wspace = 0.4, hspace =0.4)
     plt.savefig('MLFF_inference.png', format='png')
-    if len(sys.argv) < 2:
-        plt.show()
+    #if len(sys.argv) < 2:
+    #    plt.show()
