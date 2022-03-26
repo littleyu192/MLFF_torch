@@ -223,11 +223,10 @@ def process_data(f_train_feat, f_train_dfeat, f_train_dR_neigh,
         print("dR neigh shape" + str(dR_neigh.shape))
         np.save(nn_data_path + "/dR_neigh.npy", dR_neigh)
     
-    # force与deepmd对齐
-    if (pm.dR_neigh):
-        tmp = pd.read_csv(pm.f_train_force, header=None)
-        force = tmp.values
-        np.save(nn_data_path + "/force.npy", force)
+    # if (pm.dR_neigh):
+    #     tmp = pd.read_csv(pm.f_train_force, header=None)
+    #     force = tmp.values
+    #     np.save(nn_data_path + "/force.npy", force)
     
 
     np.save(nn_data_path + "/feat_scaled.npy", feat_scaled)
