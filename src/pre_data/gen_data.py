@@ -50,6 +50,16 @@ def process_data(f_train_feat, f_train_dfeat, f_train_dR_neigh,
     pd.options.display.float_format = '${:,.15f}'.format
     itypes, feat, engy = prepare.r_feat_csv(f_train_feat)
 
+    natoms_img = np.zeros((nImg, pm.ntypes + 1), dtype=np.integer)
+    for i in range(nImg):
+        natoms_img[i][0] = indImg[i+1] - indImg[i]
+        tmp = itypes[indImg[i]:indImg[i+1]]
+        mask = np.unique(tmp)
+        type_id = 1
+        for type in mask:
+            natoms_img[i][type_id] = np.sum(tmp == type)
+            type_id += 1
+
     # 进行scale
     # feat_scaled = scalers.pre_feat(feat, itypes)
     # engy_scaled = scalers.pre_engy(engy, itypes)
@@ -195,6 +205,7 @@ def process_data(f_train_feat, f_train_dfeat, f_train_dR_neigh,
     print("egroup shape" + str(egroup.shape))
     print("divider shape" + str(egroup.shape))
     print("dfeat_scaled shape" + str(dfeat_scaled.shape))
+    print("natoms_img shape" + str(natoms_img.shape))
     
     # neighbor 不排序
     # if (pm.dR_neigh):
@@ -240,6 +251,7 @@ def process_data(f_train_feat, f_train_dfeat, f_train_dR_neigh,
     np.save(nn_data_path + "/divider.npy", divider)
     np.save(nn_data_path + "/dfeat_scaled.npy", dfeat_scaled)
     np.save(nn_data_path + "/ind_img.npy", np.array(indImg).reshape(-1))
+    np.save(nn_data_path + "/natoms_img.npy", natoms_img)
     # np.save(nn_data_path + "/ep.npy", ep)
 
 def color_print(string, fg=31, bg=49):

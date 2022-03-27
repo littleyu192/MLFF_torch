@@ -20,7 +20,9 @@
       integer itype_atom(natom)
       real*8 d,Rc2,dx1,dx2,dx3,dx,dy,dz,dd
       integer m_neigh
-
+      
+      list_neigh = 0
+      dR_neigh = 0
       iflag=0
       do i=1,3
       d=dsqrt(AL(1,i)**2+AL(2,i)**2+AL(3,i)**2)
@@ -152,13 +154,13 @@
       print *, "print m_neigh:", m_neigh
       print *, "print ntype:", ntype
       print *, "print natom:", natom
-      open(1314, file='./PWdata/dRneigh.dat', access='append', recl=100)
+      open(1314, file='./PWdata/dRneigh.dat', access='append')
       ! m_neigh,ntype,natom
       do k=1, natom
         do j=1, ntype
           do i=1, m_neigh
             if (abs(dR_neigh(1, i, j, k))>1.D-8) then
-              write(1314, *) dR_neigh(1, i, j, k), dR_neigh(2, i, j, k), dR_neigh(3, i, j, k), list_neigh(i,j,k)
+              write(1314, "(3(E17.10,1x), 1x, i6)") dR_neigh(1, i, j, k), dR_neigh(2, i, j, k), dR_neigh(3, i, j, k), list_neigh(i,j,k)
             else
               write(1314, *) 0,0,0,0
             end if
