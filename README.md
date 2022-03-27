@@ -45,12 +45,14 @@ with dorcker:
 ```sh
 	# generate features
 	cd the/path/to/data    # in parameter.py, make sure isCalcFeat=True && isFitVdw=False
+	ulimit -Ss unlimited
 	python the/path/to/MLFF_torch/src/bin/mlff.py
 	python the/path/to/MLFF_torch/src/bin/seper.py  # in parameters.py, test_ratio = 0.2 for default
 	python the/path/to/MLFF_torch/src/bin/gen_data.py
 	# model train, mannul in MLFF_torch/dataset/cu1000/parameters*.py
 	# if you want use deepmd model in training
 	cp parameters_dp.py parameters.py
+	# if u have muti-MOVEMENT file in PWdata directory, in parameters.py, make sure batch_size = 1
 	python the/path/to/MLFF_torch/src/train.py --deepmd=True -n DeepMD_cfg_dp -s record
 	# if you want use MLP by kalmane filter
 	cp parameters_kf.py parameters.py
