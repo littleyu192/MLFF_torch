@@ -1,3 +1,4 @@
+from tkinter import image_names
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -15,8 +16,8 @@ class GKalmanFilter(nn.Module):
         self.kalman_nue = kalman_nue
         self.device = device
         self.model = model
-        self.natoms = pm.natoms
-        self.natoms_sum = sum(pm.natoms)
+        # self.natoms = pm.natoms
+        # self.natoms_sum = sum(pm.natoms)
         self.n_select = 24
         self.Force_group_num = 6
         self.n_select_eg = 12
@@ -64,14 +65,14 @@ class GKalmanFilter(nn.Module):
 
         torch.cuda.empty_cache()
     
-    def __get_random_index(self, Force_label, n_select, Force_group_num):
+    def __get_random_index(self, Force_label, n_select, Force_group_num, natoms_img):
         total_atom=0
         atom_list=[0]
         select_list=[]
         random_index=[[[],[]] for i in range(math.ceil(n_select/Force_group_num))]
 
-        for i in range(len(pm.natoms)):
-            total_atom+=pm.natoms[i]
+        for i in range(pm.ntypes):
+            total_atom += natoms_img[0, i+1]
             atom_list.append(total_atom)
         random_list=list(range(total_atom))
         for i in range(n_select):
@@ -95,9 +96,10 @@ class GKalmanFilter(nn.Module):
 
     def update_energy(self, inputs, Etot_label,  update_prefactor = 1):
         time_start = time.time()
-        Etot_predict, Ei_predict, force_predict = self.model(inputs[0], inputs[1], inputs[2], inputs[3], inputs[4])
+        Etot_predict, Ei_predict, force_predict = self.model(inputs[0], inputs[1], inputs[2], inputs[3], inputs[4], inputs[5])
         errore = Etot_label.item() - Etot_predict.item()
-        errore = errore / self.natoms_sum
+        natoms_sum = inputs[3][0, 0]
+        errore = errore / natoms_sum
         if errore < 0:
             errore = - update_prefactor * errore
             (-1.0 * Etot_predict).backward()
@@ -108,10 +110,10 @@ class GKalmanFilter(nn.Module):
         i = 0
         for name, param in self.model.named_parameters():
             if i == 0:
-                H = (param.grad / self.natoms_sum).T.reshape(param.grad.nelement(), 1)
+                H = (param.grad / natoms_sum).T.reshape(param.grad.nelement(), 1)
                 weights = param.data.T.reshape(param.data.nelement(),1)
             else:
-                H = torch.cat((H, (param.grad/self.natoms_sum).T.reshape(param.grad.nelement(), 1)))
+                H = torch.cat((H, (param.grad/natoms_sum).T.reshape(param.grad.nelement(), 1)))
                 weights = torch.cat((weights, param.data.T.reshape(param.data.nelement(), 1))) #!!!!waring, should use T
             i += 1
         self.__update(H, errore, weights)
@@ -127,14 +129,15 @@ class GKalmanFilter(nn.Module):
         NOTICE! for every force, we should repeat calculate Fatom
         because every step the weight will update, and the same dfeat/dR and de/df will get different Fatom
         '''
-        random_index=self.__get_random_index(Force_label, self.n_select, self.Force_group_num)
+        natoms_sum = inputs[3][0, 0]
+        random_index=self.__get_random_index(Force_label, self.n_select, self.Force_group_num, inputs[3])
 
         for index_i in range(len(random_index)):  # 4
             error = 0
             for index_ii in range(len(random_index[index_i][0])): # 6
                 for j in range(3):
                     #error = 0 #if we use group , it should not be init
-                    Etot_predict, Ei_predict, force_predict = self.model(inputs[0], inputs[1], inputs[2], inputs[3], inputs[4])
+                    Etot_predict, Ei_predict, force_predict = self.model(inputs[0], inputs[1], inputs[2], inputs[3], inputs[4], inputs[5])
                     force_predict.requires_grad_(True)
                     error_tmp = (Force_label[random_index[index_i][0][index_ii]][random_index[index_i][1][index_ii]][j] - force_predict[random_index[index_i][0][index_ii]][random_index[index_i][1][index_ii]][j])
                     if error_tmp < 0:
@@ -146,7 +149,7 @@ class GKalmanFilter(nn.Module):
                         (force_predict[random_index[index_i][0][index_ii]][random_index[index_i][1][index_ii]][j]).backward(retain_graph=True)
 
             num = len(random_index[index_i][0])
-            error = (error / (num * 3.0)) / self.natoms_sum
+            error = (error / (num * 3.0)) / natoms_sum
             
             tmp_grad = 0
             i = 0
@@ -155,13 +158,13 @@ class GKalmanFilter(nn.Module):
                     tmp_grad = param.grad
                     if tmp_grad == None: #when name==bias, the grad will be None
                         tmp_grad = torch.tensor([0.0])
-                    H = ((tmp_grad /(num * 3.0)) / self.natoms_sum).T.reshape(tmp_grad.nelement(), 1)
+                    H = ((tmp_grad /(num * 3.0)) / natoms_sum).T.reshape(tmp_grad.nelement(), 1)
                     weights = param.data.T.reshape(param.data.nelement(), 1)
                 else:
                     tmp_grad=param.grad
                     if tmp_grad==None: #when name==bias, the grad will be None
                         tmp_grad=torch.tensor([0.0])
-                    H = torch.cat((H, ((tmp_grad / (num*3.0)) / self.natoms_sum).T.reshape(tmp_grad.nelement(), 1)))
+                    H = torch.cat((H, ((tmp_grad / (num*3.0)) / natoms_sum).T.reshape(tmp_grad.nelement(), 1)))
                     weights = torch.cat((weights, param.data.T.reshape(param.data.nelement(), 1)))  # !!!!waring, should use T
                 i += 1
             
@@ -173,8 +176,8 @@ class GKalmanFilter(nn.Module):
 
 
     def update_egroup(self, inputs, Egroup_label, update_prefactor=0.1):
-
-        random_index=self.__get_random_index(Egroup_label, self.n_select_eg, self.Force_group_num_eg)
+        
+        random_index=self.__get_random_index(Egroup_label, self.n_select_eg, self.Force_group_num_eg, inputs[3])
 
         for index_i in range(len(random_index)):
             error = 0
@@ -223,8 +226,6 @@ class LKalmanFilter(nn.Module):
         self.kalman_nue = kalman_nue
         self.device = device
         self.model = model
-        self.natoms = pm.natoms
-        self.natoms_sum = sum(pm.natoms)
         self.n_select = 24
         self.Force_group_num = 6
         self.n_select_eg = 12
@@ -280,14 +281,14 @@ class LKalmanFilter(nn.Module):
 
         torch.cuda.empty_cache()
     
-    def __get_random_index(self, Force_label, n_select, Force_group_num):
+    def __get_random_index(self, Force_label, n_select, Force_group_num, natoms_img):
         total_atom=0
         atom_list=[0]
         select_list=[]
         random_index=[[[],[]] for i in range(math.ceil(n_select/Force_group_num))]
 
-        for i in range(len(pm.natoms)):
-            total_atom+=pm.natoms[i]
+        for i in range(pm.ntypes):
+            total_atom += natoms_img[0, i+1]
             atom_list.append(total_atom)
         random_list=list(range(total_atom))
         for i in range(n_select):
@@ -311,9 +312,10 @@ class LKalmanFilter(nn.Module):
 
     def update_energy(self, inputs, Etot_label):
         time_start = time.time()
-        Etot_predict, Ei_predict, force_predict = self.model(inputs[0], inputs[1], inputs[2], inputs[3], inputs[4])
+        Etot_predict, Ei_predict, force_predict = self.model(inputs[0], inputs[1], inputs[2], inputs[3], inputs[4], inputs[5])
         errore = Etot_label.item() - Etot_predict.item()
-        errore = errore / self.natoms_sum
+        natoms_sum = inputs[3][0, 0]
+        errore = errore / natoms_sum
         if errore < 0:
             errore = -1.0 * errore
             (-1.0 * Etot_predict).backward()
@@ -323,7 +325,7 @@ class LKalmanFilter(nn.Module):
         weights = []
         H = []
         for name, param in self.model.named_parameters():
-            H.append((param.grad / self.natoms_sum).T.reshape(param.grad.nelement(), 1))
+            H.append((param.grad / natoms_sum).T.reshape(param.grad.nelement(), 1))
             weights.append(param.data.T.reshape(param.data.nelement(),1))
         self.__update(H, errore, weights)
         time_end = time.time()
@@ -332,14 +334,15 @@ class LKalmanFilter(nn.Module):
 
     def update_force(self, inputs, Force_label):
         time_start = time.time()
-        random_index=self.__get_random_index(Force_label, self.n_select, self.Force_group_num)
+        natoms_sum = inputs[3][0, 0]
+        random_index=self.__get_random_index(Force_label, self.n_select, self.Force_group_num, inputs[3])
 
         for index_i in range(len(random_index)):  # 4
             error = 0
             for index_ii in range(len(random_index[index_i][0])): # 6
                 for j in range(3):
                     #error = 0 #if we use group , it should not be init
-                    Etot_predict, Ei_predict, force_predict = self.model(inputs[0], inputs[1], inputs[2], inputs[3], inputs[4])
+                    Etot_predict, Ei_predict, force_predict = self.model(inputs[0], inputs[1], inputs[2], inputs[3], inputs[4], inputs[5])
                     force_predict.requires_grad_(True)
                     error_tmp = (Force_label[random_index[index_i][0][index_ii]][random_index[index_i][1][index_ii]][j] - force_predict[random_index[index_i][0][index_ii]][random_index[index_i][1][index_ii]][j])
                     if error_tmp < 0:
@@ -351,7 +354,7 @@ class LKalmanFilter(nn.Module):
                         (force_predict[random_index[index_i][0][index_ii]][random_index[index_i][1][index_ii]][j]).backward(retain_graph=True)
 
             num = len(random_index[index_i][0])
-            error = (error / (num * 3.0)) / self.natoms_sum
+            error = (error / (num * 3.0)) / natoms_sum
             
             tmp_grad = 0
             i = 0
@@ -362,13 +365,13 @@ class LKalmanFilter(nn.Module):
                     tmp_grad = param.grad
                     if tmp_grad == None: #when name==bias, the grad will be None
                         tmp_grad = torch.tensor([0.0])
-                    H.append(((tmp_grad /(num * 3.0)) / self.natoms_sum).T.reshape(tmp_grad.nelement(), 1))
+                    H.append(((tmp_grad /(num * 3.0)) / natoms_sum).T.reshape(tmp_grad.nelement(), 1))
                     weights.append(param.data.T.reshape(param.data.nelement(), 1))
                 else:
                     tmp_grad=param.grad
                     if tmp_grad==None: #when name==bias, the grad will be None
                         tmp_grad=torch.tensor([0.0])
-                    H.append(((tmp_grad / (num*3.0)) / self.natoms_sum).T.reshape(tmp_grad.nelement(), 1))
+                    H.append(((tmp_grad / (num*3.0)) / natoms_sum).T.reshape(tmp_grad.nelement(), 1))
                     weights.append(param.data.T.reshape(param.data.nelement(), 1))
                 i += 1
             self.__update(H, error, weights)
@@ -386,8 +389,6 @@ class SKalmanFilter(nn.Module):
         self.kalman_nue = kalman_nue
         self.device = device
         self.model = model
-        self.natoms = pm.natoms
-        self.natoms_sum = sum(pm.natoms)
         self.n_select = 24
         self.Force_group_num = 6
         self.n_select_eg = 12
@@ -479,14 +480,14 @@ class SKalmanFilter(nn.Module):
 
         torch.cuda.empty_cache()
     
-    def __get_random_index(self, Force_label, n_select, Force_group_num):
+    def __get_random_index(self, Force_label, n_select, Force_group_num, natoms_img):
         total_atom=0
         atom_list=[0]
         select_list=[]
         random_index=[[[],[]] for i in range(math.ceil(n_select/Force_group_num))]
 
-        for i in range(len(pm.natoms)):
-            total_atom+=pm.natoms[i]
+        for i in range(pm.ntypes):
+            total_atom += natoms_img[0, i+1]
             atom_list.append(total_atom)
         random_list=list(range(total_atom))
         for i in range(n_select):
@@ -510,16 +511,17 @@ class SKalmanFilter(nn.Module):
 
     def update_energy(self, inputs, Etot_label):
         time_start = time.time()
-        Etot_predict, Ei_predict, force_predict = self.model(inputs[0], inputs[1], inputs[2], inputs[3], inputs[4])
+        Etot_predict, Ei_predict, force_predict = self.model(inputs[0], inputs[1], inputs[2], inputs[3], inputs[4], inputs[5])
         errore = Etot_label.item() - Etot_predict.item()
-        errore = errore / self.natoms_sum
+        natoms_sum = inputs[3][0, 0]
+        errore = errore / natoms_sum
         if errore < 0:
             errore = -1.0 * errore
             (-1.0 * Etot_predict).backward()
         else:
             Etot_predict.backward()
         
-        weights, H = self.__get_weights_H(self.natoms_sum)
+        weights, H = self.__get_weights_H(natoms_sum)
         self.__update(H, errore, weights)
         time_end = time.time()
         print("update Energy time:", time_end - time_start, 's')
@@ -527,11 +529,12 @@ class SKalmanFilter(nn.Module):
 
     def update_force(self, inputs, Force_label):
         time_start = time.time()
-        random_index=self.__get_random_index(Force_label, self.n_select, self.Force_group_num)
+        natoms_sum = inputs[3][0, 0]
+        random_index=self.__get_random_index(Force_label, self.n_select, self.Force_group_num, inputs[3])
 
         for index_i in range(len(random_index)):  # 4
             error = 0
-            Etot_predict, Ei_predict, force_predict = self.model(inputs[0], inputs[1], inputs[2], inputs[3], inputs[4])
+            Etot_predict, Ei_predict, force_predict = self.model(inputs[0], inputs[1], inputs[2], inputs[3], inputs[4], inputs[5])
             force_predict.requires_grad_(True)
             for index_ii in range(len(random_index[index_i][0])): # 6
                 for j in range(3):
@@ -546,28 +549,9 @@ class SKalmanFilter(nn.Module):
                         (force_predict[random_index[index_i][0][index_ii]][random_index[index_i][1][index_ii]][j]).backward(retain_graph=True)
 
             num = len(random_index[index_i][0])
-            error = (error / (num * 3.0)) / self.natoms_sum
+            error = (error / (num * 3.0)) / natoms_sum
             
-            # tmp_grad = 0
-            # i = 0
-            # weights = []
-            # H = []
-
             weights, H = self.__get_weights_H(num * 3.0)
-            # for name, param in self.model.named_parameters():
-            #     if i == 0:
-            #         tmp_grad = param.grad
-            #         if tmp_grad == None: #when name==bias, the grad will be None
-            #             tmp_grad = torch.tensor([0.0])
-            #         H.append(((tmp_grad /(num * 3.0)) / self.natoms_sum).T.reshape(tmp_grad.nelement(), 1))
-            #         weights.append(param.data.T.reshape(param.data.nelement(), 1))
-            #     else:
-            #         tmp_grad=param.grad
-            #         if tmp_grad==None: #when name==bias, the grad will be None
-            #             tmp_grad=torch.tensor([0.0])
-            #         H.append(((tmp_grad / (num*3.0)) / self.natoms_sum).T.reshape(tmp_grad.nelement(), 1))
-            #         weights.append(param.data.T.reshape(param.data.nelement(), 1))
-            #     i += 1
             self.__update(H, error, weights)
 
         torch.cuda.empty_cache()

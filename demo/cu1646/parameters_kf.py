@@ -69,7 +69,7 @@ isNNfinetuning=True
 #********* for gen_feature.in *********************
 atomType=[29]                                  #铜有29个同位素,相当于29个种类的cu
 maxNeighborNum=100
-natoms=[108]
+#natoms=[108]
 
 iflag_PCA=0
 Rc_M=6.0                     # max of Rcut
