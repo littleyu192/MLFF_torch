@@ -124,6 +124,9 @@ class MovementDataset(Dataset):
 
         res[mask] = 1.0 / x[mask]
         Ri = torch.cat((res.unsqueeze(-1), Ri_xyz), dim=-1)
+
+        vv_copy = vv.unsqueeze(-1).repeat(1, 1, 1, 4)
+        Ri[mask] *= vv_copy[mask]
         return Ri
 
     def __compute_stat(self, image_num=10):
@@ -196,11 +199,9 @@ class MovementDataset(Dataset):
             atom_sum = atom_sum + natoms_per_type[i]
         
         self.davg = np.array(self.davg).reshape(self.ntypes, -1)
-        self.dstd = np.array(self.dstd).reshape(self.ntypes, -1)
+        self.dstd = np.array(self.dstd).reshape(self.ntypes, -1)        
 
-        
 
-        
     def __compute_stat_output(self, image_num=10,  rcond=1e-3):
         self.ener_shift = []
         natoms_sum = self.natoms_img[0, 0]
