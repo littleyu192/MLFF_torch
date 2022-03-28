@@ -1119,6 +1119,7 @@ for epoch in range(start_epoch, n_epoch + 1):
         valid_loss_Ei = 0.
         valid_loss_F = 0.
         for i_batch, sample_batches in enumerate(loader_valid):
+            natoms_sum = sample_batches['natoms_img'][0, 0].item()
             nr_batch_sample = sample_batches['input_feat'].shape[0]
             valid_error_iter, batch_loss_Etot, batch_loss_Ei, batch_loss_F = valid(sample_batches, model, nn.MSELoss())
             # n_iter = (epoch - 1) * len(loader_valid) + i_batch + 1
@@ -1134,7 +1135,7 @@ for epoch in range(start_epoch, n_epoch + 1):
                 fid_err_log.write('iter\t loss\t RMSE_Etot\t RMSE_Ei\t RMSE_F\t lr\n')
             elif iter % iter_print == 0:
                 fid_err_log = open(f_err_log, 'a')
-                fid_err_log.write('%d %e %e %e %e %e \n'%(iter, batch_loss, math.sqrt(batch_loss_Etot)/sum(pm.natoms), math.sqrt(batch_loss_Ei), math.sqrt(batch_loss_F), real_lr))
+                fid_err_log.write('%d %e %e %e %e %e \n'%(iter, batch_loss, math.sqrt(batch_loss_Etot)/natoms_sum, math.sqrt(batch_loss_Ei), math.sqrt(batch_loss_F), real_lr))
             else:
                 pass
 
