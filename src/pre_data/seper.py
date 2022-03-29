@@ -126,27 +126,36 @@ def write_natoms_dfeat():
 
 def write_dR_neigh():
     # 需要生成一个自己的info文件 先用gen2b的代替
-    infodata = pd.read_csv(os.path.join(pm.sourceFileList[0],'info.txt.Ftype'+str(pm.use_Ftype[0])), header=None,delim_whitespace=True).values[:,0].astype(int)
-    natom = infodata[1]
-    img_num = infodata[2] - (len(infodata)-3)
-    train_img_num = int(img_num * (1 - pm.test_ratio))
     dR_neigh = pd.read_csv(pm.dRneigh_path, header=None, delim_whitespace=True)
-    if img_num * pm.maxNeighborNum * natom * len(pm.atomType) != dR_neigh.shape[0]:
+    count = 0
+    for system in pm.sourceFileList:
+        infodata = pd.read_csv(os.path.join(system,'info.txt.Ftype'+str(pm.use_Ftype[0])), header=None,delim_whitespace=True).values[:,0].astype(int)
+        natom = infodata[1]
+        img_num = infodata[2] - (len(infodata)-3)
+
+        tmp = img_num * natom * len(pm.atomType) * pm.maxNeighborNum
+        dR_neigh_tmp = dR_neigh[count:count+tmp]
+
+        train_img_num = int(img_num * (1 - pm.test_ratio))
+        
+        index = train_img_num * natom * len(pm.atomType) * pm.maxNeighborNum
+        if count == 0:
+            train_img = dR_neigh_tmp[:index]
+            test_img = dR_neigh_tmp[index:]
+        else:
+            train_img = train_img.append(dR_neigh_tmp[:index])
+            test_img = test_img.append(dR_neigh_tmp[index:])
+        count += tmp
+    if count != dR_neigh.shape[0]:
         raise ValueError("dim not match")
-    index = train_img_num * natom * pm.maxNeighborNum * len(pm.atomType)
-    train_img = dR_neigh[:index]
-    test_img = dR_neigh[index:]
     train_img.to_csv(pm.f_train_dR_neigh, header=False, index=False)
     test_img.to_csv(pm.f_test_dR_neigh, header=False, index=False)
     # force和deepmd的对齐
-    force = pd.read_csv(os.path.join(pm.trainSetDir, "force.csv"), header=None)
-    force_train = force[:train_img_num * natom]
-    force_test = force[train_img_num * natom:]
-    force_train.to_csv(pm.f_train_force, header=False, index=False)
-    force_test.to_csv(pm.f_test_force, header=False, index=False)
-
-
-
+    # force = pd.read_csv(os.path.join(pm.trainSetDir, "force.csv"), header=None)
+    # force_train = force[:train_img_num * natom]
+    # force_test = force[train_img_num * natom:]
+    # force_train.to_csv(pm.f_train_force, header=False, index=False)
+    # force_test.to_csv(pm.f_test_force, header=False, index=False)
 if __name__ == '__main__':
     if not os.path.isdir(pm.dir_work):
         os.system("mkdir " + pm.dir_work)

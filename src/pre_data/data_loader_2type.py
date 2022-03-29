@@ -10,15 +10,16 @@ import torch
 codepath = os.path.abspath(sys.path[0])
 sys.path.append(codepath+'/../lib')
 sys.path.append(os.getcwd())
+import prepare as pp
 import parameters as pm
 
 
 class MovementDataset(Dataset):
 
-    def __init__(self, natoms, feat_path, dfeat_path,
+    def __init__(self, feat_path, dfeat_path,
                  egroup_path, egroup_weight_path, divider_path,
                  itype_path, nblist_path, weight_all_path,
-                 energy_path, force_path, ind_img_path, dR_neigh_path=None):  # , natoms_path
+                 energy_path, force_path, ind_img_path, natoms_img_path , dR_neigh_path=None):  # , natoms_path
 
         super(MovementDataset, self).__init__()
         self.device = torch.device(
@@ -29,7 +30,7 @@ class MovementDataset(Dataset):
         self.egroup_weight = np.load(egroup_weight_path)
         self.divider = np.load(divider_path)
 
-        self.natoms_sum = natoms
+        # self.natoms_sum = natoms
         # self.natoms = pd.read_csv(natoms_path)   #/fread_dfeat/NN_output/natoms_train.csv
         self.itype = np.load(itype_path)
         self.nblist = np.load(nblist_path)
@@ -41,14 +42,14 @@ class MovementDataset(Dataset):
         self.use_dR_neigh = False
 
         self.ntypes = pm.ntypes
-        self.natoms_per_type = pm.natoms
+        self.natoms_img = np.load(natoms_img_path)
         if dR_neigh_path:
             self.use_dR_neigh = True
             tmp = np.load(dR_neigh_path)
             self.dR = tmp[:, :, :, :3]
-            self.dR_neigh_list = np.squeeze(tmp[:, :, :, 3:], axis=-1)
+            self.dR_neigh_list = np.squeeze(tmp[:, :, :, 3:], axis=-1).astype(int)
             self.force = -1 * self.force
-
+        
     def __getitem__(self, index):
         ind_image = np.zeros(2)
         ind_image[0] = self.ind_img[index]
@@ -65,7 +66,8 @@ class MovementDataset(Dataset):
 
             'output_energy': self.energy[self.ind_img[index]:self.ind_img[index+1]],
             'output_force': self.force[self.ind_img[index]:self.ind_img[index+1]],
-            'ind_image': ind_image
+            'ind_image': ind_image,
+            'natoms_img': self.natoms_img[index]
         }
         if self.use_dR_neigh:
             dic['input_dR'] = self.dR[self.ind_img[index]:self.ind_img[index+1]]
@@ -122,6 +124,9 @@ class MovementDataset(Dataset):
 
         res[mask] = 1.0 / x[mask]
         Ri = torch.cat((res.unsqueeze(-1), Ri_xyz), dim=-1)
+
+        vv_copy = vv.unsqueeze(-1).repeat(1, 1, 1, 4)
+        Ri[mask] *= vv_copy[mask]
         return Ri
 
     def __compute_stat(self, image_num=10):
@@ -135,8 +140,12 @@ class MovementDataset(Dataset):
             image_num = self.__len__()
         image_dR = self.dR[self.ind_img[0]:self.ind_img[image_num]]
         list_neigh = self.dR_neigh_list[self.ind_img[0]:self.ind_img[image_num]]
-        image_dR = np.reshape(image_dR, (-1, self.natoms_sum, self.ntypes * pm.maxNeighborNum, 3))
-        list_neigh = np.reshape(list_neigh, (-1, self.natoms_sum, self.ntypes * pm.maxNeighborNum))
+
+        natoms_sum = self.natoms_img[0, 0]
+        natoms_per_type = self.natoms_img[0, 1:]
+
+        image_dR = np.reshape(image_dR, (-1, natoms_sum, self.ntypes * pm.maxNeighborNum, 3))
+        list_neigh = np.reshape(list_neigh, (-1, natoms_sum, self.ntypes * pm.maxNeighborNum))
 
         image_dR = torch.tensor(image_dR, device=self.device, dtype=torch.double)
         list_neigh = torch.tensor(list_neigh, device=self.device, dtype=torch.int)
@@ -166,8 +175,8 @@ class MovementDataset(Dataset):
         atom_sum = 0
 
         for i in range(self.ntypes):
-            Ri_ntype = Ri[:, atom_sum:atom_sum+self.natoms_per_type[i]].reshape(-1, 4)
-            Ri2_ntype = Ri2[:, atom_sum:atom_sum+self.natoms_per_type[i]].reshape(-1, 4)
+            Ri_ntype = Ri[:, atom_sum:atom_sum+natoms_per_type[i]].reshape(-1, 4)
+            Ri2_ntype = Ri2[:, atom_sum:atom_sum+natoms_per_type[i]].reshape(-1, 4)
             sum_Ri = Ri_ntype.sum(axis=0).tolist()
             sum_Ri_r = sum_Ri[0]
             sum_Ri_a = np.average(sum_Ri[1:])
@@ -187,27 +196,27 @@ class MovementDataset(Dataset):
 
             self.davg.append(np.tile(davg_unit, pm.maxNeighborNum * self.ntypes).reshape(-1, 4))
             self.dstd.append(np.tile(dstd_unit, pm.maxNeighborNum * self.ntypes).reshape(-1, 4))
-            atom_sum = atom_sum + self.natoms_per_type[i]
+            atom_sum = atom_sum + natoms_per_type[i]
         
         self.davg = np.array(self.davg).reshape(self.ntypes, -1)
-        self.dstd = np.array(self.dstd).reshape(self.ntypes, -1)
+        self.dstd = np.array(self.dstd).reshape(self.ntypes, -1)        
 
-        
 
-        
     def __compute_stat_output(self, image_num=10,  rcond=1e-3):
         self.ener_shift = []
+        natoms_sum = self.natoms_img[0, 0]
+        natoms_per_type = self.natoms_img[0, 1:]
         # only for one atom type
         if image_num > self.__len__():
             image_num = self.__len__()
         energy = self.energy[self.ind_img[0]:self.ind_img[image_num]]
-        energy = np.reshape(energy, (-1, self.natoms_sum, 1))
+        energy = np.reshape(energy, (-1, natoms_sum, 1))
         natoms_sum = 0
         for ntype in range(self.ntypes):
-            energy_ntype = energy[:, natoms_sum:natoms_sum+self.natoms_per_type[ntype]]
-            natoms_sum += self.natoms_per_type[ntype]
+            energy_ntype = energy[:, natoms_sum:natoms_sum+natoms_per_type[ntype]]
+            natoms_sum += natoms_per_type[ntype]
             energy_sum = energy_ntype.sum(axis=1)
-            energy_one = np.ones_like(energy_sum) * self.natoms_per_type[ntype]
+            energy_one = np.ones_like(energy_sum) * natoms_per_type[ntype]
             ener_shift, _, _, _ = np.linalg.lstsq(energy_one, energy_sum, rcond=rcond)
             self.ener_shift.append(ener_shift[0, 0])
         
@@ -219,10 +228,9 @@ class MovementDataset(Dataset):
         return self.davg, self.dstd, self.ener_shift
 
 
-def get_torch_data(atoms_number_in_one_image, examplespath):
+def get_torch_data(examplespath):
     '''
     input para:
-    atoms_number_in_one_image : can be read from parameter file, e.g. cu case 108
     examplespath : npy_file_dir
     data_file_frompwmat : read train_data.csv or test_data.csv
     '''
@@ -241,13 +249,14 @@ def get_torch_data(atoms_number_in_one_image, examplespath):
     f_nblist = os.path.join(examplespath+'/nblist.npy')
     f_weight_all = os.path.join(examplespath+'/weight_all.npy')
     ind_img = os.path.join(examplespath+'/ind_img.npy')
+    natoms_img = os.path.join(examplespath+'/natoms_img.npy')
 
     f_energy = os.path.join(examplespath+'/engy_scaled.npy')
     f_force = os.path.join(examplespath+'/fors_scaled.npy')
     # f_force = os.path.join(examplespath+'/force.npy')
 
-    torch_data = MovementDataset(atoms_number_in_one_image, f_feat, f_dfeat,
+    torch_data = MovementDataset(f_feat, f_dfeat,
                                  f_egroup, f_egroup_weight, f_divider,
                                  f_itype, f_nblist, f_weight_all,
-                                 f_energy, f_force, ind_img, f_dR_neigh)
+                                 f_energy, f_force, ind_img, natoms_img, f_dR_neigh)
     return torch_data

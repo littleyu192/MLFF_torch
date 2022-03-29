@@ -2,8 +2,8 @@
 demo/cu1646/*
 !demo/cu1646/PWdata
 !demo/cu1646/*.py
-demo/cu1646/PWdata/
-# !demo/cu1646/PWdata/MOVEMENT
+!demo/cu1646/PWdata/data1/MOVEMENT
+!demo/cu1646/PWdata/data2/MOVEMENT
 
 demo/cuo/*
 !demo/cuo/PWdata
@@ -88,5 +88,3 @@ src/op/op.egg-info/SOURCES.txt
 src/op/op.egg-info/top_level.txt
 src/op/build/lib.linux-x86_64-3.8/op_grad.cpython-38-x86_64-linux-gnu.so
 src/op/build/lib.linux-x86_64-3.8/test.cpython-38-x86_64-linux-gnu.so
-
-

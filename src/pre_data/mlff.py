@@ -156,15 +156,15 @@ if hasattr(pm, 'isNewMd100'):
             num_process = pm.md_num_process
         md100.run_md100(imodel=imodel, atom_type=pm.atomType, num_process=num_process)
 
-if pm.dR_neigh:
-    movement_path = os.path.join(pm.trainSetDir, "MOVEMENT")
-    cmd1 = "sed -n '/force/,+108p' " + movement_path + " > tmp.txt"
-    cmd2 = "sed '/force/d' tmp.txt | awk '{print $2,$3,$4}' OFS=',' > Force.txt"
+# if pm.dR_neigh:
+#     movement_path = os.path.join(pm.trainSetDir, "MOVEMENT")
+#     cmd1 = "sed -n '/force/,+108p' " + movement_path + " > tmp.txt"
+#     cmd2 = "sed '/force/d' tmp.txt | awk '{print $2,$3,$4}' OFS=',' > Force.txt"
 
-    os.system(cmd1)
-    os.system(cmd2)
+#     os.system(cmd1)
+#     os.system(cmd2)
 
-    force = pd.read_csv("Force.txt", header=None)
-    os.system("rm Force.txt tmp.txt")
-    force_path = os.path.join(pm.trainSetDir, "force.csv")
-    force.to_csv(force_path, header=False, index=False)
+#     force = pd.read_csv("Force.txt", header=None)
+#     os.system("rm Force.txt tmp.txt")
+#     force_path = os.path.join(pm.trainSetDir, "force.csv")
+#     force.to_csv(force_path, header=False, index=False)

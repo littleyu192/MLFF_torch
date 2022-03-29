@@ -379,7 +379,7 @@ else:
     writer = None
 
 
-def get_loss_func(start_lr, real_lr, has_fi, lossFi, has_etot, loss_Etot, has_egroup, loss_Egroup, has_ei, loss_Ei):
+def get_loss_func(start_lr, real_lr, has_fi, lossFi, has_etot, loss_Etot, has_egroup, loss_Egroup, has_ei, loss_Ei, natoms_sum):
     start_pref_egroup = 0.02
     limit_pref_egroup = 1.0
     start_pref_F = 1000  #1000
@@ -396,7 +396,7 @@ def get_loss_func(start_lr, real_lr, has_fi, lossFi, has_etot, loss_Etot, has_eg
     if has_fi:
         l2_loss += pref_fi * lossFi      # * 108
     if has_etot:
-        l2_loss += 1./sum(pm.natoms) * pref_etot * loss_Etot  # 1/108 = 0.009259259259, 1/64=0.015625
+        l2_loss += 1./natoms_sum * pref_etot * loss_Etot  # 1/108 = 0.009259259259, 1/64=0.015625
     if has_egroup :
         l2_loss += pref_egroup * loss_Egroup
     if has_ei :
@@ -457,9 +457,9 @@ def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
     atom_number = Ei_label.shape[1]
     Etot_label = torch.sum(Ei_label, dim=1)
     # Etot_label = Ep_label
-    # import ipdb;ipdb.set_trace()
     neighbor = Variable(sample_batches['input_nblist'].int().to(device))  # [40,108,100]
     ind_img = Variable(sample_batches['ind_image'].int().to(device))
+    natoms_img = Variable(sample_batches['natoms_img'].int().to(device))
     # dumping what you want here
     #
     dump("defat.shape= %s" %(dfeat.shape,))
@@ -481,11 +481,10 @@ def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
     #     # print(parm[name])
     #     # print(name, parameter.mean().item(), parameter.std().item())
     # import ipdb;ipdb.set_trace()
-
     if opt_deepmd:
-        Etot_predict, Ei_predict, Force_predict = model(dR, dfeat, dR_neigh_list, egroup_weight, divider)
+        Etot_predict, Ei_predict, Force_predict = model(dR, dfeat, dR_neigh_list, natoms_img, egroup_weight, divider)
     else:
-        Etot_predict, Ei_predict, Force_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
+        Etot_predict, Ei_predict, Force_predict = model(input_data, dfeat, neighbor, natoms_img, egroup_weight, divider)
     
     optimizer.zero_grad()
     # Egroup_predict = model.get_egroup(egroup_weight, divider)   #[40,108,1]
@@ -539,7 +538,6 @@ def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
 
     # if loss_Etot.item() > 1e5:
     #     print("a debug")
-    #     import ipdb;ipdb.set_trace()
     #     return torch.zeros(1), torch.zeros(1), torch.zeros(1), torch.zeros(1)
     
     start_lr = opt_lr
@@ -548,7 +546,7 @@ def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
     w_eg = 0
     w_ei = 0
     
-    loss, pref_f, pref_e = get_loss_func(start_lr, real_lr, w_f, loss_F, w_e, loss_Etot, w_eg, loss_Egroup, w_ei, loss_Ei)
+    loss, pref_f, pref_e = get_loss_func(start_lr, real_lr, w_f, loss_F, w_e, loss_Etot, w_eg, loss_Egroup, w_ei, loss_Ei, natoms_img[0, 0].item())
     # loss = loss_Etot
 
     loss.backward()
@@ -613,6 +611,7 @@ def train_kalman(sample_batches, model, kalman, criterion, last_epoch, real_lr):
     # import ipdb;ipdb.set_trace()
     neighbor = Variable(sample_batches['input_nblist'].int().to(device))  # [40,108,100]
     ind_img = Variable(sample_batches['ind_image'].int().to(device))
+    natoms_img = Variable(sample_batches['natoms_img'].int().to(device))
     # dumping what you want here
     #
     dump("defat.shape= %s" %(dfeat.shape,))
@@ -623,20 +622,18 @@ def train_kalman(sample_batches, model, kalman, criterion, last_epoch, real_lr):
     dump(neighbor)
 
     if opt_deepmd:
-        Etot_predict, Ei_predict, Force_predict = model(dR, dfeat, dR_neigh_list, egroup_weight, divider)
-        kalman_inputs = [dR, dfeat, dR_neigh_list, egroup_weight, divider]
+        kalman_inputs = [dR, dfeat, dR_neigh_list, natoms_img, egroup_weight, divider]
     else:
-        Etot_predict, Ei_predict, Force_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
-        kalman_inputs = [input_data, dfeat, neighbor, egroup_weight, divider]
+        kalman_inputs = [input_data, dfeat, neighbor, natoms_img, egroup_weight, divider]
    
     kalman.update_energy(kalman_inputs, Etot_label)
     kalman.update_force(kalman_inputs, Force_label)
     # kalman.update_egroup(kalman_inputs, Egroup_label)
 
     if opt_deepmd:
-        Etot_predict, Ei_predict, Force_predict = model(dR, dfeat, dR_neigh_list, egroup_weight, divider)
+        Etot_predict, Ei_predict, Force_predict = model(dR, dfeat, dR_neigh_list, natoms_img, egroup_weight, divider)
     else:
-        Etot_predict, Ei_predict, Force_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
+        Etot_predict, Ei_predict, Force_predict = model(input_data, dfeat, neighbor, natoms_img, egroup_weight, divider)
 
     loss_F = criterion(Force_predict, Force_label)
     loss_Etot = criterion(Etot_predict, Etot_label)
@@ -657,6 +654,7 @@ def valid(sample_batches, model, criterion):
     egroup_weight = Variable(sample_batches['input_egroup_weight'].double().to(device))
     divider = Variable(sample_batches['input_divider'].double().to(device))
     neighbor = Variable(sample_batches['input_nblist'].int().to(device))  # [40,108,100]
+    natoms_img = Variable(sample_batches['natoms_img'].int().to(device))  # [40,108,100]
     # Ep_label = Variable(sample_batches['output_ep'][:,:,:].double().to(device))
     if pm.dR_neigh:
         dR = Variable(sample_batches['input_dR'].double().to(device), requires_grad=True)
@@ -668,9 +666,9 @@ def valid(sample_batches, model, criterion):
 
     model.train()
     if opt_deepmd:
-        Etot_predict, Ei_predict, Force_predict = model(dR, dfeat, dR_neigh_list, egroup_weight, divider)
+        Etot_predict, Ei_predict, Force_predict = model(dR, dfeat, dR_neigh_list, natoms_img, egroup_weight, divider)
     else:
-        Etot_predict, Ei_predict, Force_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
+        Etot_predict, Ei_predict, Force_predict = model(input_data, dfeat, neighbor, natoms_img, egroup_weight, divider)
     
     # Egroup_predict = model.get_egroup(Ei_predict, egroup_weight, divider)
     loss_F = criterion(Force_predict, Force_label)
@@ -738,11 +736,11 @@ info("Scheduler: opt_LR_T_max = %s" %opt_LR_T_max)
 info("scheduler: opt_autograd = %s" %opt_autograd)
 
 train_data_path = pm.train_data_path
-torch_train_data = get_torch_data(sum(pm.natoms), train_data_path)
+torch_train_data = get_torch_data(train_data_path)
 
 
 valid_data_path=pm.test_data_path
-torch_valid_data = get_torch_data(sum(pm.natoms), valid_data_path)
+torch_valid_data = get_torch_data(valid_data_path)
 
 
 # ===================for scaler feature and dfeature==========================
@@ -775,14 +773,14 @@ if pm.is_scale:
 
 
 	
-loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=True)
+loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=False)
 if opt_deepmd:
-    davg, dstd, ener_shift = torch_train_data.get_stat()
+    davg, dstd, ener_shift = torch_train_data.get_stat(image_num=8)
     stat = [davg, dstd, ener_shift]
 
 loader_valid = Data.DataLoader(torch_valid_data, batch_size=batch_size, shuffle=True)
 if opt_deepmd:
-    davg, dstd, ener_shift = torch_valid_data.get_stat()
+    davg, dstd, ener_shift = torch_valid_data.get_stat(image_num=2)
 
 # 模型多卡并行
 # if torch.cuda.device_count() > 1:
@@ -1014,6 +1012,8 @@ for epoch in range(start_epoch, n_epoch + 1):
             # param_group['lr'] = real_lr * pm.batch_size
             param_group['lr'] = real_lr * (pm.batch_size ** 0.5)
         
+        natoms_sum = sample_batches['natoms_img'][0, 0].item()
+        
         if pm.use_GKalman == True:
             real_lr = 0.001
             batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
@@ -1045,7 +1045,7 @@ for epoch in range(start_epoch, n_epoch + 1):
             fid_err_log.write('iter\t loss\t RMSE_Etot\t RMSE_Ei\t RMSE_F\t lr\n')
         elif iter % iter_print == 0:
             fid_err_log = open(f_err_log, 'a')
-            fid_err_log.write('%d %e %e %e %e %e \n'%(iter, batch_loss, math.sqrt(batch_loss_Etot)/sum(pm.natoms), math.sqrt(batch_loss_Ei), math.sqrt(batch_loss_F), real_lr))
+            fid_err_log.write('%d %e %e %e %e %e \n'%(iter, batch_loss, math.sqrt(batch_loss_Etot)/natoms_sum, math.sqrt(batch_loss_Ei), math.sqrt(batch_loss_F), real_lr))
         else:
             pass
 
@@ -1079,7 +1079,7 @@ for epoch in range(start_epoch, n_epoch + 1):
         f_epoch_err_log.write('epoch\t loss\t RMSE_Etot\t RMSE_Ei\t RMSE_F\t lr\n')
     elif epoch % epoch_print == 0:
         f_epoch_err_log = open(epoch_err_log, 'a')
-        f_epoch_err_log.write('%d %e %e %e %e %e \n'%(epoch, loss, RMSE_Etot/sum(pm.natoms), RMSE_Ei, RMSE_F, real_lr))
+        f_epoch_err_log.write('%d %e %e %e %e %e \n'%(epoch, loss, RMSE_Etot, RMSE_Ei, RMSE_F, real_lr))
     else:
         pass    
 
@@ -1119,6 +1119,7 @@ for epoch in range(start_epoch, n_epoch + 1):
         valid_loss_Ei = 0.
         valid_loss_F = 0.
         for i_batch, sample_batches in enumerate(loader_valid):
+            natoms_sum = sample_batches['natoms_img'][0, 0].item()
             nr_batch_sample = sample_batches['input_feat'].shape[0]
             valid_error_iter, batch_loss_Etot, batch_loss_Ei, batch_loss_F = valid(sample_batches, model, nn.MSELoss())
             # n_iter = (epoch - 1) * len(loader_valid) + i_batch + 1
@@ -1134,7 +1135,7 @@ for epoch in range(start_epoch, n_epoch + 1):
                 fid_err_log.write('iter\t loss\t RMSE_Etot\t RMSE_Ei\t RMSE_F\t lr\n')
             elif iter % iter_print == 0:
                 fid_err_log = open(f_err_log, 'a')
-                fid_err_log.write('%d %e %e %e %e %e \n'%(iter, batch_loss, math.sqrt(batch_loss_Etot)/sum(pm.natoms), math.sqrt(batch_loss_Ei), math.sqrt(batch_loss_F), real_lr))
+                fid_err_log.write('%d %e %e %e %e %e \n'%(iter, batch_loss, math.sqrt(batch_loss_Etot)/natoms_sum, math.sqrt(batch_loss_Ei), math.sqrt(batch_loss_F), real_lr))
             else:
                 pass
 
@@ -1155,7 +1156,7 @@ for epoch in range(start_epoch, n_epoch + 1):
             fid_err_log.write('epoch\t valid_RMSE_Etot\t valid_RMSE_Ei\t valid_RMSE_F\n')
         elif epoch % epoch_print == 0:
             fid_err_log = open(f_err_log, 'a')
-            fid_err_log.write('%d %e %e %e \n'%(epoch, valid_RMSE_Etot/sum(pm.natoms), valid_RMSE_Ei, valid_RMSE_F))
+            fid_err_log.write('%d %e %e %e \n'%(epoch, valid_RMSE_Etot, valid_RMSE_Ei, valid_RMSE_F))
         
         if valid_loss < min_loss:
             min_loss = valid_loss

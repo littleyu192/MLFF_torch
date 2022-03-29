@@ -44,9 +44,7 @@ class DeepMD(nn.Module):
         super(DeepMD, self).__init__()
         # config parameters
         self.ntypes = pm.ntypes
-        self.natoms = pm.natoms
         self.device = device
-        self.dim_feat = pm.nFeatures
         self.stat = stat
 
         # network
@@ -80,7 +78,7 @@ class DeepMD(nn.Module):
         #         self.transform.append(nn.TransformerEncoder(self.transform_layer, 6))
 
     
-    def smooth(self, image_dR, x, Ri_xyz, mask, inr, davg, dstd):
+    def smooth(self, image_dR, x, Ri_xyz, mask, inr, davg, dstd, natoms):
 
         inr2 = torch.zeros_like(inr)
         inr3 = torch.zeros_like(inr)
@@ -157,7 +155,7 @@ class DeepMD(nn.Module):
         Ri[mask] *= vv_copy[mask]
 
         for ntype in range(self.ntypes):
-            atom_num_ntype = self.natoms[ntype]
+            atom_num_ntype = natoms[ntype]
             davg_ntype = davg[ntype].reshape(-1, 4).squeeze().repeat(atom_num_ntype, 1, 1) #[32,100,4]
             dstd_ntype = dstd[ntype].reshape(-1, 4).squeeze().repeat(atom_num_ntype, 1, 1) #[32,100,4]
             if ntype == 0:
@@ -277,7 +275,7 @@ class DeepMD(nn.Module):
         Egroup_out = torch.divide(Egroup, divider)
         return Egroup_out
         
-    def forward(self, image_dR, dfeat, list_neigh, Egroup_weight, divider):
+    def forward(self, image_dR, dfeat, list_neigh, natoms_img, Egroup_weight, divider):
         # starttime = datetime.datetime.now()
         # recover from deepmd 单元素
         # image_dR = torch.tensor(np.load("deepmd_image_dR.npy"), device=self.device, requires_grad=True)
@@ -302,6 +300,11 @@ class DeepMD(nn.Module):
         batch_size = image_dR.shape[0]
         natoms_sum = image_dR.shape[1]
         neighbor_num = image_dR.shape[3]
+        # when batch_size > 1. don't support multi movement file
+        if batch_size > 1 and torch.unique(natoms_img[:, 0]).shape[0] > 1:
+            raise ValueError("batchsize > 1, use one movement")
+
+        natoms = natoms_img[0, 1:]
 
         list_neigh_reshape = list_neigh.reshape(batch_size, natoms_sum, -1)  #[1,64,200]
         image_dR_reshape = image_dR.reshape(batch_size, natoms_sum, -1, 3)  #[1,64,200,3]
@@ -322,16 +325,16 @@ class DeepMD(nn.Module):
 
         davg = torch.tensor(self.stat[0], device=self.device)  #[2,100,4]
         dstd = torch.tensor(self.stat[1], device=self.device)  #[2,100,4]
-        Ri, Ri_d = self.smooth(image_dR_reshape, nr, Ri_xyz, mask, inr, davg, dstd) #[1,64,200,4]
+        Ri, Ri_d = self.smooth(image_dR_reshape, nr, Ri_xyz, mask, inr, davg, dstd, natoms) #[1,64,200,4]
         
         atom_sum = 0
 
         for ntype in range(self.ntypes):
             for ntype_1 in range(self.ntypes):
-                S_Rij = Ri[:, atom_sum:atom_sum+self.natoms[ntype], ntype_1*neighbor_num:(ntype_1+1)*neighbor_num, 0].unsqueeze(-1)
+                S_Rij = Ri[:, atom_sum:atom_sum+natoms[ntype], ntype_1*neighbor_num:(ntype_1+1)*neighbor_num, 0].unsqueeze(-1)
                 embedding_index = ntype * self.ntypes + ntype_1
                 G = self.embeding_net[embedding_index](S_Rij)
-                tmp_a = Ri[:, atom_sum:atom_sum+self.natoms[ntype], ntype_1*neighbor_num:(ntype_1+1)*neighbor_num].transpose(-2, -1)
+                tmp_a = Ri[:, atom_sum:atom_sum+natoms[ntype], ntype_1*neighbor_num:(ntype_1+1)*neighbor_num].transpose(-2, -1)
                 tmp_b = torch.matmul(tmp_a, G)
                 if ntype_1 == 0:
                     xyz_scater_a = tmp_b
@@ -340,7 +343,7 @@ class DeepMD(nn.Module):
             xyz_scater_a = xyz_scater_a * 4.0 / (neighbor_num * self.ntypes * 4)
             xyz_scater_b = xyz_scater_a[:, :, :, :16]
             DR_ntype = torch.matmul(xyz_scater_a.transpose(-2, -1), xyz_scater_b)
-            DR_ntype = DR_ntype.reshape(batch_size, self.natoms[ntype], -1)
+            DR_ntype = DR_ntype.reshape(batch_size, natoms[ntype], -1)
             if ntype == 0:
                 DR = DR_ntype
             else:
@@ -354,7 +357,7 @@ class DeepMD(nn.Module):
                 Ei = Ei_ntype
             else:
                 Ei = torch.concat((Ei, Ei_ntype), dim=1)
-            atom_sum = atom_sum + self.natoms[ntype]
+            atom_sum = atom_sum + natoms[ntype]
         
         Etot = torch.sum(Ei, 1)
         # Egroup = self.get_egroup(Ei, Egroup_weight, divider)

@@ -111,40 +111,10 @@ class FCNet(nn.Module):
         return predict, grad
 
 
-class preMLFFNet(nn.Module):
-    def __init__(self, atomType = pm.atomType, natoms = pm.natoms):  # atomType=[8,32]
-        super(preMLFFNet,self).__init__()
-        self.atomType = atomType
-        self.natoms = pm.natoms   #[32,32]
-        self.models = nn.ModuleList()
-        for i in range(len(self.atomType)):  #i=[0,1]
-            self.models.append(FCNet(itype = i, Dropout=True))   # Dropout=True
-
-
-    def forward(self, image, dfeat, neighbor):
-        natoms_index = [0]
-        temp = 0
-        for i in self.natoms:
-            temp += i
-            natoms_index.append(temp)    #[0,32,64]
-        input_data = image
-        
-        for i in range(len(natoms_index)-1):
-            x = input_data[:, natoms_index[i]:natoms_index[i+1]]
-            _, predict = self.models[i](x)
-            if(i==0):
-                Ei = predict #[32, 1]
-            else:
-                Ei = torch.cat((Ei, predict), dim=1)    #[64,1]
-        Etot = Ei.sum(dim=1)
-        return Etot, Ei
-
-
 class MLFFNet(nn.Module):
     def __init__(self, scalers, device, atomType = pm.atomType, Dropout = False):  #atomType=[8,32]
         super(MLFFNet,self).__init__()
         self.atomType = atomType
-        self.natoms = pm.natoms   #[32,32]
         self.models = nn.ModuleList()
         self.scalers = scalers
         self.device = device
@@ -152,12 +122,12 @@ class MLFFNet(nn.Module):
             self.models.append(FCNet(itype = i, Dropout=Dropout))   # Dropout=True
 
 
-    def forward(self, image, dfeat, neighbor, Egroup_weight, divider):
+    def forward(self, image, dfeat, neighbor, natoms_img, Egroup_weight, divider):
         start = time.time()
         #image.requires_grad_(True)
         natoms_index = [0]
         temp = 0
-        for i in self.natoms:
+        for i in natoms_img[0, 1:]:
             temp += i
             natoms_index.append(temp)    #[0,32,64]
         
