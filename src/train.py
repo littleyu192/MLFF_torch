@@ -57,7 +57,8 @@ def error(msg, *args, **kwargs):
 # show start logging banner to logging file
 #
 info("New running starts ===>")
-info(' '.join(sys.argv))
+info("codebase git revision: %s" %opt.git_revision)
+info("commandline: %s" %opt.commandline)
 
 # set default training dtype
 #

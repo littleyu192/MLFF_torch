@@ -1,6 +1,7 @@
 # system modules
 import os,sys
 import getopt
+import subprocess
 
 # local modules
 import component.logger as mlff_logger
@@ -9,6 +10,12 @@ import parameters as pm
 # MLFF runtime option
 class mlff_runtime_option:
     def __init__(self):
+        # system information
+        try:
+            self.git_revision = subprocess.check_output(['git', 'rev-parse', 'HEAD']).strip().decode()
+        except:
+            self.git_revision = 'UNKNOWN'
+        self.commandline = ''
         # global running config
         self.force_cpu = False
         self.magic = False
@@ -60,6 +67,8 @@ class mlff_runtime_option:
         self.LR_T_max = None
 
     def parse(self, argv):
+        self.commandline = ' '.join(argv)
+
         opts,args = getopt.getopt(argv[1:],
             '-h-c-m-f-p-S-n:-a:-z:-v:-w:-u:-e:-l:-g:-t:-b:-d:-r:-s:-o:-i:-j:',
             ['help','cpu','magic','follow','recover','shuffle',
