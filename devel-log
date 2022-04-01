@@ -1,0 +1,17 @@
+# this file is used to maintain clean linear commit logs
+# by using temporary personal branch for feature-devel in
+# rebase-merge style
+#
+# add a one-line description here when you decide to start
+# a job, then commit it to your personal-devel branch, it
+# will be a good base to squash your following commits
+#
+# suggested format:
+# date; [flag];  brif descprition; [author]
+#
+# suggested flags:
+# FEATURE BUGFIX PERFORMANCE CLEANUP REMOVE
+#
+
+2022-04-01; [FEATURE]; MLFF_streamer: a fully configurable MLFF network model; [liutao]
+
