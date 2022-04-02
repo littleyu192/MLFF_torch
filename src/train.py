@@ -1043,7 +1043,7 @@ for epoch in range(start_epoch, n_epoch + 1):
         if iter == 1:
             fid_err_log = open(f_err_log, 'w')
             fid_err_log.write('iter\t loss\t RMSE_Etot\t RMSE_Ei\t RMSE_F\t lr\n')
-        elif iter % iter_print == 0:
+        if iter % iter_print == 0:
             fid_err_log = open(f_err_log, 'a')
             fid_err_log.write('%d %e %e %e %e %e \n'%(iter, batch_loss, math.sqrt(batch_loss_Etot)/natoms_sum, math.sqrt(batch_loss_Ei), math.sqrt(batch_loss_F), real_lr))
         else:
@@ -1077,7 +1077,7 @@ for epoch in range(start_epoch, n_epoch + 1):
     if epoch == 1:
         f_epoch_err_log = open(epoch_err_log, 'w')
         f_epoch_err_log.write('epoch\t loss\t RMSE_Etot\t RMSE_Ei\t RMSE_F\t lr\n')
-    elif epoch % epoch_print == 0:
+    if epoch % epoch_print == 0:
         f_epoch_err_log = open(epoch_err_log, 'a')
         f_epoch_err_log.write('%d %e %e %e %e %e \n'%(epoch, loss, RMSE_Etot, RMSE_Ei, RMSE_F, real_lr))
     else:
