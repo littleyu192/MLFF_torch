@@ -211,14 +211,22 @@ class MovementDataset(Dataset):
             image_num = self.__len__()
         energy = self.energy[self.ind_img[0]:self.ind_img[image_num]]
         energy = np.reshape(energy, (-1, natoms_sum, 1))
-        natoms_sum = 0
-        for ntype in range(self.ntypes):
-            energy_ntype = energy[:, natoms_sum:natoms_sum+natoms_per_type[ntype]]
-            natoms_sum += natoms_per_type[ntype]
-            energy_sum = energy_ntype.sum(axis=1)
-            energy_one = np.ones_like(energy_sum) * natoms_per_type[ntype]
-            ener_shift, _, _, _ = np.linalg.lstsq(energy_one, energy_sum, rcond=rcond)
-            self.ener_shift.append(ener_shift[0, 0])
+        # natoms_sum = 0
+        # for ntype in range(self.ntypes):
+        #     energy_ntype = energy[:, natoms_sum:natoms_sum+natoms_per_type[ntype]]
+        #     natoms_sum += natoms_per_type[ntype]
+        #     energy_sum = energy_ntype.sum(axis=1)
+        #     energy_one = np.ones_like(energy_sum) * natoms_per_type[ntype]
+        #     ener_shift, _, _, _ = np.linalg.lstsq(energy_one, energy_sum, rcond=rcond)
+        #     self.ener_shift.append(ener_shift[0, 0])
+        # energy_ntype = energy[:, natoms_sum:natoms_sum+natoms_per_type[ntype]]
+        # natoms_sum += natoms_per_type[ntype]
+        energy_sum = energy.sum(axis=1)
+        energy_avg = np.average(energy_sum)
+        # energy_one = np.ones_like(energy_sum) * natoms_per_type[ntype]
+        ener_shift, _, _, _ = np.linalg.lstsq([natoms_per_type], [energy_avg], rcond=rcond)
+        self.ener_shift = ener_shift.tolist()
+        
         
 
     def get_stat(self, image_num=20, rcond=1e-3):
