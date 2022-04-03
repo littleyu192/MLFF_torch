@@ -10,8 +10,8 @@
 # date; [flag];  brif descprition; [author]
 #
 # suggested flags:
-# FEATURE BUGFIX PERFORMANCE CLEANUP REMOVE
+# FEATURE FIXUP PERFORMANCE MAINTAIN
 #
 
-2022-04-01; [FEATURE]; MLFF_streamer: a fully configurable MLFF network model; [liutao]
+2022-04-01; [FEATURE]; MLFF_stacker: a fully configurable MLFF network model; [liutao]
 

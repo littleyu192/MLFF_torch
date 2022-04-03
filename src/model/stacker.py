@@ -11,25 +11,15 @@
 #
 #           cfg = [
 #                   (scale,),                   # layer: scale_1
+                    (skip
 #                   (linear, 16, 32, True),     # layer: linear_1, bias=True
-#                   (activation,),              # layer: activation_1
+#                   (func, tanh,),              # layer: tanh activation
 #                   (linear, 32, 64, True),     # layer: linear_2, bias=True
-#                   (activation,),              # layer: activation_2
+#                   (func, tanh,),              # layer: tanh activation
 #                   (linear, 64, 8, False),     # layer: linear3, bias=False
-#                   (activation,),              # layer: activation_3
+#                   (func, tanh,),              # layer: activation_3
 #                   (linear, 8, 1, False),      # layer: linear4, bias=False
-#           ]
-#
-#           the auto generated (virtual) mirrored part should be:
-#           [
-#                   (d_linear, 1, 8, False),    # layer: linear4, bias=False
-#                   (d_activation,),            # layer: activation_3
-#                   (d_linear, 8, 64, False),   # layer: linear3, bias=False
-#                   (d_activation,),            # layer: activation_2
-#                   (d_linear, 64, 32, True),   # layer: linear_2, bias=False
-#                   (d_activation,),            # layer: activation_1
-#                   (d_linear, 32, 16, True),   # layer: linear_1, bias=False
-#                   (d_scale,),                 # layer: scale_1
+#                   (func, linear,),
 #           ]
 #
 
@@ -128,8 +118,6 @@ class dmirror_FC(nn.Module):
     def __init__(self, cfg, act_func, d_act_func, magic=False):
         super(dmirror_FC, self).__init__()
         self.cfg = cfg
-        self.act_func = act_func
-        self.d_act_func = d_act_func
         self.layers = []
         self.layers_r = []
 
