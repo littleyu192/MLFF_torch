@@ -1,4 +1,3 @@
-from tkinter import image_names
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -230,6 +229,7 @@ class LKalmanFilter(nn.Module):
         self.Force_group_num = 6
         self.n_select_eg = 12
         self.Force_group_num_eg = 3
+        self.block_size = 1024
         self.__init_P()
 
     def __init_P(self):
@@ -237,11 +237,32 @@ class LKalmanFilter(nn.Module):
         for name, param in self.model.named_parameters():
             param_num = param.data.nelement()
             print(name, param_num)
-            self.P.append(torch.eye(param_num).to(self.device))
+            if param_num >= self.block_size:
+                block_num = math.ceil(param_num / self.block_size)
+                for i in range(block_num):
+                    if i != block_num - 1:
+                        self.P.append(torch.eye(self.block_size).to(self.device))
+                    else:
+                        self.P.append(torch.eye(param_num % self.block_size).to(self.device))
+            else:
+                self.P.append(torch.eye(param_num).to(self.device))
         self.weights_num = len(self.P)
     
+    def __split_weights(self, weight):
+        param_num = weight.nelement()
+        res = []
+        if param_num < self.block_size:
+            res.append(weight)
+        else:
+            block_num = math.ceil(param_num / self.block_size)
+            for i in range(block_num):
+                if i != block_num - 1:
+                    res.append(weight[i*self.block_size:(i+1)*self.block_size])
+                else:
+                    res.append(weight[i*self.block_size:])
+        return res
+    
     def __update(self, H, error, weights):
-
         tmp = 0
         for i in range(self.weights_num):
             tmp = tmp + (self.kalman_lambda + torch.matmul(torch.matmul(H[i].T, self.P[i]), H[i]))
@@ -258,7 +279,7 @@ class LKalmanFilter(nn.Module):
             '''
             2. update weights
             '''
-            weights[i] += K * error
+            weights[i] = weights[i] + K * error
         
             '''
             3. update P
@@ -272,13 +293,25 @@ class LKalmanFilter(nn.Module):
 
         i = 0
         for name, param in self.model.named_parameters():
-            param.data = weights[i].reshape(param.data.T.shape).T
-            i += 1
+            param_num = param.nelement()
+            if (param_num < self.block_size):
+                if param.ndim > 1:
+                    param.data = weights[i].reshape(param.data.T.shape).T
+                else:
+                    param.data = weights[i].reshape(param.data.shape)
+                i += 1
+            else:
+                block_num = math.ceil(param_num / self.block_size)
+                for j in range(block_num):
+                    if j == 0:
+                        tmp_weight = weights[i]
+                    else:
+                        tmp_weight = torch.concat([tmp_weight, weights[i]], dim=0)
+                    i += 1
+                param.data = tmp_weight.reshape(param.data.T.shape).T
 
-        for name, param in self.model.named_parameters():
-                param.grad.detach_()
-                param.grad.zero_()
-
+            param.grad.detach_()
+            param.grad.zero_()
         torch.cuda.empty_cache()
     
     def __get_random_index(self, Force_label, n_select, Force_group_num, natoms_img):
@@ -326,8 +359,20 @@ class LKalmanFilter(nn.Module):
         weights = []
         H = []
         for name, param in self.model.named_parameters():
-            H.append((param.grad / natoms_sum).T.reshape(param.grad.nelement(), 1))
-            weights.append(param.data.T.reshape(param.data.nelement(),1))
+            # H.append((param.grad / natoms_sum).T.reshape(param.grad.nelement(), 1))
+            if param.ndim > 1:
+                tmp = (param.grad / natoms_sum).T.reshape(param.grad.nelement(), 1)
+            else:
+                tmp = (param.grad / natoms_sum).reshape(param.grad.nelement(), 1)
+            res = self.__split_weights(tmp)
+            H = H + res
+            # weights.append(param.data.T.reshape(param.data.nelement(),1))
+            if param.ndim > 1:
+                tmp = param.data.T.reshape(param.data.nelement(),1)
+            else:
+                tmp = param.data.reshape(param.data.nelement(),1)
+            res = self.__split_weights(tmp)
+            weights = weights + res
         self.__update(H, errore, weights)
         time_end = time.time()
         print("update Energy time:", time_end - time_start, 's')
@@ -362,23 +407,25 @@ class LKalmanFilter(nn.Module):
             weights = []
             H = []
             for name, param in self.model.named_parameters():
-                if i == 0:
-                    tmp_grad = param.grad
-                    if tmp_grad == None: #when name==bias, the grad will be None
-                        tmp_grad = torch.tensor([0.0])
-                    H.append(((tmp_grad /(num * 3.0)) / natoms_sum).T.reshape(tmp_grad.nelement(), 1))
-                    weights.append(param.data.T.reshape(param.data.nelement(), 1))
+                # H.append((param.grad / natoms_sum).T.reshape(param.grad.nelement(), 1))
+                if param.ndim > 1:
+                    tmp = (param.grad / (num * 3.0) / natoms_sum).T.reshape(param.grad.nelement(), 1)
                 else:
-                    tmp_grad=param.grad
-                    if tmp_grad==None: #when name==bias, the grad will be None
-                        tmp_grad=torch.tensor([0.0])
-                    H.append(((tmp_grad / (num*3.0)) / natoms_sum).T.reshape(tmp_grad.nelement(), 1))
-                    weights.append(param.data.T.reshape(param.data.nelement(), 1))
-                i += 1
+                    tmp = (param.grad / (num * 3.0) / natoms_sum).reshape(param.grad.nelement(), 1)
+                res = self.__split_weights(tmp)
+                H = H + res
+                # weights.append(param.data.T.reshape(param.data.nelement(),1))
+                if param.ndim > 1:
+                    tmp = param.data.T.reshape(param.data.nelement(),1)
+                else:
+                    tmp = param.data.reshape(param.data.nelement(),1)
+                res = self.__split_weights(tmp)
+                weights = weights + res
             self.__update(H, error, weights)
 
         torch.cuda.empty_cache()
         time_end = time.time()
+
         print("update Force time:", time_end - time_start, 's')
 
 
@@ -552,7 +599,7 @@ class SKalmanFilter(nn.Module):
             num = len(random_index[index_i][0])
             error = (error / (num * 3.0)) / natoms_sum
             
-            weights, H = self.__get_weights_H(num * 3.0)
+            weights, H = self.__get_weights_H(num * 3.0 * natoms_sum)
             self.__update(H, error, weights)
 
         torch.cuda.empty_cache()
