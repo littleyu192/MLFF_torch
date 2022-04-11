@@ -111,23 +111,23 @@ DeepMD_cfg_dp_kf = {
 nfeat_type=len(use_Ftype)
 Ftype1_para={
     'numOf2bfeat':[24,24],       # [itpye1,itype2]
-    'Rc':[6.0,6.0],
-    'Rm':[5.8,5.8],   # 'Rc':[5.5,5.5], 'Rm':[5.0,5.0],
-    'iflag_grid':[3,3],                      # 1 or 2 or 3
-    'fact_base':[0.2,0.2],
-    'dR1':[0.5,0.5],
+    'Rc':[6.0 for i in range(len(atomType))],
+    'Rm':[5.8 for i in range(len(atomType))],   # 'Rc':[5.5,5.5], 'Rm':[5.0,5.0],
+    'iflag_grid':[3 for i in range(len(atomType))],                      # 1 or 2 or 3
+    'fact_base':[0.2 for i in range(len(atomType))],
+    'dR1':[0.5 for i in range(len(atomType))],
     'iflag_ftype':3       # same value for different types, iflag_ftype:1,2,3 when 3, iflag_grid must be 3
 }
 Ftype2_para={
-    'numOf3bfeat1':[3,3],     # 3*3=9
-    'numOf3bfeat2':[3,3],     # 3*3=9   总的特征数24+9+9=42
-    'Rc':[5.5,5.5],
-    'Rc2':[5.5,5.5],
-    'Rm':[5.0,5.0],
-    'iflag_grid':[3,3],                      # 1 or 2 or 3
-    'fact_base':[0.2,0.2],
-    'dR1':[0.5,0.5],
-    'dR2':[0.5,0.5],
+    'numOf3bfeat1':[3 for i in range(len(atomType))],     # 3*3=9
+    'numOf3bfeat2':[3 for i in range(len(atomType))],     # 3*3=9   总的特征数24+9+9=42
+    'Rc':[5.5 for i in range(len(atomType))],
+    'Rc2':[5.5 for i in range(len(atomType))],
+    'Rm':[5.0 for i in range(len(atomType))],
+    'iflag_grid':[3 for i in range(len(atomType))],                      # 1 or 2 or 3
+    'fact_base':[0.2 for i in range(len(atomType))],
+    'dR1':[0.5 for i in range(len(atomType))],
+    'dR2':[0.5 for i in range(len(atomType))],
     'iflag_ftype':3   # same value for different types, iflag_ftype:1,2,3 when 3, iflag_grid must be 3
 }
 Ftype3_para={           # 2bgauss
