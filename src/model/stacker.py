@@ -1,6 +1,58 @@
 #
-# streamer: a fully configurable framework which can generate MLFF
-# network model dynamiclly accroding to a specified configuration
+# stacker: a configurable network model framework, which treats
+# a network model as the stack of fundmental network blocks, both
+# the network blocks and the whole network model can be described
+# by specified configurations
+#
+# network block description examples:
+# 
+#       # a plain res-net block with one weight layer, out_dim = 128
+#       #
+#       res_block_plain = [
+#           (input, auto,),         # layer0: input, width=auto
+#           (linear, 128, False,),  # layer1: linear_1, width=128, bias=False
+#           (batch_norm,),          # layer2: batch_norm_2
+#           (func, tanh,),          # layer3: tanh_3, tanh activation
+#           (shortcut, 0, True),    # layer4: shortcut_4, shortcut from layer0,
+#                                   # use projection if dimension mismatch=True
+#       ]
+#
+#       # a bottleneck building block just like ResNet v1, out_dim = 256 
+#       #
+#       res_block_bottleneck = [
+#           (input, auto,),         # layer0: input, width=auto
+#           (linear, 64, False,),   # layer1: linear_1, width=64, bias=False
+#           (batch_norm,),          # layer2: batch_norm_2
+#           (func, relu,),          # layer3: relu_3, relu activation
+#           (linear, 64, False,),   # layer4: linear_4, width=64, bias=False
+#           (batch_norm,),          # layer5: batch_norm_5
+#           (func, relu,),          # layer6: relu_6, relu activation
+#           (linear, 256, False),   # layer7: linear_7, width=256, bias=False
+#           (batch_norm,),          # layer8: batch_norm_8
+#           (shortcut, 0, True),    # layer9: shortcut_9, shortcut from layer0
+#           (func, relu),           # layer10: relu_10, relu activation
+#       ]
+#
+#       # a two-layer res-net block with full pre-activation just like ResNet v2
+#       #
+#       res_block_FPA = [           
+#           (input, auto,),         # layer0: input, width=auto
+#           (batch_norm,),          # layer1: batch_norm_1
+#           (func, relu,),          # layer2: relu_2, relu activation
+#           (linear, 128, False,),  # layer3: linear_3, width=128, bias=False
+#           (batch_norm,),          # layer4:
+#           (func, relu,),
+#           (linear, 128, False,),
+#           (shortcut, 0, True,),
+#       ]
+
+#                           (layer_norm
+# implemented fundmental network blocks:
+# 
+# resnet_linear
+# block_resnext
+
+# basic layers supported by stacker is defined and implemented  here
 #
 # Basic dmirror layers:
 #
@@ -10,8 +62,7 @@
 #         automaticlly generated. An example:
 #
 #           cfg = [
-#                   (scale,),                   # layer: scale_1
-                    (skip
+#                   (layer_norm,),                   # layer1: layer_norm_1
 #                   (linear, 16, 32, True),     # layer: linear_1, bias=True
 #                   (func, tanh,),              # layer: tanh activation
 #                   (linear, 32, 64, True),     # layer: linear_2, bias=True
@@ -34,7 +85,7 @@ logging_level_SUMMARY = 15
 
 # setup module logger
 import component.logger as mlff_logger
-logger = mlff_logger.get_module_logger('dmirror')
+logger = mlff_logger.get_module_logger('stacker')
 def dump(msg, *args, **kwargs):
     logger.log(mlff_logger.DUMP, msg, *args, **kwargs)
 def debug(msg, *args, **kwargs):
@@ -50,7 +101,7 @@ def error(msg, *args, **kwargs):
 
 # dmirror implementation
 #
-class dmirror_linear(nn.Module):
+class stacker_block(nn.Module):
     def __init__(self, in_dim, out_dim, bias=True, magic=False):
         super(dmirror_linear, self).__init__()
         self.bias = None
@@ -114,12 +165,11 @@ class dmirror_activation(nn.Module):
         return x * self.d_func(self.k)
 
 
-class dmirror_FC(nn.Module):
-    def __init__(self, cfg, act_func, d_act_func, magic=False):
-        super(dmirror_FC, self).__init__()
+class MLFF_network_block(nn.Module):
+    def __init__(self, cfg):
+        super(MLFF_network_block, self).__init__()
         self.cfg = cfg
         self.layers = []
-        self.layers_r = []
 
         # parse cfg & generating layers
         #
