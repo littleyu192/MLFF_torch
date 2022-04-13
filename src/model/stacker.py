@@ -1,77 +1,80 @@
 #
 # stacker: a configurable network model framework, which treats
-# a network model as the stack of fundmental network blocks, both
-# the network blocks and the whole network model can be described
-# by specified configurations
+# a network model as the stack of network blocks, and a network
+# block is a stack of fundmental layers or fundmental blocks,
+# so the whole network model can be described by a hierarchical
+# of network block descriptors
 #
 # network block description examples:
 # 
-#       # a plain res-net block with one weight layer, out_dim = 128
+#       # a plain residual block with one weight layer
 #       #
-#       res_block_plain = [
-#           (input, auto,),         # layer0: input, width=auto
-#           (linear, 128, False,),  # layer1: linear_1, width=128, bias=False
-#           (batch_norm,),          # layer2: batch_norm_2
-#           (func, tanh,),          # layer3: tanh_3, tanh activation
-#           (shortcut, 0, True),    # layer4: shortcut_4, shortcut from layer0,
+#       block_res_plain_1 = [
+#           (width, 128, 128, 128, 128, 128,), # default out_width of each layer
+#                                              # can be overwritten when calling
+#           (input,),               # layer0: input, a virtual layer
+#           (linear, False,),       # layer1: L1_linear, bias=False
+#           (batch_norm,),          # layer2: L2_batch_norm
+#           (func, tanh,),          # layer3: L3_func_tanh, tanh activation
+#           (shortcut, 0, True,),   # layer4: L4_shortcut_L0, shortcut from layer0,
 #                                   # use projection if dimension mismatch=True
 #       ]
 #
-#       # a bottleneck building block just like ResNet v1, out_dim = 256 
+#       # a bottleneck residual block just like ResNet v1
 #       #
-#       res_block_bottleneck = [
-#           (input, auto,),         # layer0: input, width=auto
-#           (linear, 64, False,),   # layer1: linear_1, width=64, bias=False
-#           (batch_norm,),          # layer2: batch_norm_2
-#           (func, relu,),          # layer3: relu_3, relu activation
-#           (linear, 64, False,),   # layer4: linear_4, width=64, bias=False
-#           (batch_norm,),          # layer5: batch_norm_5
-#           (func, relu,),          # layer6: relu_6, relu activation
-#           (linear, 256, False),   # layer7: linear_7, width=256, bias=False
-#           (batch_norm,),          # layer8: batch_norm_8
-#           (shortcut, 0, True),    # layer9: shortcut_9, shortcut from layer0
-#           (func, relu),           # layer10: relu_10, relu activation
+#       block_res_bottleneck = [
+#           (width, 256, 64, 64, 64, 64, 64, 64, 256, 256, 256, 256,),
+#           (input,),               # layer0: input, a virtual layer
+#           (linear, False,),       # layer1: L1_linear, bias=False
+#           (batch_norm,),          # layer2: L2_batch_norm
+#           (func, relu,),          # layer3: L3_func_relu, relu activation
+#           (linear, False,),       # layer4: L4_linear, bias=False
+#           (batch_norm,),          # layer5: L5_batch_norm
+#           (func, relu,),          # layer6: L6_func_relu, relu activation
+#           (linear, False,),       # layer7: L7_linear, bias=False
+#           (batch_norm,),          # layer8: L8_batch_norm
+#           (shortcut, 0, True,),   # layer9: L9_shortcut_L0, shortcut from layer0,
+#                                   # use projection if dimension mismatch=True
+#           (func, relu,),          # layer10: L10_func_relu, relu activation
 #       ]
 #
-#       # a two-layer res-net block with full pre-activation just like ResNet v2
+#       # a two-layer full pre-activation residual block just like ResNet v2
 #       #
-#       res_block_FPA = [           
-#           (input, auto,),         # layer0: input, width=auto
-#           (batch_norm,),          # layer1: batch_norm_1
-#           (func, relu,),          # layer2: relu_2, relu activation
-#           (linear, 128, False,),  # layer3: linear_3, width=128, bias=False
-#           (batch_norm,),          # layer4:
-#           (func, relu,),
-#           (linear, 128, False,),
-#           (shortcut, 0, True,),
+#       block_res_FPA = [           
+#           (width, 128, 128, 128, 128, 128, 128, 128, 128,),
+#           (input,),               # layer0: input, a virtual layer
+#           (batch_norm,),          # layer1: L1_batch_norm
+#           (func, relu,),          # layer2: L2_func_relu, relu activation
+#           (linear, False,),       # layer3: L3_linear, bias=False
+#           (batch_norm,),          # layer4: L4_batch_norm
+#           (func, relu,),          # layer5: L5_func_relu, relu activation
+#           (linear, True,),        # layer6: L6_linear, bias=True
+#           (shortcut, 0, True,),   # layer7: L7_shortcut_L0, shortcut from layer0
+#                                   # use projection if dimension mismatch=True
 #       ]
-
-#                           (layer_norm
-# implemented fundmental network blocks:
-# 
-# resnet_linear
-# block_resnext
-
-# basic layers supported by stacker is defined and implemented  here
 #
-# Basic dmirror layers:
+#       # an aggregated residual transformations block just like ResNeXt
+#       block_res_ART = [
+#           # default out_width and group for each layer
+#           # can be overwritten when calling
+#           (width, 256, 128, 128, 128, 128, 128, 128, 256, 256, 256, 256,),
+#           (group,   1,   1,   1,   1,  32,   1,   1,   1,   1,   1,   1,),
+#           (input,),                   # layer0: input, a virtual layer
+#           (linear, False,),           # layer1: L1_linear, bias=False
+#           (batch_norm,),              # layer2: L2_batch_norm
+#           (func, relu,),              # layer3: L3_func_relu, relu activation
+#           (linear_group, False,),     # layer4: L4_linear_group, bias=False
+#           (batch_norm,),              # layer5: L5_batch_norm
+#           (func, relu,),              # layer6: L6_func_relu, relu activation
+#           (linear, False,),           # layer7: L7_linear, bias=False
+#           (batch_norm,),              # layer8: L8_batch_norm
+#           (shortcut, 0, True,),       # layer9: L9_shortcut_L0, shortcut from layer0
+#                                       # use projection if dimension mismatch=True
+#           (func, relu,),              # layer10: L10_func_relu, relu activation
+#       ]
 #
-#   dmirror_FC(self, cfg, act_func, d_act_func)
-#       * cfg describes the base part of a dmirror style network,
-#         the whole network (including the mirrored part) will be
-#         automaticlly generated. An example:
 #
-#           cfg = [
-#                   (layer_norm,),                   # layer1: layer_norm_1
-#                   (linear, 16, 32, True),     # layer: linear_1, bias=True
-#                   (func, tanh,),              # layer: tanh activation
-#                   (linear, 32, 64, True),     # layer: linear_2, bias=True
-#                   (func, tanh,),              # layer: tanh activation
-#                   (linear, 64, 8, False),     # layer: linear3, bias=False
-#                   (func, tanh,),              # layer: activation_3
-#                   (linear, 8, 1, False),      # layer: linear4, bias=False
-#                   (func, linear,),
-#           ]
+#
 #
 
 import torch
