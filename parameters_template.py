@@ -22,7 +22,7 @@ n_epoch = 150
 
 prefix = r'./'
 trainSetDir = r'./PWdata'
-codedir=r'/home/husiyu/software/MLFF_torch'
+codedir=r'/home/MLFF_torch'
 fortranFitSourceDir=codedir+'/src/pre_data/fit/'
 fitModelDir = r'./fread_dfeat'
 train_data_path = r'./train_data/final_train'
