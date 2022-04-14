@@ -77,7 +77,8 @@ use_SKalman = False
 is_scale = False
 itype_Ei_mean=[166.46]
 
-DeepMD_cfg_dp = {
+
+DP_cfg_dp = {
     'embeding_net': {
         'network_size': [25, 50, 100], 
 	'bias': True,
@@ -92,7 +93,7 @@ DeepMD_cfg_dp = {
 	}
 }
 
-DeepMD_cfg_dp_kf = {
+DP_cfg_dp_kf = {
     'embeding_net': {
         'network_size': [25, 25, 25], 
 	'bias': True,
