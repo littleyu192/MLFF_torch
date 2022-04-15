@@ -208,12 +208,13 @@ def process_data(f_train_feat, f_train_dfeat, f_train_dR_neigh,
     print("natoms_img shape" + str(natoms_img.shape))
     
     # neighbor 不排序
-    # if (pm.dR_neigh):
-    #     dR_neigh = pd.read_csv(f_train_dR_neigh, header=None).values.reshape(indImg[-1], len(pm.atomType), pm.maxNeighborNum, 4) # 1 是 ntype
-    #     print("dR neigh shape" + str(dR_neigh.shape))
-    #     np.save(nn_data_path + "/dR_neigh.npy", dR_neigh)
+    if (pm.dR_neigh):
+        dR_neigh = pd.read_csv(f_train_dR_neigh, header=None).values.reshape(indImg[-1], len(pm.atomType), pm.maxNeighborNum, 4) # 1 是 ntype
+        print("dR neigh shape" + str(dR_neigh.shape))
+        np.save(nn_data_path + "/dR_neigh.npy", dR_neigh)
 
     # neighbor 升序排列
+    """
     if (pm.dR_neigh):
         # dR_neigh = pd.read_csv(f_train_dR_neigh, header=None).values.reshape(indImg[-1], pm.maxNeighborNum, 4) # 1 是 ntype
         names = ['dx', 'dy', 'dz', 'neigh_id']
@@ -233,7 +234,7 @@ def process_data(f_train_feat, f_train_dfeat, f_train_dR_neigh,
         dR_neigh = res.values.reshape(indImg[-1], len(pm.atomType), pm.maxNeighborNum, 4)
         print("dR neigh shape" + str(dR_neigh.shape))
         np.save(nn_data_path + "/dR_neigh.npy", dR_neigh)
-    
+    """
     # if (pm.dR_neigh):
     #     tmp = pd.read_csv(pm.f_train_force, header=None)
     #     force = tmp.values

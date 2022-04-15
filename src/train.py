@@ -21,7 +21,7 @@ from model.MLFF import MLFFNet
 
 from optimizer.kalmanfilter import GKalmanFilter, LKalmanFilter, SKalmanFilter
 
-from model.deepmd import DeepMD
+from model.dp import DP
 import torch.utils.data as Data
 from torch.autograd import Variable
 import math
@@ -98,8 +98,8 @@ opt_LR_T_max = None
 
 opt_autograd = True
 
-opt_deepmd = False
-# opt_deepmd = True
+opt_dp = False
+
 
 opts,args = getopt.getopt(sys.argv[1:],
     '-h-c-m-f-R-n:-a:-z:-v:-w:-u:-e:-l:-g:-t:-b:-d:-r:-s:-o:-i:-j:',
@@ -110,7 +110,7 @@ opts,args = getopt.getopt(sys.argv[1:],
      'milestones=','patience=','cooldown=','eps=','total_steps=',
      'max_lr=','min_lr=','T_max=',
      'wandb','wandb_entity=','wandb_project=',
-     'auto_grad=', 'dmirror=', 'deepmd='])
+     'auto_grad=', 'dmirror=', 'dp='])
 
 for opt_name,opt_value in opts:
     if opt_name in ('-h','--help'):
@@ -174,10 +174,10 @@ for opt_name,opt_value in opts:
         print("                                    using --dmirror or --auto_grad")
         print("                                    default: --auto_grad")
         print("")
-        print("     --deepmd                    :  use deepmd method(emdedding net + fitting net)")
-        print("                                    using --deepmd=True enable deepmd method")
+        print("     --dp                    :  use dp method(emdedding net + fitting net)")
+        print("                                    using --dp=True enable dp method")
         print("                                    adding -n DeepMD_cfg (see cu/parameters.py)")
-        print("                                    defalt: --deepmd=False (see line 90)")
+        print("                                    defalt: --dp=False (see line 90)")
         print("")
         print("wandb parameters:")
         print("     --wandb                     :  ebable wandb, sync tensorboard data to wandb")
@@ -288,8 +288,8 @@ for opt_name,opt_value in opts:
         opt_autograd = False
     elif opt_name in ('--auto_grad'):
         opt_autograd = True
-    elif opt_name in ('--deepmd='):
-        opt_deepmd = eval(opt_value)
+    elif opt_name in ('--dp='):
+        opt_dp = eval(opt_value)
 
 # setup logging module
 logging.addLevelName(logging_level_DUMP, 'DUMP')
@@ -481,7 +481,7 @@ def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
     #     # print(parm[name])
     #     # print(name, parameter.mean().item(), parameter.std().item())
     # import ipdb;ipdb.set_trace()
-    if opt_deepmd:
+    if opt_dp:
         Etot_predict, Ei_predict, Force_predict = model(dR, dfeat, dR_neigh_list, natoms_img, egroup_weight, divider)
     else:
         Etot_predict, Ei_predict, Force_predict = model(input_data, dfeat, neighbor, natoms_img, egroup_weight, divider)
@@ -508,23 +508,7 @@ def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
         summary("force label ==============================================>")
         summary(Force_label)
 
-    # dp 对齐，shift 之后的 label
-    # Ei_label = Ei_label - 5133.92272
-    # Etot_label = Etot_label - 554464.1386
-    # Etot_label = Etot_label - 554463.6064  
 
-    # recover from dpmd
-    # dp_force_label = torch.tensor(np.load("/home/husiyu/software/deepMD/deepmd-kit-gpu/dataset/cu/data/deepmd_force_hat.npy"), device=device)
-    # dp_etot_label = torch.tensor(np.load("/home/husiyu/software/deepMD/deepmd-kit-gpu/dataset/cu/data/deepmd_etot_hat.npy"), device=device)
-    # dp_force_label = torch.tensor(np.load("/home/husiyu/software/MLFFdataset/cu_f1_mini/deepmd_force_hat.npy"), device=device)
-    # dp_etot_label = torch.tensor(np.load("/home/husiyu/software/MLFFdataset/cu_f1_mini/deepmd_etot_hat.npy"), device=device)
-    # loss_F = criterion(Force_predict, dp_force_label.reshape(1,108,3))
-    # loss_Etot = criterion(Etot_predict, dp_etot_label.reshape(1,1))
-    # dp_force_label = torch.tensor(np.load("/home/husiyu/software/deepMD/deepmd-kit-gpu/dataset/cuo1/data/deepmd_force_hat.npy"), device=device)
-    # dp_etot_label = torch.tensor(np.load("/home/husiyu/software/deepMD/deepmd-kit-gpu/dataset/cuo1/data/deepmd_etot_hat.npy"), device=device)
-    # loss_F = criterion(Force_predict, dp_force_label.reshape(1,64,3))
-    # loss_Etot = criterion(Etot_predict, dp_etot_label.reshape(1,1))
-    # import ipdb;ipdb.set_trace()
 
     loss_F = criterion(Force_predict, Force_label)
     loss_Etot = criterion(Etot_predict, Etot_label)
@@ -621,7 +605,7 @@ def train_kalman(sample_batches, model, kalman, criterion, last_epoch, real_lr):
     dump("dump neighbor ------------------->")
     dump(neighbor)
 
-    if opt_deepmd:
+    if opt_dp:
         kalman_inputs = [dR, dfeat, dR_neigh_list, natoms_img, egroup_weight, divider]
     else:
         kalman_inputs = [input_data, dfeat, neighbor, natoms_img, egroup_weight, divider]
@@ -630,7 +614,7 @@ def train_kalman(sample_batches, model, kalman, criterion, last_epoch, real_lr):
     kalman.update_force(kalman_inputs, Force_label)
     # kalman.update_egroup(kalman_inputs, Egroup_label)
 
-    if opt_deepmd:
+    if opt_dp:
         Etot_predict, Ei_predict, Force_predict = model(dR, dfeat, dR_neigh_list, natoms_img, egroup_weight, divider)
     else:
         Etot_predict, Ei_predict, Force_predict = model(input_data, dfeat, neighbor, natoms_img, egroup_weight, divider)
@@ -665,7 +649,7 @@ def valid(sample_batches, model, criterion):
     Etot_label = torch.sum(Ei_label, dim=1)
 
     model.train()
-    if opt_deepmd:
+    if opt_dp:
         Etot_predict, Ei_predict, Force_predict = model(dR, dfeat, dR_neigh_list, natoms_img, egroup_weight, divider)
     else:
         Etot_predict, Ei_predict, Force_predict = model(input_data, dfeat, neighbor, natoms_img, egroup_weight, divider)
@@ -774,12 +758,12 @@ if pm.is_scale:
 
 	
 loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=False)
-if opt_deepmd:
+if opt_dp:
     davg, dstd, ener_shift = torch_train_data.get_stat(image_num=8)
     stat = [davg, dstd, ener_shift]
 
 loader_valid = Data.DataLoader(torch_valid_data, batch_size=batch_size, shuffle=True)
-if opt_deepmd:
+if opt_dp:
     davg, dstd, ener_shift = torch_valid_data.get_stat(image_num=2)
 
 # 模型多卡并行
@@ -794,7 +778,7 @@ if opt_deepmd:
 patience = 100000
 data_scalers = DataScalers(f_ds=pm.f_data_scaler, f_feat=pm.f_train_feat, load=True)
 
-if opt_deepmd:
+if opt_dp:
     model = DeepMD(opt_net_cfg, opt_act, device, stat, opt_magic)
 else:
     model = MLFFNet(data_scalers, device)
@@ -821,103 +805,6 @@ if (opt_recover_mode == True):
     opt_latest_file = opt_model_dir+'latest.pt'
     checkpoint = torch.load(opt_latest_file,map_location=device)
 
-    # 跟deepmd对齐时的模型转换，直接从latest.pt continue时 注释下面一段
-    '''
-    # 单元素 recover
-    # weight_path = "/home/husiyu/software/deepMD/deepmd-kit-gpu/dataset/cu1000/data"
-    # dict_keys(['global_step:0', 'descrpt_attr/t_avg:0', 'descrpt_attr/t_std:0', 'filter_type_0/matrix_1_0:0', 'filter_type_0/bias_1_0:0', 'filter_type_0/matrix_2_0:0', 'filter_type_0/bias_2_0:0', 'filter_type_0/matrix_3_0:0', 'filter_type_0/bias_3_0:0', 'layer_0_type_0/matrix:0', 'layer_0_type_0/bias:0', 'layer_1_type_0/matrix:0', 'layer_1_type_0/bias:0', 'layer_1_type_0/idt:0', 'layer_2_type_0/matrix:0', 'layer_2_type_0/bias:0', 'layer_2_type_0/idt:0', 'final_layer_type_0/matrix:0', 'final_layer_type_0/bias:0', 'beta1_power:0', 'beta2_power:0'])
-    # odict_keys(['embeding_net.weights.weight0', 'embeding_net.weights.weight1', 'embeding_net.weights.weight2', 'embeding_net.bias.bias0', 'embeding_net.bias.bias1', 'embeding_net.bias.bias2', 'embeding_net.resnet_dt.resnet_dt0', 'embeding_net.resnet_dt.resnet_dt1', 'embeding_net.resnet_dt.resnet_dt2', 'fitting_net.weights.weight0', 'fitting_net.weights.weight1', 'fitting_net.weights.weight2', 'fitting_net.weights.weight3', 'fitting_net.bias.bias0', 'fitting_net.bias.bias1', 'fitting_net.bias.bias2', 'fitting_net.bias.bias3'])
-    # weight_path = "/home/husiyu/software/deepMD/deepmd-kit-gpu/dataset/cu1/data" 
-    # map_relation = {"embeding_net.weights.weight0" : "filter_type_0/matrix_1_0:0",  #(1,25)
-    #                 "embeding_net.bias.bias0" : "filter_type_0/bias_1_0:0",         #(1,25)
-    #                 "embeding_net.weights.weight1" : "filter_type_0/matrix_2_0:0",  #(25, 50)
-    #                 "embeding_net.bias.bias1" : "filter_type_0/bias_2_0:0",         #(1,50)
-    #                 "embeding_net.weights.weight2" : "filter_type_0/matrix_3_0:0",  #(50,100)
-    #                 "embeding_net.bias.bias2" : "filter_type_0/bias_3_0:0",        #(1,100)
-    #                 "fitting_net.weights.weight0" : "layer_0_type_0/matrix:0",     #(1600, 240)
-    #                 "fitting_net.bias.bias0" : "layer_0_type_0/bias:0",            #(1,240)-->(240,)
-    #                 "fitting_net.weights.weight1" : "layer_1_type_0/matrix:0",     #(240, 240)
-    #                 "fitting_net.bias.bias1" : "layer_1_type_0/bias:0",            #(1,240)-->(240,)
-    #                 "fitting_net.resnet_dt.resnet_dt1":"layer_1_type_0/idt:0",             # (1,240):(240,)
-    #                 "fitting_net.weights.weight2" : "layer_2_type_0/matrix:0",     #(240, 240)
-    #                 "fitting_net.bias.bias2" : "layer_2_type_0/bias:0",            #(1,240)-->(240,)
-    #                 "fitting_net.resnet_dt.resnet_dt2":"layer_2_type_0/idt:0",             #(240,) 
-    #                 "fitting_net.weights.weight3" : "final_layer_type_0/matrix:0", #(240, 1)
-    #                 "fitting_net.bias.bias3" : "final_layer_type_0/bias:0",        #(1,1)-->(1,)
-    # }
-    # deepmd_weight = np.load(weight_path + "/weights.npy", allow_pickle='TRUE').item()
-    # model_weights = checkpoint['model']
-    # for name, value in model_weights.items():
-    #     copying = torch.from_numpy(deepmd_weight[map_relation[name]])
-    #     if 'fitting_net.bias' in name or 'resnet' in name:
-    #         copying = copying.unsqueeze(0)
-    #     model_weights[name] = copying
-    
-    # 多元素 recover
-    weight_path = "/home/husiyu/software/deepMD/deepmd-kit-gpu/dataset/cuo1/data" 
-    map_relation = {"embeding_net.0.weights.weight0" : "filter_type_0/matrix_1_0:0",  #(1,25)
-                    "embeding_net.0.bias.bias0" : "filter_type_0/bias_1_0:0",         #(1,25)
-                    "embeding_net.0.weights.weight1" : "filter_type_0/matrix_2_0:0",  #(25, 50)
-                    "embeding_net.0.bias.bias1" : "filter_type_0/bias_2_0:0",         #(1,50)
-                    "embeding_net.0.weights.weight2" : "filter_type_0/matrix_3_0:0",  #(50,100)
-                    "embeding_net.0.bias.bias2" : "filter_type_0/bias_3_0:0",        #(1,100)
-
-                    "embeding_net.1.weights.weight0" : "filter_type_0/matrix_1_1:0",  #(1,25)
-                    "embeding_net.1.bias.bias0" : "filter_type_0/bias_1_1:0",         #(1,25)
-                    "embeding_net.1.weights.weight1" : "filter_type_0/matrix_2_1:0",  #(25, 50)
-                    "embeding_net.1.bias.bias1" : "filter_type_0/bias_2_1:0",         #(1,50)
-                    "embeding_net.1.weights.weight2" : "filter_type_0/matrix_3_1:0",  #(50,100)
-                    "embeding_net.1.bias.bias2" : "filter_type_0/bias_3_1:0",        #(1,100)
-
-                    # 此处 torch 里的keys需要更新
-                    "embeding_net.2.weights.weight0" : "filter_type_1/matrix_1_0:0",  #(1,25)
-                    "embeding_net.2.bias.bias0" : "filter_type_1/bias_1_0:0",         #(1,25)
-                    "embeding_net.2.weights.weight1" : "filter_type_1/matrix_2_0:0",  #(25, 50)
-                    "embeding_net.2.bias.bias1" : "filter_type_1/bias_2_0:0",         #(1,50)
-                    "embeding_net.2.weights.weight2" : "filter_type_1/matrix_3_0:0",  #(50,100)
-                    "embeding_net.2.bias.bias2" : "filter_type_1/bias_3_0:0",        #(1,100)
-
-                    "embeding_net.3.weights.weight0" : "filter_type_1/matrix_1_1:0",  #(1,25)
-                    "embeding_net.3.bias.bias0" : "filter_type_1/bias_1_1:0",         #(1,25)
-                    "embeding_net.3.weights.weight1" : "filter_type_1/matrix_2_1:0",  #(25, 50)
-                    "embeding_net.3.bias.bias1" : "filter_type_1/bias_2_1:0",         #(1,50)
-                    "embeding_net.3.weights.weight2" : "filter_type_1/matrix_3_1:0",  #(50,100)
-                    "embeding_net.3.bias.bias2" : "filter_type_1/bias_3_1:0",        #(1,100)
-
-                    "fitting_net.0.weights.weight0" : "layer_0_type_0/matrix:0",     #(1600, 240)
-                    "fitting_net.0.bias.bias0" : "layer_0_type_0/bias:0",            #(1,240)-->(240,)
-                    "fitting_net.0.weights.weight1" : "layer_1_type_0/matrix:0",     #(240, 240)
-                    "fitting_net.0.bias.bias1" : "layer_1_type_0/bias:0",            #(1,240)-->(240,)
-                    "fitting_net.0.resnet_dt.resnet_dt1":"layer_1_type_0/idt:0",             # (1,240):(240,)
-                    "fitting_net.0.weights.weight2" : "layer_2_type_0/matrix:0",     #(240, 240)
-                    "fitting_net.0.bias.bias2" : "layer_2_type_0/bias:0",            #(1,240)-->(240,)
-                    "fitting_net.0.resnet_dt.resnet_dt2":"layer_2_type_0/idt:0",             #(240,) 
-                    "fitting_net.0.weights.weight3" : "final_layer_type_0/matrix:0", #(240, 1)
-                    "fitting_net.0.bias.bias3" : "final_layer_type_0/bias:0",        #(1,1)-->(1,)
-
-                    "fitting_net.1.weights.weight0" : "layer_0_type_1/matrix:0",     #(1600, 240)
-                    "fitting_net.1.bias.bias0" : "layer_0_type_1/bias:0",            #(1,240)-->(240,)
-                    "fitting_net.1.weights.weight1" : "layer_1_type_1/matrix:0",     #(240, 240)
-                    "fitting_net.1.bias.bias1" : "layer_1_type_1/bias:0",            #(1,240)-->(240,)
-                    "fitting_net.1.resnet_dt.resnet_dt1":"layer_1_type_1/idt:0",             # (1,240):(240,)
-                    "fitting_net.1.weights.weight2" : "layer_2_type_1/matrix:0",     #(240, 240)
-                    "fitting_net.1.bias.bias2" : "layer_2_type_1/bias:0",            #(1,240)-->(240,)
-                    "fitting_net.1.resnet_dt.resnet_dt2":"layer_2_type_1/idt:0",             #(240,) 
-                    "fitting_net.1.weights.weight3" : "final_layer_type_1/matrix:0", #(240, 1)
-                    "fitting_net.1.bias.bias3" : "final_layer_type_1/bias:0",        #(1,1)-->(1,)
-    }
-
-
-    deepmd_weight = np.load(weight_path + "/weights.npy", allow_pickle='TRUE').item()
-    model_weights = checkpoint['model']
-    for name, value in model_weights.items():
-        copying = torch.from_numpy(deepmd_weight[map_relation[name]])
-        if ('fitting_net' in name and 'bias' in name) or 'resnet' in name:
-            copying = copying.unsqueeze(0)
-        model_weights[name] = copying 
-    # model_weights["fitting_net.bias.bias3"] = model_weights["fitting_net.bias.bias3"] + 5133.62
-    start_epoch = 1
-    '''
     model.load_state_dict(checkpoint['model'])
     start_epoch = checkpoint['epoch'] + 1
     
@@ -1043,7 +930,7 @@ for epoch in range(start_epoch, n_epoch + 1):
         if iter == 1:
             fid_err_log = open(f_err_log, 'w')
             fid_err_log.write('iter\t loss\t RMSE_Etot\t RMSE_Ei\t RMSE_F\t lr\n')
-        elif iter % iter_print == 0:
+        if iter % iter_print == 0:
             fid_err_log = open(f_err_log, 'a')
             fid_err_log.write('%d %e %e %e %e %e \n'%(iter, batch_loss, math.sqrt(batch_loss_Etot)/natoms_sum, math.sqrt(batch_loss_Ei), math.sqrt(batch_loss_F), real_lr))
         else:
@@ -1077,7 +964,7 @@ for epoch in range(start_epoch, n_epoch + 1):
     if epoch == 1:
         f_epoch_err_log = open(epoch_err_log, 'w')
         f_epoch_err_log.write('epoch\t loss\t RMSE_Etot\t RMSE_Ei\t RMSE_F\t lr\n')
-    elif epoch % epoch_print == 0:
+    if epoch % epoch_print == 0:
         f_epoch_err_log = open(epoch_err_log, 'a')
         f_epoch_err_log.write('%d %e %e %e %e %e \n'%(epoch, loss, RMSE_Etot, RMSE_Ei, RMSE_F, real_lr))
     else:
@@ -1133,7 +1020,7 @@ for epoch in range(start_epoch, n_epoch + 1):
             if iter == 1:
                 fid_err_log = open(f_err_log, 'w')
                 fid_err_log.write('iter\t loss\t RMSE_Etot\t RMSE_Ei\t RMSE_F\t lr\n')
-            elif iter % iter_print == 0:
+            if iter % iter_print == 0:
                 fid_err_log = open(f_err_log, 'a')
                 fid_err_log.write('%d %e %e %e %e %e \n'%(iter, batch_loss, math.sqrt(batch_loss_Etot)/natoms_sum, math.sqrt(batch_loss_Ei), math.sqrt(batch_loss_F), real_lr))
             else:
@@ -1154,7 +1041,7 @@ for epoch in range(start_epoch, n_epoch + 1):
         if not os.path.exists(f_err_log):
             fid_err_log = open(f_err_log, 'w')
             fid_err_log.write('epoch\t valid_RMSE_Etot\t valid_RMSE_Ei\t valid_RMSE_F\n')
-        elif epoch % epoch_print == 0:
+        if epoch % epoch_print == 0:
             fid_err_log = open(f_err_log, 'a')
             fid_err_log.write('%d %e %e %e \n'%(epoch, valid_RMSE_Etot, valid_RMSE_Ei, valid_RMSE_F))
         
