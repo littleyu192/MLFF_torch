@@ -38,20 +38,6 @@ class MovementDataset(Dataset):
         self.ind_img = np.load(ind_img_path)
 
         self.energy = np.load(energy_path)
-        # etot alignment for cu
-        '''
-        self.dE = np.load("/home/husiyu/software/MLFFdataset/v1_cu1646/PWdata/energy.npy") #dE
-        dE = self.dE[:1316]/108.0  # self.energy.shape[0]/108 = 1316
-        dE1 = np.repeat(dE,108).reshape(-1, 1)
-        self.energy = dE1[:self.energy.shape[0]] + self.energy
-        
-        # etot alignment for cuo
-        self.dE = np.loadtxt("/home/husiyu/software/MLFFdataset/v1_cuo1000/PWdata/energy.txt") #dE
-        dE = self.dE[:800]/64.0  # self.energy.shape[0]/64 = 800
-        dE1 = np.repeat(dE,64).reshape(-1, 1)
-        self.energy = dE1[:self.energy.shape[0]] + self.energy
-        '''
-        
         self.force = np.load(force_path)
         self.use_dR_neigh = False
         

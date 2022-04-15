@@ -401,15 +401,7 @@ def get_loss_func(start_lr, real_lr, has_fi, lossFi, has_etot, loss_Etot, has_eg
         l2_loss += pref_egroup * loss_Egroup
     if has_ei :
         l2_loss += pref_ei * loss_Ei
-    # print("total loss, mse etot, mse force:")
-    # print(l2_loss.item(), '\n', loss_Etot.item(),  '\t', lossFi.item())
-    # print(" prefactor of etot, prefactor of force")
-    # print(pref_etot, pref_fi)
-    # import ipdb;ipdb.set_trace()
-
-    # data = [learning_rate, loss_Egroup, lossFi, loss_Etot, l2_loss];
-    # save_prefactor_file(pm.dir_work+"prefactor_loss.csv", data)
-    # l2_loss = torch.sqrt(l2_loss)
+    
     return l2_loss, pref_fi, pref_etot
 
 
@@ -545,16 +537,6 @@ def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
     optimizer.step()
     info("loss = %.16f (loss_etot = %.16f, loss_force = %.16f, RMSE_etot = %.16f, RMSE_force = %.16f)"\
      %(loss, loss_Etot, loss_F, loss_Etot ** 0.5, loss_F ** 0.5))
-    
-    # f_err_log =  '/home/husiyu/software/MLFFdataset/v1_cu1646/record_loss.dat'
-    # f_err_log =  '/home/husiyu/software/MLFFdataset/v1_cuo1000/record_loss.dat'
-    # if not os.path.exists(f_err_log):
-    #     fid_err_log = open(f_err_log, 'w')
-    #     fid_err_log.write('etot_predict\t etot_label\t l2_etot\t prefactor_e\t force_predict_0x\t force_label_0x\t l2_f\t prefactor_f\n')
-    #     fid_err_log.write('%e %e %e %e %e %e %e %e \n'%(Etot_predict.item(), Etot_label.item(), loss_Etot.item(), 0, Force_predict[0,0,0].item(), Force_label[0,0,0].item(), loss_F.item(), 0))
-    # else:
-    #     fid_err_log = open(f_err_log, 'a')
-    #     fid_err_log.write('%e %e %e %e %e %e %e %e \n'%(Etot_predict.item(), Etot_label.item(), loss_Etot.item(), 0, Force_predict[0,0,0].item(), Force_label[0,0,0].item(), loss_F.item(), 0))
     
     return loss, loss_Etot, loss_Ei, loss_F
 
@@ -766,7 +748,6 @@ loader_valid = Data.DataLoader(torch_valid_data, batch_size=batch_size, shuffle=
 if opt_dp:
     davg, dstd, ener_shift = torch_valid_data.get_stat(image_num=2)
 
-# 模型多卡并行
 # if torch.cuda.device_count() > 1:
     # model = nn.DataParallel(model)
 
@@ -872,8 +853,8 @@ if pm.use_SKalman == True:
 
 min_loss = np.inf
 iter = 1
-epoch_print = 1  #隔几个epoch记录一次误差
-iter_print = 1  #隔几个iteration记录一次误差
+epoch_print = 1 
+iter_print = 1 
 
 for epoch in range(start_epoch, n_epoch + 1):
     if (epoch == n_epoch):
