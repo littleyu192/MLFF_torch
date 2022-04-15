@@ -38,19 +38,35 @@ class MovementDataset(Dataset):
         self.ind_img = np.load(ind_img_path)
 
         self.energy = np.load(energy_path)
+        # etot alignment for cu
+        '''
+        self.dE = np.load("/home/husiyu/software/MLFFdataset/v1_cu1646/PWdata/energy.npy") #dE
+        dE = self.dE[:1316]/108.0  # self.energy.shape[0]/108 = 1316
+        dE1 = np.repeat(dE,108).reshape(-1, 1)
+        self.energy = dE1[:self.energy.shape[0]] + self.energy
+        
+        # etot alignment for cuo
+        self.dE = np.loadtxt("/home/husiyu/software/MLFFdataset/v1_cuo1000/PWdata/energy.txt") #dE
+        dE = self.dE[:800]/64.0  # self.energy.shape[0]/64 = 800
+        dE1 = np.repeat(dE,64).reshape(-1, 1)
+        self.energy = dE1[:self.energy.shape[0]] + self.energy
+        '''
+        
         self.force = np.load(force_path)
         self.use_dR_neigh = False
-
+        
         self.ntypes = pm.ntypes
         self.natoms_img = np.load(natoms_img_path)
         if dR_neigh_path:
             self.use_dR_neigh = True
             tmp = np.load(dR_neigh_path)
+            # import ipdb;ipdb.set_trace()
             self.dR = tmp[:, :, :, :3]
             self.dR_neigh_list = np.squeeze(tmp[:, :, :, 3:], axis=-1).astype(int)
             self.force = -1 * self.force
         
     def __getitem__(self, index):
+        # index = index + 10
         ind_image = np.zeros(2)
         ind_image[0] = self.ind_img[index]
         ind_image[1] = self.ind_img[index+1]
@@ -199,7 +215,8 @@ class MovementDataset(Dataset):
             atom_sum = atom_sum + natoms_per_type[i]
         
         self.davg = np.array(self.davg).reshape(self.ntypes, -1)
-        self.dstd = np.array(self.dstd).reshape(self.ntypes, -1)        
+        self.dstd = np.array(self.dstd).reshape(self.ntypes, -1)      
+        # import ipdb;ipdb.set_trace()  
 
 
     def __compute_stat_output(self, image_num=10,  rcond=1e-3):

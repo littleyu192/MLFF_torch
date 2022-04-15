@@ -119,7 +119,7 @@ class GKalmanFilter(nn.Module):
             i += 1
         self.__update(H, errore, weights)
         time_end = time.time()
-        print("update Energy time:", time_end - time_start, 's')
+        print("Global KF update Energy time:", time_end - time_start, 's')
         
 
     def update_force(self, inputs, Force_label, update_prefactor = 1):
@@ -173,7 +173,7 @@ class GKalmanFilter(nn.Module):
 
         torch.cuda.empty_cache()
         time_end = time.time()
-        print("update Force time:", time_end - time_start, 's')
+        print("Global KF update Force time:", time_end - time_start, 's')
 
 
     def update_egroup(self, inputs, Egroup_label, update_prefactor=0.1):
@@ -229,7 +229,7 @@ class LKalmanFilter(nn.Module):
         self.model = model
         self.n_select = 24
         self.Force_group_num = 6
-        self.block_size = 1024
+        self.block_size = 10240
         self.__init_P()
 
     def __init_P(self):
@@ -356,10 +356,10 @@ class LKalmanFilter(nn.Module):
         
         self.__update(H, errore, weights)
         time_end = time.time()
-        print("update Energy time:", time_end - time_start, 's')
+        print("Layerwised KF update Energy time:", time_end - time_start, 's')
         
 
-    def update_force(self, inputs, Force_label, update_prefactor = 1):
+    def update_force(self, inputs, Force_label, update_prefactor = 2):
         time_start = time.time()
         natoms_sum = inputs[3][0, 0]
         index = self.__sample(self.n_select, self.Force_group_num, natoms_sum)
@@ -369,11 +369,12 @@ class LKalmanFilter(nn.Module):
         for i in range(index.shape[0]):
             Etot_predict, Ei_predict, force_predict = self.model(inputs[0], inputs[1], inputs[2], inputs[3], inputs[4], inputs[5])
             error_tmp = Force_label[:, index[i]] - force_predict[:, index[i]]
+            error_tmp = update_prefactor * error_tmp
             mask = error_tmp < 0
             error_tmp[mask] = -1 * error_tmp[mask]
             error = error_tmp.mean() / natoms_sum
             tmp_force_predict = force_predict[:, index[i]]
-            tmp_force_predict[mask] = -1 * tmp_force_predict[mask]
+            tmp_force_predict[mask] = -update_prefactor * tmp_force_predict[mask]
             tmp_force_predict.sum().backward()
 
             weights = []
@@ -400,8 +401,7 @@ class LKalmanFilter(nn.Module):
         torch.cuda.empty_cache()
         time_end = time.time()
 
-        print("update Force time:", time_end - time_start, 's')
-        # import ipdb; ipdb.set_trace()
+        print("Layerwised KF update Force time:", time_end - time_start, 's')
 
 
 class SKalmanFilter(nn.Module):
@@ -421,9 +421,10 @@ class SKalmanFilter(nn.Module):
 
     def __init_P(self):
         param_sum = 0
-        for _, param in self.model.named_parameters():
+        for name, param in self.model.named_parameters():
             param_num = param.data.nelement()
             param_sum += param_num
+            print(name, param)
         
         self.block_num = math.ceil(param_sum / self.block_size)
         self.last_block_size = param_sum % self.block_size
@@ -503,41 +504,20 @@ class SKalmanFilter(nn.Module):
 
         torch.cuda.empty_cache()
     
-    def __get_random_index(self, Force_label, n_select, Force_group_num, natoms_img):
-        total_atom=0
-        atom_list=[0]
-        select_list=[]
-        random_index=[[[],[]] for i in range(math.ceil(n_select/Force_group_num))]
+    
+    def __sample(self, select_num, group_num, natoms):
+        if select_num % group_num:
+            raise Exception("divider")
+        index = range(natoms)
+        res = np.random.choice(index, select_num).reshape(-1, group_num)
+        return res
 
-        for i in range(pm.ntypes):
-            total_atom += natoms_img[0, i+1]
-            atom_list.append(total_atom)
-        random_list=list(range(total_atom))
-        for i in range(n_select):
-            select_list.append(random_list.pop(random.randint(0, total_atom-i-1)))
-
-        tmp=0
-        tmp2=0
-        Force_shape = Force_label.shape[0] * Force_label.shape[1]
-        tmp_1=list(range(Force_label.shape[0]))
-        tmp_2=select_list
-        for i in tmp_1:
-            for k in tmp_2:
-                random_index[tmp][0].append(i)
-                random_index[tmp][1].append(k)
-                tmp2+=1
-                if tmp2%Force_group_num==0:
-                    tmp+=1
-                if tmp2==Force_shape:
-                    break
-        return random_index
-
-    def update_energy(self, inputs, Etot_label):
+    def update_energy(self, inputs, Etot_label, update_prefactor = 1):
         time_start = time.time()
         Etot_predict, Ei_predict, force_predict = self.model(inputs[0], inputs[1], inputs[2], inputs[3], inputs[4], inputs[5])
         errore = Etot_label.item() - Etot_predict.item()
         natoms_sum = inputs[3][0, 0]
-        errore = errore / natoms_sum
+        errore = update_prefactor * errore / natoms_sum
         if errore < 0:
             errore = -1.0 * errore
             (-1.0 * Etot_predict).backward()
@@ -547,31 +527,27 @@ class SKalmanFilter(nn.Module):
         weights, H = self.__get_weights_H(natoms_sum)
         self.__update(H, errore, weights)
         time_end = time.time()
-        print("update Energy time:", time_end - time_start, 's')
+        print("Sliced KF update Energy time:", time_end - time_start, 's')
         
 
-    def update_force(self, inputs, Force_label):
+    def update_force(self, inputs, Force_label, update_prefactor = 2):
         time_start = time.time()
         natoms_sum = inputs[3][0, 0]
-        random_index=self.__get_random_index(Force_label, self.n_select, self.Force_group_num, inputs[3])
+        index = self.__sample(self.n_select, self.Force_group_num, natoms_sum)
 
-        for index_i in range(len(random_index)):  # 4
-            error = 0
+        for i in range(index.shape[0]):
             Etot_predict, Ei_predict, force_predict = self.model(inputs[0], inputs[1], inputs[2], inputs[3], inputs[4], inputs[5])
-            force_predict.requires_grad_(True)
-            for index_ii in range(len(random_index[index_i][0])): # 6
-                for j in range(3):
-                    #error = 0 #if we use group , it should not be init
-                    error_tmp = (Force_label[random_index[index_i][0][index_ii]][random_index[index_i][1][index_ii]][j] - force_predict[random_index[index_i][0][index_ii]][random_index[index_i][1][index_ii]][j])
-                    if error_tmp < 0:
-                        error_tmp = -1.0 * error_tmp
-                        error += error_tmp
-                        (-1.0 * force_predict[random_index[index_i][0][index_ii]][random_index[index_i][1][index_ii]][j]).backward(retain_graph=True)
-                    else:
-                        error += error_tmp
-                        (force_predict[random_index[index_i][0][index_ii]][random_index[index_i][1][index_ii]][j]).backward(retain_graph=True)
-
-            num = len(random_index[index_i][0])
+            error_tmp = Force_label[:, index[i]] - force_predict[:, index[i]]
+            error_tmp = update_prefactor * error_tmp
+            mask = error_tmp < 0
+            error_tmp[mask] = -1 * error_tmp[mask]
+            error = error_tmp.mean() / natoms_sum
+            tmp_force_predict = force_predict[:, index[i]]
+            # import ipdb;ipdb.set_trace()
+            tmp_force_predict[mask] = -1 * tmp_force_predict[mask]
+            tmp_force_predict.sum().backward()
+        
+            num = self.Force_group_num
             error = (error / (num * 3.0)) / natoms_sum
             
             weights, H = self.__get_weights_H(num * 3.0 * natoms_sum)
@@ -579,6 +555,6 @@ class SKalmanFilter(nn.Module):
 
         torch.cuda.empty_cache()
         time_end = time.time()
-        print("update Force time:", time_end - time_start, 's')
+        print("Sliced KF update Force time:", time_end - time_start, 's')
 
 

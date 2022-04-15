@@ -509,7 +509,6 @@ def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
         summary(Force_label)
 
 
-
     loss_F = criterion(Force_predict, Force_label)
     loss_Etot = criterion(Etot_predict, Etot_label)
 
@@ -546,15 +545,17 @@ def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
     optimizer.step()
     info("loss = %.16f (loss_etot = %.16f, loss_force = %.16f, RMSE_etot = %.16f, RMSE_force = %.16f)"\
      %(loss, loss_Etot, loss_F, loss_Etot ** 0.5, loss_F ** 0.5))
-    # f_err_log = '/home/husiyu/software/MLFFdataset/CuO_mini/0306/iter_lr.dat'
-    # f_err_log = opt_session_dir + "iter_lr.dat"
-    # if i_batch == 1:
-    #     fid_err_log = open(f_err_log, 'a')
-    #     fid_err_log.write('iter\t total_loss\t mse_fi\t pref_fi\t lr\t mse_etot\t pref_etot\n')
+    
+    # f_err_log =  '/home/husiyu/software/MLFFdataset/v1_cu1646/record_loss.dat'
+    # f_err_log =  '/home/husiyu/software/MLFFdataset/v1_cuo1000/record_loss.dat'
+    # if not os.path.exists(f_err_log):
+    #     fid_err_log = open(f_err_log, 'w')
+    #     fid_err_log.write('etot_predict\t etot_label\t l2_etot\t prefactor_e\t force_predict_0x\t force_label_0x\t l2_f\t prefactor_f\n')
+    #     fid_err_log.write('%e %e %e %e %e %e %e %e \n'%(Etot_predict.item(), Etot_label.item(), loss_Etot.item(), 0, Force_predict[0,0,0].item(), Force_label[0,0,0].item(), loss_F.item(), 0))
     # else:
-    # fid_err_log = open(f_err_log, 'a')
-    # fid_err_log.write('%d %e %e %e %e %e %e \n'%(i_batch, loss, loss_F, pref_f, real_lr, loss_Etot, pref_e))
-
+    #     fid_err_log = open(f_err_log, 'a')
+    #     fid_err_log.write('%e %e %e %e %e %e %e %e \n'%(Etot_predict.item(), Etot_label.item(), loss_Etot.item(), 0, Force_predict[0,0,0].item(), Force_label[0,0,0].item(), loss_F.item(), 0))
+    
     return loss, loss_Etot, loss_Ei, loss_F
 
 def train_kalman(sample_batches, model, kalman, criterion, last_epoch, real_lr):
@@ -756,10 +757,9 @@ if pm.is_scale:
     torch_valid_data.dfeat = dfeat_tmp
 
 
-	
-loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=False)
+loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=True)
 if opt_dp:
-    davg, dstd, ener_shift = torch_train_data.get_stat(image_num=8)
+    davg, dstd, ener_shift = torch_train_data.get_stat(image_num=10)
     stat = [davg, dstd, ener_shift]
 
 loader_valid = Data.DataLoader(torch_valid_data, batch_size=batch_size, shuffle=True)
@@ -779,7 +779,7 @@ patience = 100000
 data_scalers = DataScalers(f_ds=pm.f_data_scaler, f_feat=pm.f_train_feat, load=True)
 
 if opt_dp:
-    model = DeepMD(opt_net_cfg, opt_act, device, stat, opt_magic)
+    model = DP(opt_net_cfg, opt_act, device, stat, opt_magic)
 else:
     model = MLFFNet(data_scalers, device)
     # model = MLFF(opt_net_cfg, opt_act, device, opt_magic, opt_autograd)
@@ -804,10 +804,8 @@ if (opt_recover_mode == True):
         raise RuntimeError("you must run follow-mode from an existing session")
     opt_latest_file = opt_model_dir+'latest.pt'
     checkpoint = torch.load(opt_latest_file,map_location=device)
-
     model.load_state_dict(checkpoint['model'])
     start_epoch = checkpoint['epoch'] + 1
-    
 
 #if torch.cuda.device_count() > 1:
 #    model = nn.DataParallel(model)
@@ -866,7 +864,7 @@ else:
 # ==========================part3:模型training==========================
 
 if pm.use_GKalman == True:
-    Gkalman = GKalmanFilter(model, kalman_lambda=0.98, kalman_nue=0.99870, device=device) #[0.98,0.9987];[0.9,0.9987];[0.9,1]
+    Gkalman = GKalmanFilter(model, kalman_lambda=0.98, kalman_nue=0.99870, device=device)
 if pm.use_LKalman == True:
     Lkalman = LKalmanFilter(model, kalman_lambda=0.98, kalman_nue=0.99870, device=device)
 if pm.use_SKalman == True:
@@ -875,7 +873,7 @@ if pm.use_SKalman == True:
 min_loss = np.inf
 iter = 1
 epoch_print = 1  #隔几个epoch记录一次误差
-iter_print = 100  #隔几个iteration记录一次误差
+iter_print = 1  #隔几个iteration记录一次误差
 
 for epoch in range(start_epoch, n_epoch + 1):
     if (epoch == n_epoch):
