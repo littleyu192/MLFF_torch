@@ -269,8 +269,8 @@ isMdProfile=False
 #-------------------------------------------------------
 #********************* NN_related ***************
 
-feature_dtype = 'float64'
-training_dtype = 'float64'
+feature_dtype = 'float64'   # 'float32'
+training_dtype = 'float64'  # 'float32'
 inference_dtype = 'float64'
 
 # device related

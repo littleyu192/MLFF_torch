@@ -49,18 +49,18 @@ with dorcker:
 	python the/path/to/MLFF_torch/src/bin/mlff.py
 	python the/path/to/MLFF_torch/src/bin/seper.py  # in parameters.py, test_ratio = 0.2 for default
 	python the/path/to/MLFF_torch/src/bin/gen_data.py
-	# model train, mannul in MLFF_torch/dataset/cu1000/parameters*.py
-	# if you want use deepmd model in training
-	cp parameters_dp.py parameters.py
+	# model train, mannul in MLFF_torch/parameters_template.py
+	# if you want use deepmd model in training, make sure dR_neigh=True && use_Ftype =[1]
+	cp parameters_template.py parameters.py
 	# if u have muti-MOVEMENT file in PWdata directory, in parameters.py, make sure batch_size = 1
 	python the/path/to/MLFF_torch/src/train.py --deepmd=True -n DeepMD_cfg_dp -s record
-	# if you want use MLP by kalmane filter
-	cp parameters_kf.py parameters.py
-	or python the/path/to/MLFF_torch/src/train.py -s record 
+	# if you want use MLP by kalmane filter, make sure is_scale=True, batch_size=1
+	cp parameters_template.py parameters.py
+	python the/path/to/MLFF_torch/src/train.py -s record 
 	# model test
 ```
 
-### Code contribution guide
+### Code contribution guidance
 ```sh
 	git checkout master
 	git pull origin master
