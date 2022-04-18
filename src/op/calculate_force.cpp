@@ -10,13 +10,30 @@ void torch_launch_calculate_force(torch::Tensor &nblist,
                        const torch::Tensor &force
 ) 
 {
-    launch_calculate_force(
-        (const int *) nblist.data_ptr(),
-        (const double *) dE.data_ptr(),
-        (const double *) Ri_d.data_ptr(),
-        batch_size, natoms, neigh_num,
-        (double *) force.data_ptr()
-    );
+    auto dtype = dE.dtype();
+    assert(Ri_d.dtype() == dtype);
+    assert(force.dtype() == dtype);
+    if (dtype == torch::kFloat32)
+    {
+        launch_calculate_force<float>(
+            (const int *) nblist.data_ptr(),
+            (const float *) dE.data_ptr(),
+            (const float *) Ri_d.data_ptr(),
+            batch_size, natoms, neigh_num,
+            (float *) force.data_ptr()
+        );
+    } else if (dtype == torch::kFloat64)
+    {
+        launch_calculate_force<double>(
+            (const int *) nblist.data_ptr(),
+            (const double *) dE.data_ptr(),
+            (const double *) Ri_d.data_ptr(),
+            batch_size, natoms, neigh_num,
+            (double *) force.data_ptr()
+        );
+    }
+    else
+        printf("data type error!");
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {

@@ -46,6 +46,12 @@ class DP(nn.Module):
         self.ntypes = pm.ntypes
         self.device = device
         self.stat = stat
+        if pm.training_dtype == "float64":
+            self.dtype = torch.double
+        elif pm.training_dtype == "float32":
+            self.dtype = torch.float32
+        else:
+            raise RuntimeError("train(): unsupported training_dtype %s" % pm.training_dtype)
 
         # network
         if (net_cfg == 'default'):
@@ -163,8 +169,7 @@ class DP(nn.Module):
                 dstd_res = dstd_ntype
             else:
                 davg_res = torch.concat((davg_res, davg_ntype), dim=0)
-                dstd_res = torch.concat((dstd_res, dstd_ntype), dim=0)
-            
+                dstd_res = torch.concat((dstd_res, dstd_ntype), dim=0)  
         Ri = (Ri - davg_res) / dstd_res  #[1,64,200,4]
         dstd_res = dstd_res.unsqueeze(-1).repeat(1, 1, 1, 3)
         Ri_d = Ri_d / dstd_res 
@@ -290,8 +295,8 @@ class DP(nn.Module):
         list_neigh_reshape = list_neigh.reshape(batch_size, natoms_sum, -1)  #[1,64,200]
         image_dR_reshape = image_dR.reshape(batch_size, natoms_sum, -1, 3)  #[1,64,200,3]
         mask = list_neigh_reshape > 0
-        dR2 = torch.zeros_like(list_neigh_reshape, dtype=torch.double)  
-        Rij = torch.zeros_like(list_neigh_reshape, dtype=torch.double)
+        dR2 = torch.zeros_like(list_neigh_reshape, dtype=self.dtype) 
+        Rij = torch.zeros_like(list_neigh_reshape, dtype=self.dtype)
         dR2[mask] = torch.sum(image_dR_reshape[mask] * image_dR_reshape[mask], -1) #[1,64,200]
         Rij[mask] = torch.sqrt(dR2[mask]) #[1,64,200]
 
@@ -304,8 +309,8 @@ class DP(nn.Module):
         Ri_xyz[mask] = image_dR_reshape[mask] / dR2_copy[mask] #[1,64,200,3]
         inr[mask] = 1 / Rij[mask]
 
-        davg = torch.tensor(self.stat[0], device=self.device)  #[2,100,4]
-        dstd = torch.tensor(self.stat[1], device=self.device)  #[2,100,4]
+        davg = torch.tensor(self.stat[0], device=self.device, dtype=self.dtype)  #[2,100,4]
+        dstd = torch.tensor(self.stat[1], device=self.device, dtype=self.dtype)  #[2,100,4]
         Ri, Ri_d = self.smooth(image_dR_reshape, nr, Ri_xyz, mask, inr, davg, dstd, natoms) #[1,64,200,4]
         
         atom_sum = 0

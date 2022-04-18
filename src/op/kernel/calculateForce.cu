@@ -31,10 +31,11 @@ __global__ void force_deriv_wrt_neighbors_a(
     atomicAdd(force + force_index, force_tmp);
 }
 
+template<typename DType>
 __global__ void force_calc(
-    double * force, 
-    const double * net_deriv,
-    const double * in_deriv,
+    DType * force, 
+    const DType * net_deriv,
+    const DType * in_deriv,
     const int * nlist,
     const int nloc,
     const int nnei)
@@ -54,7 +55,7 @@ __global__ void force_calc(
         return;
     }
 
-    double temp_a[4], temp_b[4];
+    DType temp_a[4], temp_b[4];
 
     const unsigned int net_offset = batch_id * nloc * ndescrpt + atom_id * ndescrpt + neigh_index * 4;
     const unsigned int in_offset = batch_id * nloc * ndescrpt * 3 + atom_id * ndescrpt * 3 + neigh_index * 12;
@@ -64,7 +65,7 @@ __global__ void force_calc(
         temp_b[i] = in_deriv[in_offset + i*3 + xyz_index];
     }
 
-    double res = 0.f;
+    DType res = 0.f;
 
     for (int i=0; i<4; i++) {
         res += temp_a[i] * temp_b[i];
@@ -75,15 +76,15 @@ __global__ void force_calc(
     atomicAdd(force + force_index, res);
 }
 
-
+template<typename DType>
 void launch_calculate_force(
     const int * nblist,
-    const double * dE,
-    const double * Ri_d,
+    const DType * dE,
+    const DType * Ri_d,
     const int batch_size,
     const int natoms,
     const int neigh_num,
-    double * force
+    DType * force
 ) {
 
 #if 0
@@ -104,3 +105,19 @@ void launch_calculate_force(
     force_calc<<<block_grid, thread_grid>>>(force, dE, Ri_d, nblist, natoms, neigh_num);
 #endif
 }
+
+template void launch_calculate_force(const int * nblist,
+    const float * dE,
+    const float * Ri_d,
+    const int batch_size,
+    const int natoms,
+    const int neigh_num,
+    float * force);
+
+template void launch_calculate_force(const int * nblist,
+    const double * dE,
+    const double * Ri_d,
+    const int batch_size,
+    const int natoms,
+    const int neigh_num,
+    double * force);
