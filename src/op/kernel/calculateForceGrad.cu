@@ -1,21 +1,21 @@
-template<typename FPTYPE>
-__device__ inline FPTYPE dev_dot(
-    const FPTYPE * arr1, 
-    const FPTYPE * arr2) 
+template<typename DType>
+__device__ inline DType dev_dot(
+    const DType * arr1, 
+    const DType * arr2) 
 {
     return arr1[0] * arr2[0] + arr1[1] * arr2[1] + arr1[2] * arr2[2];
 }
 
-template<typename FPTYPE>
+template<typename DType>
 __global__ void force_grad_wrt_center_atom(
-    FPTYPE * grad_net,
-    const FPTYPE * grad, 
-    const FPTYPE * env_deriv, 
+    DType * grad_net,
+    const DType * grad, 
+    const DType * env_deriv, 
     const int natoms,
     const int ndescrpt)
 {
     unsigned int batch_id = blockIdx.z;
-    __shared__ FPTYPE grad_one[3];
+    __shared__ DType grad_one[3];
     unsigned int center_idx = blockIdx.x;
     unsigned int tid = threadIdx.x;
     if(tid < 3){
@@ -30,11 +30,11 @@ __global__ void force_grad_wrt_center_atom(
     }
 }
 
-template<typename FPTYPE>
+template<typename DType>
 __global__ void force_grad_wrt_neighbors_a(
-    FPTYPE * grad_net, 
-    const FPTYPE * grad, 
-    const FPTYPE * env_deriv, 
+    DType * grad_net, 
+    const DType * grad, 
+    const DType * env_deriv, 
     const int * nlist, 
     const int nloc,
     const int nnei)
@@ -58,20 +58,20 @@ __global__ void force_grad_wrt_neighbors_a(
     grad_net[grad_net_offset] += dev_dot(grad + grad_offset, env_deriv + env_deriv_offset);
 }
 
-
+template<typename DType>
 void launch_calculate_force_grad(
     const int * nblist,
-    const double * Ri_d,
-    const double * net_grad,
+    const DType * Ri_d,
+    const DType * net_grad,
     const int batch_size,
     const int natoms,
     const int neigh_num,
-    double * grad
+    DType * grad
 ) {
 
     int LEN = 256;
     const int ndesc = neigh_num * 4;
-    cudaMemset(grad, 0.0, sizeof(double) * batch_size * natoms * ndesc);
+    cudaMemset(grad, 0.0, sizeof(DType) * batch_size * natoms * ndesc);
 
     const int nblock = (ndesc + LEN - 1) / LEN;
     dim3 block_grid(natoms, nblock, batch_size);
@@ -88,3 +88,23 @@ void launch_calculate_force_grad(
         grad,
         net_grad, Ri_d, nblist, natoms, neigh_num);
 }
+
+template void launch_calculate_force_grad(
+    const int * nblist,
+    const float * Ri_d,
+    const float * net_grad,
+    const int batch_size,
+    const int natoms,
+    const int neigh_num,
+    float * grad
+);
+
+template void launch_calculate_force_grad(
+    const int * nblist,
+    const double * Ri_d,
+    const double * net_grad,
+    const int batch_size,
+    const int natoms,
+    const int neigh_num,
+    double * grad
+);
