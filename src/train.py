@@ -613,20 +613,39 @@ def train_kalman(sample_batches, model, kalman, criterion, last_epoch, real_lr):
     return loss, loss_Etot, loss_Ei, loss_F
 
 def valid(sample_batches, model, criterion):
-    Ei_label = Variable(sample_batches['output_energy'][:,:,:].double().to(device))
-    Force_label = Variable(sample_batches['output_force'][:,:,:].double().to(device))   #[40,108,3]
-    Egroup_label = Variable(sample_batches['input_egroup'].double().to(device))
-    input_data = Variable(sample_batches['input_feat'].double().to(device), requires_grad=True)
-    dfeat = Variable(sample_batches['input_dfeat'].double().to(device))  #[40,108,100,42,3]
-    egroup_weight = Variable(sample_batches['input_egroup_weight'].double().to(device))
-    divider = Variable(sample_batches['input_divider'].double().to(device))
+    if (opt_dtype == 'float64'):
+        Ei_label = Variable(sample_batches['output_energy'][:,:,:].double().to(device))
+        Force_label = Variable(sample_batches['output_force'][:,:,:].double().to(device))   #[40,108,3]
+        Egroup_label = Variable(sample_batches['input_egroup'].double().to(device))
+        input_data = Variable(sample_batches['input_feat'].double().to(device), requires_grad=True)
+        dfeat = Variable(sample_batches['input_dfeat'].double().to(device))  #[40,108,100,42,3]
+        egroup_weight = Variable(sample_batches['input_egroup_weight'].double().to(device))
+        divider = Variable(sample_batches['input_divider'].double().to(device))
+        # Ep_label = Variable(sample_batches['output_ep'][:,:,:].double().to(device))
+        if pm.dR_neigh:
+            dR = Variable(sample_batches['input_dR'].double().to(device), requires_grad=True)
+            dR_neigh_list = Variable(sample_batches['input_dR_neigh_list'].to(device))
+
+    elif (opt_dtype == 'float32'):
+        Ei_label = Variable(sample_batches['output_energy'][:,:,:].float().to(device))
+        Force_label = Variable(sample_batches['output_force'][:,:,:].float().to(device))   #[40,108,3]
+        Egroup_label = Variable(sample_batches['input_egroup'].float().to(device))
+        input_data = Variable(sample_batches['input_feat'].float().to(device), requires_grad=True)
+        dfeat = Variable(sample_batches['input_dfeat'].float().to(device))  #[40,108,100,42,3]
+        egroup_weight = Variable(sample_batches['input_egroup_weight'].float().to(device))
+        divider = Variable(sample_batches['input_divider'].float().to(device))
+        # Ep_label = Variable(sample_batches['output_ep'][:,:,:].float().to(device))
+        if pm.dR_neigh:
+            dR = Variable(sample_batches['input_dR'].float().to(device), requires_grad=True)
+            dR_neigh_list = Variable(sample_batches['input_dR_neigh_list'].to(device))
+
+    else:
+        error("train(): unsupported opt_dtype %s" %opt_dtype)
+        raise RuntimeError("train(): unsupported opt_dtype %s" %opt_dtype)
+
     neighbor = Variable(sample_batches['input_nblist'].int().to(device))  # [40,108,100]
     natoms_img = Variable(sample_batches['natoms_img'].int().to(device))  # [40,108,100]
-    # Ep_label = Variable(sample_batches['output_ep'][:,:,:].double().to(device))
-    if pm.dR_neigh:
-        dR = Variable(sample_batches['input_dR'].double().to(device), requires_grad=True)
-        dR_neigh_list = Variable(sample_batches['input_dR_neigh_list'].to(device))
-    
+
     error=0
     atom_number = Ei_label.shape[1]
     Etot_label = torch.sum(Ei_label, dim=1)
