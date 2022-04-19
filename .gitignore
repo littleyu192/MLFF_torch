@@ -22,6 +22,8 @@ demo/cuo1000/PWdata/
 !/dataset/surface_Li/PWdata/MOVEMENT
 !/dataset/li100/PWdata/MOVEMENT
 !/dataset/CuO/PWdata/MOVEMENT
+# ctag file
+tags
 # model file
 *.pt
 *.dat
