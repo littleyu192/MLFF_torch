@@ -42,7 +42,7 @@ import getpass
 from sklearn.preprocessing import MinMaxScaler
 from joblib import dump, load
 from sklearn.feature_selection import VarianceThreshold
-
+import pickle
 # logging and our extension
 import logging
 logging_level_DUMP = 5
@@ -736,7 +736,7 @@ for multi element system, we should scaler for each element, just as for every e
 '''
 if pm.is_scale:
     if pm.use_storage_scaler:
-        scaler=load('scaler.pkl')
+        scaler = load('./scaler.pkl')
         torch_train_data.feat=scaler.transform(torch_train_data.feat)
     else:
         scaler=MinMaxScaler()
@@ -748,7 +748,7 @@ if pm.is_scale:
     torch_train_data.dfeat = dfeat_tmp
 
     if pm.storage_scaler:
-        dump(scaler, 'scaler.pkl')
+        pickle.dump(scaler, open("./scaler.pkl",'wb'))
 
     torch_valid_data.feat = scaler.transform(torch_valid_data.feat)
     dfeat_tmp = torch_valid_data.dfeat
@@ -781,7 +781,7 @@ data_scalers = DataScalers(f_ds=pm.f_data_scaler, f_feat=pm.f_train_feat, load=T
 if opt_dp:
     model = DP(opt_net_cfg, opt_act, device, stat, opt_magic)
 else:
-    model = MLFFNet(data_scalers, device)
+    model = MLFFNet(device)
     # model = MLFF(opt_net_cfg, opt_act, device, opt_magic, opt_autograd)
 
     # this is a temp fix for a quick test

@@ -112,11 +112,10 @@ class FCNet(nn.Module):
 
 
 class MLFFNet(nn.Module):
-    def __init__(self, scalers, device, atomType = pm.atomType, Dropout = False):  #atomType=[8,32]
+    def __init__(self, device, atomType = pm.atomType, Dropout = False):  #atomType=[8,32]
         super(MLFFNet,self).__init__()
         self.atomType = atomType
         self.models = nn.ModuleList()
-        self.scalers = scalers
         self.device = device
         for i in range(len(self.atomType)):  #i=[0,1]
             self.models.append(FCNet(itype = i, Dropout=Dropout))   # Dropout=True

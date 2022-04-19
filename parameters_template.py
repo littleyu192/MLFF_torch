@@ -74,7 +74,9 @@ dR_neigh = False
 use_GKalman = False
 use_LKalman = False
 use_SKalman = False
-is_scale = False
+is_scale = False   # in NNKF， set True
+use_storage_scaler = False
+storage_scaler = False  # in NNKF，set True
 itype_Ei_mean=[166.46]
 
 
