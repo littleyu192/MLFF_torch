@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+from statistics import mode
+from turtle import Turtle
 import torch
 import os,sys
 import random
@@ -13,10 +15,13 @@ from torch.nn.modules import loss
 import torch.optim as optim
 from torch.nn.parameter import Parameter
 from torch.utils.data import Dataset, DataLoader
-# from model.FCold import preMLFFNet, MLFFNet
-from model.LN import LNNet
-from model.MLFF import preMLFF, MLFF
-from model.deepmd import preDeepMD, DeepMD
+from loss.AutomaticWeightedLoss import AutomaticWeightedLoss
+from model.MLFF_v1 import MLFF
+from model.MLFF import MLFFNet
+
+from optimizer.kalmanfilter import GKalmanFilter, LKalmanFilter, SKalmanFilter
+
+from model.dp import DP
 import torch.utils.data as Data
 from torch.autograd import Variable
 import math
@@ -24,13 +29,19 @@ sys.path.append(os.getcwd())
 import parameters as pm 
 codepath=os.path.abspath(sys.path[0])
 sys.path.append(codepath+'/pre_data')
+sys.path.append(codepath+'/..')
 from data_loader_2type import MovementDataset, get_torch_data
 from scalers import DataScalers
+from utils import get_weight_grad
 from torch.utils.tensorboard import SummaryWriter
 # from tensorboardX import SummaryWriter
 import time
 import getopt
 import getpass
+
+from sklearn.preprocessing import MinMaxScaler
+from joblib import dump, load
+from sklearn.feature_selection import VarianceThreshold
 
 # logging and our extension
 import logging
@@ -43,16 +54,15 @@ opt_magic = False
 opt_follow_mode = False
 opt_recover_mode = False
 opt_net_cfg = 'default'
-# opt_act = 'sigmoid'
 # opt_act = 'tanh'
-opt_act = 'softplus'
+opt_act = 'sigmoid'
 opt_optimizer = 'ADAM'
 opt_momentum = float(0)
 opt_regular_wd = float(0)
 opt_scheduler = 'NONE'
-opt_epochs = 1000
-opt_lr = float(0.1)
-opt_gamma = float(0.9)
+opt_epochs = pm.n_epoch
+opt_lr = float(0.001)
+opt_gamma = float(0.99)
 opt_step = 100
 opt_batch_size = pm.batch_size
 opt_dtype = pm.training_dtype
@@ -88,8 +98,8 @@ opt_LR_T_max = None
 
 opt_autograd = True
 
-opt_deepmd = False
-# opt_deepmd = True
+opt_dp = False
+
 
 opts,args = getopt.getopt(sys.argv[1:],
     '-h-c-m-f-R-n:-a:-z:-v:-w:-u:-e:-l:-g:-t:-b:-d:-r:-s:-o:-i:-j:',
@@ -100,7 +110,7 @@ opts,args = getopt.getopt(sys.argv[1:],
      'milestones=','patience=','cooldown=','eps=','total_steps=',
      'max_lr=','min_lr=','T_max=',
      'wandb','wandb_entity=','wandb_project=',
-     'auto_grad=', 'dmirror=', 'deepmd='])
+     'auto_grad=', 'dmirror=', 'dp='])
 
 for opt_name,opt_value in opts:
     if opt_name in ('-h','--help'):
@@ -164,10 +174,10 @@ for opt_name,opt_value in opts:
         print("                                    using --dmirror or --auto_grad")
         print("                                    default: --auto_grad")
         print("")
-        print("     --deepmd                    :  use deepmd method(emdedding net + fitting net)")
-        print("                                    using --deepmd=True enable deepmd method")
+        print("     --dp                    :  use dp method(emdedding net + fitting net)")
+        print("                                    using --dp=True enable dp method")
         print("                                    adding -n DeepMD_cfg (see cu/parameters.py)")
-        print("                                    defalt: --deepmd=False (see line 90)")
+        print("                                    defalt: --dp=False (see line 90)")
         print("")
         print("wandb parameters:")
         print("     --wandb                     :  ebable wandb, sync tensorboard data to wandb")
@@ -278,8 +288,8 @@ for opt_name,opt_value in opts:
         opt_autograd = False
     elif opt_name in ('--auto_grad'):
         opt_autograd = True
-    elif opt_name in ('--deepmd'):
-        opt_deepmd = eval(opt_value)
+    elif opt_name in ('--dp='):
+        opt_dp = eval(opt_value)
 
 # setup logging module
 logging.addLevelName(logging_level_DUMP, 'DUMP')
@@ -370,8 +380,6 @@ else:
 
 
 def test(sample_batches, model, criterion):
-    # floating part of sample_batches, cast to specified opt_dtype
-    #
     if (opt_dtype == 'float64'):
         Ei_label = Variable(sample_batches['output_energy'][:,:,:].double().to(device))
         Force_label = Variable(sample_batches['output_force'][:,:,:].double().to(device))   #[40,108,3]
@@ -380,11 +388,11 @@ def test(sample_batches, model, criterion):
         dfeat = Variable(sample_batches['input_dfeat'].double().to(device))  #[40,108,100,42,3]
         egroup_weight = Variable(sample_batches['input_egroup_weight'].double().to(device))
         divider = Variable(sample_batches['input_divider'].double().to(device))
+        # Ep_label = Variable(sample_batches['output_ep'][:,:,:].double().to(device))
         if pm.dR_neigh:
             dR = Variable(sample_batches['input_dR'].double().to(device), requires_grad=True)
             dR_neigh_list = Variable(sample_batches['input_dR_neigh_list'].to(device))
-            dstd = Variable(sample_batches['input_dstd'].double().to(device))
-            davg = Variable(sample_batches['input_davg'].double().to(device))
+
     elif (opt_dtype == 'float32'):
         Ei_label = Variable(sample_batches['output_energy'][:,:,:].float().to(device))
         Force_label = Variable(sample_batches['output_force'][:,:,:].float().to(device))   #[40,108,3]
@@ -393,57 +401,47 @@ def test(sample_batches, model, criterion):
         dfeat = Variable(sample_batches['input_dfeat'].float().to(device))  #[40,108,100,42,3]
         egroup_weight = Variable(sample_batches['input_egroup_weight'].float().to(device))
         divider = Variable(sample_batches['input_divider'].float().to(device))
+        # Ep_label = Variable(sample_batches['output_ep'][:,:,:].float().to(device))
         if pm.dR_neigh:
             dR = Variable(sample_batches['input_dR'].float().to(device), requires_grad=True)
             dR_neigh_list = Variable(sample_batches['input_dR_neigh_list'].to(device))
-            dstd = Variable(sample_batches['input_dstd'].float().to(device))
-            davg = Variable(sample_batches['input_davg'].float().to(device))
 
-        error("test(): unsupported opt_dtype %s" %opt_dtype)
+    else:
+        error("train(): unsupported opt_dtype %s" %opt_dtype)
         raise RuntimeError("train(): unsupported opt_dtype %s" %opt_dtype)
 
-    # non-floating or derived part of sample_batches
-    #
-    atom_number = Ei_label.shape[1]
-    Etot_label = torch.sum(Ei_label, dim=1)   #[40,108,1]-->[40,1]
     neighbor = Variable(sample_batches['input_nblist'].int().to(device))  # [40,108,100]
-    ind_img = Variable(sample_batches['ind_image'].int().to(device))
-    # dumping what you want here
-    #
-    dump("defat.shape= %s" %(dfeat.shape,))
-    dump("neighbor.shape = %s" %(neighbor.shape,))
-    dump("dump dfeat ------------------->")
-    dump(dfeat)
-    dump("dump neighbor ------------------->")
-    dump(neighbor)
+    natoms_img = Variable(sample_batches['natoms_img'].int().to(device))  # [40,108,100]
 
-    # model = model.cuda()
-    # model = torch.nn.parallel.DistributedDataParallel(model)
-    # model.train()
-    # force_predict, Etot_predict, Ei_predict, Egroup_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
+    error=0
+    atom_number = Ei_label.shape[1]
+    Etot_label = torch.sum(Ei_label, dim=1)
 
-    if opt_deepmd:
-        Etot_predict, Ei_predict, Force_predict = model(dR, dR_neigh_list, davg, dstd)
+    model.train()
+    if opt_dp:
+        Etot_predict, Ei_predict, Force_predict = model(dR, dfeat, dR_neigh_list, natoms_img, egroup_weight, divider)
     else:
-        Etot_predict, Ei_predict, Force_predict = model(input_data, dfeat, neighbor, egroup_weight, divider)
+        Etot_predict, Ei_predict, Force_predict = model(input_data, dfeat, neighbor, natoms_img, egroup_weight, divider)
     
-    print("etot predict =============================================>")
-    print(Etot_predict)
-    print("etot label ===============================================>")
-    print(Etot_label)
-    print("force predict ============================================>")
-    print(Force_predict)
-    print("force label ==============================================>")
-    print(Force_label)
-   
+    # Egroup_predict = model.get_egroup(Ei_predict, egroup_weight, divider)
     loss_F = criterion(Force_predict, Force_label)
     loss_Etot = criterion(Etot_predict, Etot_label)
     loss_Ei = criterion(Ei_predict, Ei_label)
-    w_ei = 1
-    loss = pm.rtLossF * loss_F+ pm.rtLossEtot * loss_Etot + w_ei * loss_Ei
-    #info("loss = %.16f (loss_etot = %.16f, loss_force = %.16f, RMSE_etot = %.16f, RMSE_force = %.16f)" %(loss, loss_Etot, loss_F, loss_Etot ** 0.5, loss_F ** 0.5))
+    # import ipdb;ipdb.set_trace()
+    # print("valid info: force label; force predict")
+    # print(Force_label)
+    # print(Force_predict)
+    error = float(loss_F.item()) + float(loss_Etot.item())
 
-    return loss, loss_Etot, loss_Ei, loss_F
+    f_err_log =  opt_session_dir + 'iter_loss_test.dat'
+    if not os.path.exists(f_err_log):
+        fid_err_log = open(f_err_log, 'w')
+        fid_err_log.write('Etot_predict\t Force_predict_x\t Force_predict_y\t Force_predict_z\n')
+    else:
+        fid_err_log = open(f_err_log, 'a')
+        fid_err_log.write('%e %e %e %e \n'%(Etot_predict.item(), Force_predict[0,0,0].item(), Force_predict[0,0,1].item(), Force_predict[0,0,2].item()))
+        
+    return error, loss_Etot, loss_Ei, loss_F
 
 
 # ==========================part1:指定参数 && 数据读取==========================
@@ -477,17 +475,32 @@ info("Training: batch_size = %d" %batch_size)
 # ==========================part1:数据读取==========================
 batch_size = 1
 test_data_path=pm.train_data_path
-torch_test_data = get_torch_data(pm.natoms, test_data_path)
+torch_test_data = get_torch_data(test_data_path)
+if pm.is_scale:
+    scaler=load('./scaler.pkl')
+    torch_test_data.feat = scaler.transform(torch_test_data.feat)
+    dfeat_tmp = torch_test_data.dfeat
+    dfeat_tmp = dfeat_tmp.transpose(0, 1, 3, 2)
+    dfeat_tmp = dfeat_tmp * scaler.scale_
+    dfeat_tmp = dfeat_tmp.transpose(0, 1, 3, 2)
+    torch_test_data.dfeat = dfeat_tmp
+
 loader_test = Data.DataLoader(torch_test_data, batch_size=batch_size, shuffle=False)
+if opt_dp:  # 此处应读training中保存的stat
+    davg, dstd, ener_shift = torch_test_data.get_stat(image_num=10)
+    stat = [davg, dstd, ener_shift]
 
 # ==========================part2:load模型==========================
-if opt_deepmd:
-    model = DeepMD(opt_net_cfg, opt_act, device, opt_magic)
+if opt_dp:
+    model = DP(opt_net_cfg, opt_act, device, stat, opt_magic)
 else:
-    model = MLFF(opt_net_cfg, opt_act, device, opt_magic, opt_autograd)
+    model = MLFFNet(device)
 model.to(device)
 
-path = r"../cu1000_5/update1122/model/4.pt"
+# change the *.pt path
+path = r"/home/husiyu/software/MLFFdataset/cutest_dp/record/model/latest.pt"
+path = r"/home/husiyu/software/MLFFdataset/cutest/record/model/latest.pt"
+
 checkpoint = torch.load(path)
 model.load_state_dict(checkpoint['model'])
 # if opt_follow_mode==True:
@@ -503,29 +516,29 @@ model.load_state_dict(checkpoint['model'])
 #     # optimizer.load_state_dict(checkpoint['optimizer'])
 
 nr_total_sample = 0
-loss = 0.
-loss_Etot = 0.
-loss_Ei = 0.
-loss_F = 0.
+test_loss = 0.
+test_loss_Etot = 0.
+test_loss_Ei = 0.
+test_loss_F = 0.
 for i_batch, sample_batches in enumerate(loader_test):
-    batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
-        test(sample_batches, model, nn.MSELoss())
-    print("mse etot:" + str(batch_loss_Etot))
-    print("mse F:" + str(batch_loss_F))
+    natoms_sum = sample_batches['natoms_img'][0, 0].item()
     nr_batch_sample = sample_batches['input_feat'].shape[0]
-    debug("nr_batch_sample = %s" %nr_batch_sample)
-    loss += batch_loss * nr_batch_sample
-    loss_Etot += batch_loss_Etot * nr_batch_sample
-    loss_Ei += batch_loss_Ei * nr_batch_sample
-    loss_F += batch_loss_F * nr_batch_sample
+    test_error_iter, batch_loss_Etot, batch_loss_Ei, batch_loss_F = test(sample_batches, model, nn.MSELoss())
+    # n_iter = (epoch - 1) * len(loader_valid) + i_batch + 1
+    test_loss += test_error_iter * nr_batch_sample
+    test_loss_Etot += batch_loss_Etot.item() * nr_batch_sample
+    test_loss_Ei += batch_loss_Ei.item() * nr_batch_sample
+    test_loss_F += batch_loss_F.item() * nr_batch_sample
     nr_total_sample += nr_batch_sample
 
-# epoch loss update
-loss /= nr_total_sample
-loss_Etot /= nr_total_sample
-loss_Ei /= nr_total_sample
-loss_F /= nr_total_sample
-RMSE_Etot = loss_Etot ** 0.5
-RMSE_Egroup = loss_Ei ** 0.5
-RMSE_F = loss_F ** 0.5
-info("epoch_loss = %.16f (loss_Etot = %.16f, loss_F = %.16f, RMSE_Etot = %.16f, RMSE_F = %.16f)" %(loss, loss_Etot, loss_F, RMSE_Etot, RMSE_F))
+# epoch loss
+test_loss /= nr_total_sample
+test_loss_Etot /= nr_total_sample
+test_loss_Ei /= nr_total_sample
+test_loss_F /= nr_total_sample
+test_RMSE_Etot = test_loss_Etot ** 0.5
+test_RMSE_Ei = test_loss_Ei ** 0.5
+test_RMSE_F = test_loss_F ** 0.5
+info("test_loss = %.16f (test_RMSE_Etot = %.16f, test_RMSE_Ei = %.16f, test_RMSE_F = %.16f)" \
+        %(test_loss, test_RMSE_Etot, test_RMSE_Ei, test_RMSE_F))
+
