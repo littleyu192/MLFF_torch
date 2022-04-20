@@ -2,13 +2,12 @@
 
 mkdir bin
 mkdir lib
-cd pre_data/gen_feature
-make
-cd ../fit
-make
-cd ../fortran_code
-make
-cd ../../bin
+make -C pre_data/gen_feature
+make -C pre_data/fit
+make -C pre_data/fortran_code  # this is *.so for tf inference, deprecated
+make -C test/MD
+make -C QCAD/fortran_code
+cd bin
 ln -s ../pre_data/mlff.py .
 ln -s ../pre_data/seper.py .
 ln -s ../pre_data/gen_data.py .
@@ -21,8 +20,4 @@ chmod +x ./gen_data.py
 chmod +x ./data_loader_2type.py
 chmod +x ./train.py
 chmod +x ./test.py
-cd ..
-cd test/MD
-make
-cd ../..
-
+cd ..            # back to src dir
