@@ -4,8 +4,11 @@ mkdir bin
 mkdir lib
 make -C pre_data/gen_feature
 make -C pre_data/fit
-make -C pre_data/fortran_code  # this is *.so for tf inference, deprecated
+make -C pre_data/fortran_code  # spack load gcc@7.5.0
 make -C test/MD
+cd QCAD/fortran_code
+make libiotk.a
+cd ../..
 make -C QCAD/fortran_code
 cd bin
 ln -s ../pre_data/mlff.py .
