@@ -159,7 +159,6 @@ module calc_NN
         enddo
         close(10)
 
-        write(*,*) "llptest nfeat1: ", nfeat1(1)
            nfeat1m=0   ! the original feature
            do i=1,ntype
            if(nfeat1(i).gt.nfeat1m) nfeat1m=nfeat1(i)
@@ -437,9 +436,9 @@ module calc_NN
 
         
         
-        write(*,*) "llp test, feature input for first atom"
-        write(*,*) feat(:,1)
-        write(*,*) "llp test, feature input end"
+       !write(*,*) "llp test, feature input for first atom"
+       !write(*,*) feat(:,1)
+       !write(*,*) "llp test, feature input end"
         num = 0
         iat1=0
         do i = 1, natom
@@ -452,9 +451,9 @@ module calc_NN
             enddo
          endif
          enddo
-        write(*,*) "llp test, feature scaled"
-        write(*,*) feat_type(:,1,1)
-        write(*,*) "llp test, feature scaled end"
+       !write(*,*) "llp test, feature scaled"
+       !write(*,*) feat_type(:,1,1)
+       !write(*,*) "llp test, feature scaled end"
 
 
          do 300 itype=1,ntype
@@ -495,13 +494,13 @@ module calc_NN
          enddo
          enddo
          endif
-        write(*,*) "llp test, f_out(:,1,ii), layer: ", ii
-        write(*,*) f_out(:,1,ii)
+       !write(*,*) "llp test, f_out(:,1,ii), layer: ", ii
+       !write(*,*) f_out(:,1,ii)
 
          call dgemm('T', 'N', nodeNN(ii+1,itype),num(itype),nodeNN(ii,itype), 1.d0,  &
            Wij_nn(1,1,ii,itype),nodeMM,f_out(1,1,ii),nodeMM,0.d0,f_in(1,1,ii+1),nodeMM)
-        write(*,*) "llp test, f_in(:,1,ii+1)=wij*f_out,layer: ", ii+1
-        write(*,*) f_in(:,1,ii+1)
+       !write(*,*) "llp test, f_in(:,1,ii+1)=wij*f_out,layer: ", ii+1
+       !write(*,*) f_in(:,1,ii+1)
 
         !if (ii .eq. 1 ) then
         !    write(*,*) "layer0 feature -> layer1. layer1:"
@@ -512,8 +511,8 @@ module calc_NN
          f_in(j,i,ii+1)=f_in(j,i,ii+1)+B_nn(j,ii,itype)
          enddo
          enddo
-        write(*,*) "llp test, x_ii+1 = wij*x_ii+bj,layer: ", ii+1
-        write(*,*) f_in(:,1,ii+1)
+       !write(*,*) "llp test, x_ii+1 = wij*x_ii+bj,layer: ", ii+1
+       !write(*,*) f_in(:,1,ii+1)
  100     continue
 
          do i=1,num(itype)

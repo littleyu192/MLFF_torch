@@ -1,13 +1,9 @@
 #!/bin/bash
-
-cd bin
-rm -rf *.r *.x
-cd ../pre_data/gen_feature
-make clean
-cd ../fit
-make clean
-cd ../fortran_code
-make clean
-cd ../../test/MD
-make clean
+rm -f bin/*.r
+rm -f bin/*.x
+make clean -C pre_data/gen_feature
+make clean -C pre_data/fit
+make clean -C pre_data/fortran_code  # for tf, will delete it
+make clean -C QCAD/fortran_code
+make clean -C test/MD
 

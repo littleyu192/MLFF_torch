@@ -1,7 +1,8 @@
+# ugly makefile, but do not change this makefile unless you have full test it.
 .PHONY:all
 #all: cmain.x mlff_predict.x main_MD.x cmain.a
 #all: cmain.x mlff_predict.x main_MD.x pair_qcad.a
-all: f2c_calc_energy_force.a cmain.x mlff_predict.x main_MD.x 
+all: f2c_calc_energy_force.a main_MD.x 
 
 MPIFC = mpiifort
 MPICXX = mpiicpc
@@ -109,6 +110,7 @@ f2c_calc_energy_force.a: $(mods) $(OBJ)
 # this the fortran MD/MD100(inference) main program
 main_MD.x: $(mods) $(OBJ) libiotk.a main_MD.o
 	$(MPIFC) $(FFLAG) $(FLINKFLAG) libiotk.a -o $@ $(OBJ) main_MD.o
+	\cp main_MD.x ../../bin/
 
 clean:
 	#make clean -C iotk
