@@ -282,15 +282,16 @@ class GKalmanFilter(nn.Module):
 
 
 class LKalmanFilter(nn.Module):
-    def __init__(self, model, kalman_lambda, kalman_nue, device):
+    def __init__(self, model, kalman_lambda, kalman_nue, device, nselect, groupsize, blocksize, fprefactor):
         super(LKalmanFilter, self).__init__()
         self.kalman_lambda = kalman_lambda
         self.kalman_nue = kalman_nue
         self.device = device
         self.model = model
-        self.n_select = 24
-        self.Force_group_num = 6
-        self.block_size = 10240 #5120 4096
+        self.n_select = nselect #24
+        self.Force_group_num = groupsize #6
+        self.block_size = blocksize #1024 #5120 4096
+        self.f_prefactor = fprefactor
         self.__init_P()
 
     def __init_P(self):
@@ -335,42 +336,42 @@ class LKalmanFilter(nn.Module):
             )
 
         A = 1 / tmp
+
+        # time_A = time.time()
+        # print("A inversion time: ", time_A - time0)
         # torch.cuda.synchronize()
-        
 
         for i in range(self.weights_num):
             time1 = time.time()
-            """
-            1. get the Kalman Gain Matrix
-            """
+            
+            # 1. get the Kalman Gain Matrix
             K = torch.matmul(self.P[i], H[i])
             K = torch.matmul(K, A)
             # torch.cuda.synchronize()
             # time2 = time.time()
             # print("update K: ", time2 - time1)
 
-            """
-            2. update weights
-            """
+            # 2. update weights
             weights[i] = weights[i] + K * error
-
-            """
-            3. update P
-            """
-            self.P[i] = (1 / self.kalman_lambda) * (
-                self.P[i] - torch.matmul(torch.matmul(K, H[i].T), self.P[i])
-            )
             # torch.cuda.synchronize()
             # time3 = time.time()
-            # print("update P1: ", time3 - time2, "size ", self.P[i].shape[0])
-            self.P[i] = (self.P[i] + self.P[i].T) / 2
+            # print("update weights time: ", time3 - time2)
+            
+            # 3. update P
+            self.P[i] = (1 / self.kalman_lambda) * (
+                self.P[i] - torch.matmul(K, torch.matmul(H[i].T, self.P[i]))
+            )
             # torch.cuda.synchronize()
             # time4 = time.time()
-            # print("update P2: ", time4 - time3)
+            # print("update P: ", time4 - time3, "size ", self.P[i].shape[0])
+            self.P[i] = (self.P[i] + self.P[i].T) / 2
             
-        """
-        4. update kalman_lambda
-        """
+
+        torch.cuda.synchronize()
+        time_end = time.time()
+        # print("===========update all weights: ", time_end - time_A, 's ==========')
+        
+        # 4. update kalman_lambda
         self.kalman_lambda = self.kalman_nue * self.kalman_lambda + 1 - self.kalman_nue
 
         i = 0
@@ -396,9 +397,9 @@ class LKalmanFilter(nn.Module):
             else:
                 param.grad.requires_grad_(False)
             param.grad.zero_()
-        # torch.cuda.synchronize()
-        # time5 = time.time()
-        # print("distribute weight and grad: ", time5 - time4)
+        torch.cuda.synchronize()
+        time5 = time.time()
+        print("==========restore weight: ", time5 - time_end, 's ==========')
 
     def __sample(self, select_num, group_num, natoms):
         if select_num % group_num:
@@ -411,18 +412,34 @@ class LKalmanFilter(nn.Module):
         torch.cuda.synchronize()
         time_start = time.time()
         Etot_predict, Ei_predict, force_predict = self.model(
-            inputs[0], inputs[1], inputs[2], inputs[3], inputs[4], inputs[5]
+            inputs[0], inputs[1], inputs[2], inputs[3], inputs[4], inputs[5], is_calc_f=False
         )
+        torch.cuda.synchronize()
+        time1 = time.time()
+        print("step(1): force forward time: ", time1 - time_start, "s")
+
+        
         errore = Etot_label.item() - Etot_predict.item()
         natoms_sum = inputs[3][0, 0]
         errore = errore / natoms_sum
 
+        # cri = nn.MSELoss(reduction='mean')
+        # errore1 = cri(Etot_label, Etot_predict)
+        
+        # errore2 = (Etot_label - Etot_predict)
+        # errore2.backward()
+        # for name, param in self.model.named_parameters():
+        #     print(name)
+        #     import ipdb;ipdb.set_trace()
+
         if errore < 0:
             errore = -update_prefactor * errore
-            (-1.0 * Etot_predict).backward()
+            (-update_prefactor * Etot_predict).backward()
         else:
             errore = update_prefactor * errore
-            Etot_predict.backward()
+            (update_prefactor * Etot_predict).backward()
+        time2 = time.time()
+        print("step(2): force loss backward time: ", time2 - time1, "s")
 
         weights = []
         H = []
@@ -442,12 +459,17 @@ class LKalmanFilter(nn.Module):
             res = self.__split_weights(tmp)
             weights = weights + res
 
+        torch.cuda.synchronize()
+        time_reshape = time.time()
+        print("step(3): w and b distribute time:", time_reshape - time2, "s")
+
         self.__update(H, errore, weights)
         torch.cuda.synchronize()
         time_end = time.time()
+        print("step(4): weights update by energy:", time_end - time_reshape, "s")
         print("Layerwised KF update Energy time:", time_end - time_start, "s")
 
-    def update_force(self, inputs, Force_label, update_prefactor=2):
+    def update_force(self, inputs, Force_label):
         torch.cuda.synchronize()
         time_start = time.time()
         natoms_sum = inputs[3][0, 0]
@@ -463,15 +485,15 @@ class LKalmanFilter(nn.Module):
             # time1 = time.time()
             # print("force forward time: ", time1 - time0, "s")
             error_tmp = Force_label[:, index[i]] - force_predict[:, index[i]]
-            error_tmp = update_prefactor * error_tmp
+            error_tmp = self.f_prefactor * error_tmp
             mask = error_tmp < 0
             error_tmp[mask] = -1 * error_tmp[mask]
             error = error_tmp.mean() / natoms_sum
             tmp_force_predict = force_predict[:, index[i]]
-            tmp_force_predict[mask] = -update_prefactor * tmp_force_predict[mask]
-            # tmp_force_predict.sum().backward()
-            loss = tmp_force_predict.sum()
-            loss.backward()
+            tmp_force_predict[mask] = -self.f_prefactor * tmp_force_predict[mask]
+            tmp_force_predict.sum().backward()
+            # loss = tmp_force_predict.sum()
+            # loss.backward()
             weights = []
             H = []
             # time2 = time.time()
@@ -479,9 +501,7 @@ class LKalmanFilter(nn.Module):
             for name, param in self.model.named_parameters():
                 # H.append((param.grad / natoms_sum).T.reshape(param.grad.nelement(), 1))
                 if param.ndim > 1:
-                    tmp = (
-                        param.grad / (self.Force_group_num * 3.0) / natoms_sum
-                    ).T.reshape(param.grad.nelement(), 1)
+                    tmp = (param.grad / (self.Force_group_num * 3.0) / natoms_sum).T.reshape(param.grad.nelement(), 1)
                 else:
                     tmp = (
                         param.grad / (self.Force_group_num * 3.0) / natoms_sum

@@ -95,10 +95,14 @@ opt_LR_total_steps = None
 opt_LR_max_lr = 1.
 opt_LR_min_lr = 0.
 opt_LR_T_max = None
-
 opt_autograd = True
-
 opt_dp = False
+
+# layerwised Kalman Filter options
+opt_nselect = 24
+opt_groupsize= 6
+opt_blocksize = 5120
+opt_fprefactor = 2
 
 
 opts,args = getopt.getopt(sys.argv[1:],
@@ -110,7 +114,7 @@ opts,args = getopt.getopt(sys.argv[1:],
      'milestones=','patience=','cooldown=','eps=','total_steps=',
      'max_lr=','min_lr=','T_max=',
      'wandb','wandb_entity=','wandb_project=',
-     'auto_grad=', 'dmirror=', 'dp='])
+     'auto_grad=', 'dmirror=', 'dp=', 'nselect=', 'groupsize=', 'blocksize=', 'fprefactor='])
 
 for opt_name,opt_value in opts:
     if opt_name in ('-h','--help'):
@@ -183,6 +187,12 @@ for opt_name,opt_value in opts:
         print("     --wandb                     :  ebable wandb, sync tensorboard data to wandb")
         print("     --wandb_entity=yr_account   :  your wandb entity or account (default is: moleculenn")
         print("     --wandb_project=yr_project  :  your wandb project name (default is: MLFF_torch)")
+        print("")
+        print("Kalman Filter parameters:")
+        print("     --nselect                   :  sample force number(default:24)")
+        print("     --groupsize                 :  the number of atoms for one iteration by force(default:6)")
+        print("     --blocksize                 :  max weights number for KF update(default:5120)")
+        print("     --fprefactor                :  LKF force prefactor(default:2)")
         print("")
         exit()
     elif opt_name in ('-c','--cpu'):
@@ -259,30 +269,30 @@ for opt_name,opt_value in opts:
             opt_file_log_level = eval(opt_file_log_level)
     elif opt_name in ('-j','--j_cycle'):
         opt_journal_cycle = int(opt_value)
-    if opt_name in ('--milestones'):
+    elif opt_name in ('--milestones'):
         opt_LR_milestones = list(map(int, opt_value.split(',')))
-    if opt_name in ('--patience'):
+    elif opt_name in ('--patience'):
         opt_LR_patience = int(opt_value)
-    if opt_name in ('--cooldown'):
+    elif opt_name in ('--cooldown'):
         opt_LR_cooldown = int(opt_value)
-    if opt_name in ('--total_steps'):
+    elif opt_name in ('--total_steps'):
         opt_LR_total_steps = int(opt_value)
-    if opt_name in ('--max_lr'):
+    elif opt_name in ('--max_lr'):
         opt_LR_max_lr = float(opt_value)
-    if opt_name in ('--min_lr'):
+    elif opt_name in ('--min_lr'):
         opt_LR_min_lr = float(opt_value)
-    if opt_name in ('--T_max'):
+    elif opt_name in ('--T_max'):
         opt_LR_T_max = int(opt_value)
-    if opt_name in ('--wandb'):
+    elif opt_name in ('--wandb'):
         opt_wandb = True
         import wandb
-    if opt_name in ('--wandb_entity'):
+    elif opt_name in ('--wandb_entity'):
         opt_wandb_entity = opt_value
-    if opt_name in ('--wandb_project'):
+    elif opt_name in ('--wandb_project'):
         opt_wandb_project = opt_value
-    if opt_name in ('--init_b'):
+    elif opt_name in ('--init_b'):
         opt_init_b = True
-    if opt_name in ('--save_model'):
+    elif opt_name in ('--save_model'):
         opt_save_model = True
     elif opt_name in ('--dmirror'):
         opt_autograd = False
@@ -290,6 +300,14 @@ for opt_name,opt_value in opts:
         opt_autograd = True
     elif opt_name in ('--dp='):
         opt_dp = eval(opt_value)
+    elif opt_name in ('--nselect='):
+        opt_nselect = eval(opt_value)
+    elif opt_name in ('--groupsize='):
+        opt_groupsize = eval(opt_value)
+    elif opt_name in ('--blocksize='):
+        opt_blocksize = eval(opt_value)
+    elif opt_name in ('--fprefactor='):
+        opt_fprefactor = eval(opt_value)
 
 # setup logging module
 logging.addLevelName(logging_level_DUMP, 'DUMP')
@@ -385,7 +403,7 @@ def get_loss_func(start_lr, real_lr, has_fi, lossFi, has_etot, loss_Etot, has_eg
     start_pref_F = 1000  #1000
     limit_pref_F = 1.0
     start_pref_etot = 0.02   
-    limit_pref_etot = 1.0  
+    limit_pref_etot = 1.0
     start_pref_ei = 0.02
     limit_pref_ei = 1.0
     pref_fi = has_fi * (limit_pref_F + (start_pref_F - limit_pref_F) * real_lr / start_lr)
@@ -427,6 +445,8 @@ def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
         if pm.dR_neigh:
             dR = Variable(sample_batches['input_dR'].double().to(device), requires_grad=True)
             dR_neigh_list = Variable(sample_batches['input_dR_neigh_list'].to(device))
+            Ri = Variable(sample_batches['input_Ri'].double().to(device), requires_grad=True)
+            Ri_d = Variable(sample_batches['input_Ri_d'].to(device))
 
     elif (opt_dtype == 'float32'):
         Ei_label = Variable(sample_batches['output_energy'][:,:,:].float().to(device))
@@ -440,7 +460,8 @@ def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
         if pm.dR_neigh:
             dR = Variable(sample_batches['input_dR'].float().to(device), requires_grad=True)
             dR_neigh_list = Variable(sample_batches['input_dR_neigh_list'].to(device))
-
+            Ri = Variable(sample_batches['input_Ri'].double().to(device), requires_grad=True)
+            Ri_d = Variable(sample_batches['input_Ri_d'].to(device))
     else:
         error("train(): unsupported opt_dtype %s" %opt_dtype)
         raise RuntimeError("train(): unsupported opt_dtype %s" %opt_dtype)
@@ -448,7 +469,6 @@ def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
 
     atom_number = Ei_label.shape[1]
     Etot_label = torch.sum(Ei_label, dim=1)
-    # Etot_label = Ep_label
     neighbor = Variable(sample_batches['input_nblist'].int().to(device))  # [40,108,100]
     ind_img = Variable(sample_batches['ind_image'].int().to(device))
     natoms_img = Variable(sample_batches['natoms_img'].int().to(device))
@@ -474,7 +494,8 @@ def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
     #     # print(name, parameter.mean().item(), parameter.std().item())
     # import ipdb;ipdb.set_trace()
     if opt_dp:
-        Etot_predict, Ei_predict, Force_predict = model(dR, dfeat, dR_neigh_list, natoms_img, egroup_weight, divider)
+        # Etot_predict, Ei_predict, Force_predict = model(dR, dfeat, dR_neigh_list, natoms_img, egroup_weight, divider)  # online cacl Ri and Ri_d 
+        Etot_predict, Ei_predict, Force_predict = model(Ri, Ri_d, dR_neigh_list, natoms_img, egroup_weight, divider)
     else:
         Etot_predict, Ei_predict, Force_predict = model(input_data, dfeat, neighbor, natoms_img, egroup_weight, divider)
     
@@ -553,6 +574,8 @@ def train_kalman(sample_batches, model, kalman, criterion, last_epoch, real_lr):
         if pm.dR_neigh:
             dR = Variable(sample_batches['input_dR'].double().to(device), requires_grad=True)
             dR_neigh_list = Variable(sample_batches['input_dR_neigh_list'].to(device))
+            Ri = Variable(sample_batches['input_Ri'].double().to(device), requires_grad=True)
+            Ri_d = Variable(sample_batches['input_Ri_d'].to(device))
 
     elif (opt_dtype == 'float32'):
         Ei_label = Variable(sample_batches['output_energy'][:,:,:].float().to(device))
@@ -566,7 +589,8 @@ def train_kalman(sample_batches, model, kalman, criterion, last_epoch, real_lr):
         if pm.dR_neigh:
             dR = Variable(sample_batches['input_dR'].float().to(device), requires_grad=True)
             dR_neigh_list = Variable(sample_batches['input_dR_neigh_list'].to(device))
-
+            Ri = Variable(sample_batches['input_Ri'].double().to(device), requires_grad=True)
+            Ri_d = Variable(sample_batches['input_Ri_d'].to(device))
     else:
         error("train(): unsupported opt_dtype %s" %opt_dtype)
         raise RuntimeError("train(): unsupported opt_dtype %s" %opt_dtype)
@@ -574,41 +598,32 @@ def train_kalman(sample_batches, model, kalman, criterion, last_epoch, real_lr):
 
     atom_number = Ei_label.shape[1]
     Etot_label = torch.sum(Ei_label, dim=1)
-    # Etot_label = Ep_label
-    # import ipdb;ipdb.set_trace()
     neighbor = Variable(sample_batches['input_nblist'].int().to(device))  # [40,108,100]
     ind_img = Variable(sample_batches['ind_image'].int().to(device))
     natoms_img = Variable(sample_batches['natoms_img'].int().to(device))
-    # dumping what you want here
-    #
-    dump("defat.shape= %s" %(dfeat.shape,))
-    dump("neighbor.shape = %s" %(neighbor.shape,))
-    dump("dump dfeat ------------------->")
-    dump(dfeat)
-    dump("dump neighbor ------------------->")
-    dump(neighbor)
 
     if opt_dp:
-        kalman_inputs = [dR, dfeat, dR_neigh_list, natoms_img, egroup_weight, divider]
+        # kalman_inputs = [dR, dfeat, dR_neigh_list, natoms_img, egroup_weight, divider]
+        kalman_inputs = [Ri, Ri_d, dR_neigh_list, natoms_img, egroup_weight, divider]
     else:
         kalman_inputs = [input_data, dfeat, neighbor, natoms_img, egroup_weight, divider]
-   
+
     kalman.update_energy(kalman_inputs, Etot_label)
     kalman.update_force(kalman_inputs, Force_label)
-    # kalman.update_egroup(kalman_inputs, Egroup_label)
 
     if opt_dp:
-        Etot_predict, Ei_predict, Force_predict = model(dR, dfeat, dR_neigh_list, natoms_img, egroup_weight, divider)
+        # Etot_predict, Ei_predict, Force_predict = model(dR, dfeat, dR_neigh_list, natoms_img, egroup_weight, divider)
+        Etot_predict, Ei_predict, Force_predict = model(Ri, Ri_d, dR_neigh_list, natoms_img, egroup_weight, divider)
     else:
         Etot_predict, Ei_predict, Force_predict = model(input_data, dfeat, neighbor, natoms_img, egroup_weight, divider)
 
     loss_F = criterion(Force_predict, Force_label)
     loss_Etot = criterion(Etot_predict, Etot_label)
-    loss_Ei = 0
+    loss_Ei = criterion(Ei_predict, Ei_label)
     loss_Egroup = 0
     loss = loss_F + loss_Etot
-    info("loss = %.16f (loss_etot = %.16f, loss_force = %.16f, RMSE_etot = %.16f, RMSE_force = %.16f)"\
-     %(loss, loss_Etot, loss_F, loss_Etot ** 0.5, loss_F ** 0.5))
+    info("mse_etot = %.16f, mse_force = %.16f, RMSE_etot = %.16f, RMSE_force = %.16f"\
+     %(loss_Etot, loss_F, loss_Etot ** 0.5, loss_F ** 0.5))
     
     return loss, loss_Etot, loss_Ei, loss_F
 
@@ -625,6 +640,8 @@ def valid(sample_batches, model, criterion):
         if pm.dR_neigh:
             dR = Variable(sample_batches['input_dR'].double().to(device), requires_grad=True)
             dR_neigh_list = Variable(sample_batches['input_dR_neigh_list'].to(device))
+            Ri = Variable(sample_batches['input_Ri'].double().to(device), requires_grad=True)
+            Ri_d = Variable(sample_batches['input_Ri_d'].to(device))
 
     elif (opt_dtype == 'float32'):
         Ei_label = Variable(sample_batches['output_energy'][:,:,:].float().to(device))
@@ -638,6 +655,8 @@ def valid(sample_batches, model, criterion):
         if pm.dR_neigh:
             dR = Variable(sample_batches['input_dR'].float().to(device), requires_grad=True)
             dR_neigh_list = Variable(sample_batches['input_dR_neigh_list'].to(device))
+            Ri = Variable(sample_batches['input_Ri'].double().to(device), requires_grad=True)
+            Ri_d = Variable(sample_batches['input_Ri_d'].to(device))
 
     else:
         error("train(): unsupported opt_dtype %s" %opt_dtype)
@@ -653,7 +672,8 @@ def valid(sample_batches, model, criterion):
     # model.train()
     model.eval()
     if opt_dp:
-        Etot_predict, Ei_predict, Force_predict = model(dR, dfeat, dR_neigh_list, natoms_img, egroup_weight, divider)
+        # Etot_predict, Ei_predict, Force_predict = model(dR, dfeat, dR_neigh_list, natoms_img, egroup_weight, divider)
+        Etot_predict, Ei_predict, Force_predict = model(Ri, Ri_d, dR_neigh_list, natoms_img, egroup_weight, divider)
     else:
         Etot_predict, Ei_predict, Force_predict = model(input_data, dfeat, neighbor, natoms_img, egroup_weight, divider)
     
@@ -661,10 +681,6 @@ def valid(sample_batches, model, criterion):
     loss_F = criterion(Force_predict, Force_label)
     loss_Etot = criterion(Etot_predict, Etot_label)
     loss_Ei = criterion(Ei_predict, Ei_label)
-    # import ipdb;ipdb.set_trace()
-    # print("valid info: force label; force predict")
-    # print(Force_label)
-    # print(Force_predict)
     error = float(loss_F.item()) + float(loss_Etot.item())
     return error, loss_Etot, loss_Ei, loss_F
 
@@ -873,7 +889,7 @@ else:
 if pm.use_GKalman == True:
     Gkalman = GKalmanFilter(model, kalman_lambda=0.98, kalman_nue=0.99870, device=device)
 if pm.use_LKalman == True:
-    Lkalman = LKalmanFilter(model, kalman_lambda=0.98, kalman_nue=0.99870, device=device)
+    Lkalman = LKalmanFilter(model, kalman_lambda=0.98, kalman_nue=0.99870, device=device, nselect=opt_nselect, groupsize=opt_groupsize, blocksize=opt_blocksize, fprefactor=opt_fprefactor)
 if pm.use_SKalman == True:
     Skalman = SKalmanFilter(model, kalman_lambda=0.98, kalman_nue=0.99870, device=device)
 
