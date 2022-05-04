@@ -72,16 +72,6 @@ class DP(nn.Module):
             fitting_net_input_dim = self.net_cfg['embeding_net']['network_size'][-1]
             self.fitting_net.append(FittingNet(self.net_cfg['fitting_net'], 16 * fitting_net_input_dim, self.stat[2][i], magic))
         
-        # if pm.transformer:
-        # if True:
-        #     self.transform_layer = nn.TransformerEncoderLayer(d_model=1600,
-        #                                                         nhead=8,
-        #                                                         dim_feedforward=3200,
-        #                                                         dropout=0.1,
-        #                                                         batch_first=True)
-        #     self.transform = nn.ModuleList()
-        #     for i in range(self.ntypes):
-        #         self.transform.append(nn.TransformerEncoder(self.transform_layer, 6))
 
     
     def smooth(self, image_dR, x, Ri_xyz, mask, inr, davg, dstd, natoms):
@@ -279,120 +269,70 @@ class DP(nn.Module):
             Egroup[i] = E_inner
         Egroup_out = torch.divide(Egroup, divider)
         return Egroup_out
-        
-    def forward(self, image_dR, dfeat, list_neigh, natoms_img, Egroup_weight, divider):
+
+
+    def forward(self, Ri, dfeat, list_neigh, natoms_img, Egroup_weight, divider, is_calc_f=None):
 
         torch.autograd.set_detect_anomaly(True)
-        batch_size = image_dR.shape[0]
-        natoms_sum = image_dR.shape[1]
-        neighbor_num = image_dR.shape[3]
-        # when batch_size > 1. don't support multi movement file
-        if batch_size > 1 and torch.unique(natoms_img[:, 0]).shape[0] > 1:
-            raise ValueError("batchsize > 1, use one movement")
-
-        natoms = natoms_img[0, 1:]
-
-        list_neigh_reshape = list_neigh.reshape(batch_size, natoms_sum, -1)  #[1,64,200]
-        image_dR_reshape = image_dR.reshape(batch_size, natoms_sum, -1, 3)  #[1,64,200,3]
-        mask = list_neigh_reshape > 0
-        dR2 = torch.zeros_like(list_neigh_reshape, dtype=self.dtype) 
-        Rij = torch.zeros_like(list_neigh_reshape, dtype=self.dtype)
-        dR2[mask] = torch.sum(image_dR_reshape[mask] * image_dR_reshape[mask], -1) #[1,64,200]
-        Rij[mask] = torch.sqrt(dR2[mask]) #[1,64,200]
-
-        nr = torch.zeros_like(dR2)
-        inr = torch.zeros_like(dR2)
-        dR2_copy = dR2.unsqueeze(-1).repeat(1, 1, 1, 3) #[1,64,200,3]
-        Ri_xyz = torch.zeros_like(dR2_copy)
-
-        nr[mask] = dR2[mask] / Rij[mask]  #[1,64,200]
-        Ri_xyz[mask] = image_dR_reshape[mask] / dR2_copy[mask] #[1,64,200,3]
-        inr[mask] = 1 / Rij[mask]
-
-        davg = torch.tensor(self.stat[0], device=self.device, dtype=self.dtype)  #[2,100,4]
-        dstd = torch.tensor(self.stat[1], device=self.device, dtype=self.dtype)  #[2,100,4]
-        Ri, Ri_d = self.smooth(image_dR_reshape, nr, Ri_xyz, mask, inr, davg, dstd, natoms) #[1,64,200,4]
         
+        Ri_d = dfeat
+        natoms = natoms_img[0, 1:]
+        natoms_sum = Ri.shape[1]
+        # when batch_size > 1. don't support multi movement file
+        if pm.batch_size > 1 and torch.unique(natoms_img[:, 0]).shape[0] > 1:
+            raise ValueError("batchsize > 1, use one movement")
         atom_sum = 0
 
         for ntype in range(self.ntypes):
             for ntype_1 in range(self.ntypes):
-                S_Rij = Ri[:, atom_sum:atom_sum+natoms[ntype], ntype_1*neighbor_num:(ntype_1+1)*neighbor_num, 0].unsqueeze(-1)
+                S_Rij = Ri[:, atom_sum:atom_sum+natoms[ntype], ntype_1*pm.maxNeighborNum:(ntype_1+1)*pm.maxNeighborNum, 0].unsqueeze(-1)
                 embedding_index = ntype * self.ntypes + ntype_1
                 G = self.embeding_net[embedding_index](S_Rij)
-                tmp_a = Ri[:, atom_sum:atom_sum+natoms[ntype], ntype_1*neighbor_num:(ntype_1+1)*neighbor_num].transpose(-2, -1)
+                tmp_a = Ri[:, atom_sum:atom_sum+natoms[ntype], ntype_1*pm.maxNeighborNum:(ntype_1+1)*pm.maxNeighborNum].transpose(-2, -1)
                 tmp_b = torch.matmul(tmp_a, G)
+                
                 if ntype_1 == 0:
                     xyz_scater_a = tmp_b
                 else:
                     xyz_scater_a = xyz_scater_a + tmp_b
-            xyz_scater_a = xyz_scater_a * 4.0 / (neighbor_num * self.ntypes * 4)
+            xyz_scater_a = xyz_scater_a * 4.0 / (pm.maxNeighborNum * self.ntypes * 4)
             xyz_scater_b = xyz_scater_a[:, :, :, :16]
             DR_ntype = torch.matmul(xyz_scater_a.transpose(-2, -1), xyz_scater_b)
-            DR_ntype = DR_ntype.reshape(batch_size, natoms[ntype], -1)
+            DR_ntype = DR_ntype.reshape(pm.batch_size, natoms[ntype], -1)
             if ntype == 0:
                 DR = DR_ntype
             else:
                 DR = torch.concat((DR, DR_ntype), dim=1)
             Ei_ntype = self.fitting_net[ntype](DR_ntype)
             
-            # transform_out = self.transform[ntype](DR_ntype)
-            # Ei_ntype = self.fitting_net[ntype](transform_out)
-
             if ntype == 0:
                 Ei = Ei_ntype
             else:
                 Ei = torch.concat((Ei, Ei_ntype), dim=1)
             atom_sum = atom_sum + natoms[ntype]
-        
-        Etot = torch.sum(Ei, 1)
+        self.Ei = Ei
+        Etot = torch.sum(self.Ei, 1)
         # Egroup = self.get_egroup(Ei, Egroup_weight, divider)
-        # F = torch.zeros((batch_size, natoms, 3), device=self.device)
+        F = torch.zeros((pm.batch_size, atom_sum, 3), device=self.device)
+        if is_calc_f == False:
+            return Etot, Ei, F
         # start_autograd = time.time()
         # print("fitting time:", start_autograd - start_fitting, 's')
 
         mask = torch.ones_like(Ei)
-        # # dE = torch.autograd.grad(Ei, Ri, grad_outputs=mask, create_graph=True)
         dE = torch.autograd.grad(Ei, Ri, grad_outputs=mask, retain_graph=True, create_graph=True)
         dE = torch.stack(list(dE), dim=0).squeeze(0)  #[:,:,:,:-1] #[2,108,100,4]-->[2,108,100,3]
 
-        Ri_d = Ri_d.reshape(batch_size, natoms_sum, -1, 3)
-        dE = dE.reshape(batch_size, natoms_sum, 1, -1)
+        Ri_d = Ri_d.reshape(pm.batch_size, natoms_sum, -1, 3)
+        dE = dE.reshape(pm.batch_size, natoms_sum, 1, -1)
 
         # start_force = time.time()
         # print("autograd time:", start_force - start_autograd, 's')
         F = torch.matmul(dE, Ri_d).squeeze(-2) # batch natom 3
         F = F * (-1)
-        # F_back = F
-        
         
         list_neigh = (list_neigh - 1).type(torch.int)
         F = CalculateForce.apply(list_neigh, dE, Ri_d, F)
-        self.Ei = Ei
+        
         return Etot, Ei, F
-        
 
-        # for batch_idx in range(batch_size):
-        #     for i in range(natoms):
-        #         # get atom_idx & neighbor_idx
-        #         i_neighbor = list_neigh[batch_idx, i]  #[100]
-        #         neighbor_idx = i_neighbor.nonzero().squeeze().type(torch.int64)  #[78]
-        #         atom_idx = i_neighbor[neighbor_idx].type(torch.int64) - 1
-        #         # calculate Force
-        #         for neigh_tmp, neighbor_id in zip(atom_idx, neighbor_idx):
-        #             tmpA = dE[batch_idx, i, :, neighbor_id*4:neighbor_id*4+4]
-        #             tmpB = Ri_d[batch_idx, i, neighbor_id*4:neighbor_id*4+4]
-        #             F_back[batch_idx, neigh_tmp] += torch.matmul(tmpA, tmpB).squeeze(0)   
-        # F = F_back
-        # np.save("torch_force.npy", F.cpu().detach().numpy())
-        # end_force_pytorch = time.time()
-        # print("torch force time:", end_force_pytorch - end_force, 's')
-        # import ipdb;ipdb.set_trace()
-
-        # print("Ei[0, 0] & Etot[0] & Force[0, 0, :]:")
-        # print(Ei[0, 0].item())
-        # print(Etot[0].item())
-        # print(F[0, 0].tolist())
-        # import ipdb;ipdb.set_trace()
-        
-        # return Etot, Ei, F
