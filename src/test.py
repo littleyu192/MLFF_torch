@@ -474,7 +474,7 @@ info("Training: batch_size = %d" %batch_size)
 
 # ==========================part1:数据读取==========================
 batch_size = 1
-test_data_path=pm.train_data_path
+test_data_path=pm.test_data_path
 torch_test_data = get_torch_data(test_data_path)
 if pm.is_scale:
     scaler=load('./scaler.pkl')
@@ -498,8 +498,9 @@ else:
 model.to(device)
 
 # change the *.pt path
-path = r"/home/husiyu/software/MLFFdataset/cutest_dp/record/model/latest.pt"
-path = r"/home/husiyu/software/MLFFdataset/cutest/record/model/latest.pt"
+# path = r"/home/husiyu/software/MLFFdataset/cutest_dp/record/model/latest.pt"
+# path = r"/home/husiyu/software/MLFFdataset/cutest/record/model/latest.pt"
+path = r"/home/husiyu/project/MLFF/dataset/cu1646/0329basebn1/model/latest.pt"
 
 checkpoint = torch.load(path)
 model.load_state_dict(checkpoint['model'])

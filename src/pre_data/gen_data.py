@@ -31,8 +31,7 @@ else:
 
 
 def process_data(f_train_feat, f_train_dfeat, f_train_dR_neigh,
-                 f_train_natoms, f_train_egroup,
-                 scalers, nn_data_path): # f_train_ep):
+                 f_train_natoms, f_train_egroup, nn_data_path): # f_train_ep):
     if not os.path.exists(nn_data_path):
         os.makedirs(nn_data_path)
     # natoms contain all atomnum of each image, format: totnatom, type1n, type2 n
@@ -41,9 +40,10 @@ def process_data(f_train_feat, f_train_dfeat, f_train_dR_neigh,
     nImg = natoms.shape[0]
     indImg = np.zeros((nImg+1,), dtype=int)
     indImg[0] = 0
+    
     for i in range(nImg):
         indImg[i+1] = indImg[i] + natoms[i, 0]
-
+    
     # 设置打印时显示方式：输出数组的时候完全输出
     np.set_printoptions(threshold=np.inf)
     # pd.set_option('display.float_format',lambda x : '%.15f' % x)
@@ -59,7 +59,7 @@ def process_data(f_train_feat, f_train_dfeat, f_train_dR_neigh,
         for type in mask:
             natoms_img[i][type_id] = np.sum(tmp == type)
             type_id += 1
-
+    
     # 进行scale
     # feat_scaled = scalers.pre_feat(feat, itypes)
     # engy_scaled = scalers.pre_engy(engy, itypes)
@@ -75,14 +75,14 @@ def process_data(f_train_feat, f_train_dfeat, f_train_dR_neigh,
         weight_all = np.ones((engy_scaled.shape[0], 1))
     nfeat0m = feat_scaled.shape[1]  # 每个原子特征的维度
     itype_atom = np.asfortranarray(np.array(pm.atomType).transpose())  # 原子类型
+    
+    # feat_scale_a = np.zeros((nfeat0m, pm.ntypes))
+    # for i in range(pm.ntypes):
+    #     itype = pm.atomType[i]
+    #     feat_scale_a[:, i] = scalers.scalers[itype].feat_scaler.a
+    # feat_scale_a = np.asfortranarray(feat_scale_a)  # scaler 的 a参数
 
-    feat_scale_a = np.zeros((nfeat0m, pm.ntypes))
-    for i in range(pm.ntypes):
-        itype = pm.atomType[i]
-        feat_scale_a[:, i] = scalers.scalers[itype].feat_scaler.a
-    feat_scale_a = np.asfortranarray(feat_scale_a)  # scaler 的 a参数
-
-    feat_scale_a=np.ones((nfeat0m,pm.ntypes))   #如果不做scale，赋值为1?
+    feat_scale_a=np.ones((nfeat0m,pm.ntypes))
     feat_scale_a = np.asfortranarray(feat_scale_a)
     
     init = pm.use_Ftype[0]
@@ -102,6 +102,7 @@ def process_data(f_train_feat, f_train_dfeat, f_train_dR_neigh,
     nfeat = {}
     nfeat[0] = 0
     flag = 0
+    
     # 读取 dfeat file
     for m in pm.use_Ftype:
         dfeatdirs[m] = np.unique(pd.read_csv(
@@ -122,7 +123,7 @@ def process_data(f_train_feat, f_train_dfeat, f_train_dR_neigh,
             ifeat_tmp_all[k] = np.array(read_allnn.ifeat_tmp_all).astype(int)
             read_allnn.deallo()
         flag = flag+1
-    
+        
     # dfeat_tmp_all_1 = []
     # for k in dfeat_tmp_all.items():
     #     dfeat_tmp_all_1.append(k)
@@ -131,7 +132,6 @@ def process_data(f_train_feat, f_train_dfeat, f_train_dR_neigh,
     # print("========dfeat_tmp_all========")
     # print(dfeat_tmp_all)
 
-    
     #pm.fitModelDir=./fread_dfeat  
     with open(os.path.join(pm.fitModelDir, "feat.info"), 'w') as f:
         print(os.path.join(pm.fitModelDir, "feat.info"))
@@ -190,10 +190,7 @@ def process_data(f_train_feat, f_train_dfeat, f_train_dR_neigh,
     # print(dfeat_scaled)
 
     convert_dfeat.deallo()
-
-    # ep = pd.read_csv(f_train_ep, header=None).values
     
-    # import ipdb; ipdb.set_trace()
     
     print("feat_scaled shape" + str(feat_scaled.shape))
     print("fors_scaled shape" + str(fors_scaled.shape))
@@ -264,32 +261,28 @@ def main():
     print("")
     print("<================ Start of feature data file generation ================>")
     print("")
-
-    # 计算scale变换的参数
-    data_scalers = DataScalers(f_ds=pm.f_data_scaler,
-                                   f_feat=pm.f_train_feat)
-    # scalers_train = get_scalers(pm.f_train_feat, pm.f_data_scaler, True)
     read_allnn.read_wp(pm.fitModelDir, pm.ntypes)
-    print(read_allnn.wp_atom)
-    process_data(pm.f_train_feat,
-                 pm.f_train_dfeat,
-                 pm.f_train_dR_neigh,
-                 pm.f_train_natoms,
-                 pm.f_train_egroup, 
-                 data_scalers,
-                 pm.train_data_path)
-                #  pm.f_train_ep)
+    # 计算scale变换的参数
+    # data_scalers = DataScalers(f_ds=pm.f_data_scaler,
+                                #    f_feat=pm.f_train_feat)
+    # scalers_train = get_scalers(pm.f_train_feat, pm.f_data_scaler, True)
+    if pm.test_ratio != 1:
+        print(read_allnn.wp_atom)
+        process_data(pm.f_train_feat,
+                    pm.f_train_dfeat,
+                    pm.f_train_dR_neigh,
+                    pm.f_train_natoms,
+                    pm.f_train_egroup,
+                    pm.train_data_path)        
     # scalers_test = get_scalers(pm.f_test_feat, pm.f_data_scaler, False)
-    data_scalers = DataScalers(f_ds=pm.f_data_scaler,
-                                   f_feat=pm.f_test_feat)
+    # data_scalers = DataScalers(f_ds=pm.f_data_scaler,
+    #                                f_feat=pm.f_test_feat)
     process_data(pm.f_test_feat,
                  pm.f_test_dfeat,
                  pm.f_test_dR_neigh,
                  pm.f_test_natoms,
                  pm.f_test_egroup,
-                 data_scalers,
                  pm.test_data_path)
-                #  pm.f_test_ep)
 
     print("")
     print("<=============== Summary of feature data file generation  ===============>")
