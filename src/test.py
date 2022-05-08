@@ -417,7 +417,7 @@ def test(sample_batches, model, criterion):
     atom_number = Ei_label.shape[1]
     Etot_label = torch.sum(Ei_label, dim=1)
 
-    model.train()
+    model.eval()
     if opt_dp:
         Etot_predict, Ei_predict, Force_predict = model(dR, dfeat, dR_neigh_list, natoms_img, egroup_weight, divider)
     else:
@@ -427,10 +427,7 @@ def test(sample_batches, model, criterion):
     loss_F = criterion(Force_predict, Force_label)
     loss_Etot = criterion(Etot_predict, Etot_label)
     loss_Ei = criterion(Ei_predict, Ei_label)
-    # import ipdb;ipdb.set_trace()
-    # print("valid info: force label; force predict")
-    # print(Force_label)
-    # print(Force_predict)
+    
     error = float(loss_F.item()) + float(loss_Etot.item())
 
     f_err_log =  opt_session_dir + 'iter_loss_test.dat'
@@ -472,12 +469,21 @@ info("Training: REGULAR_wd = %.16f" %REGULAR_wd)
 info("Training: scheduler = %s" %opt_scheduler)
 info("Training: batch_size = %d" %batch_size)
 
+
+
+
+# change the directory where you trained the model
+dir = r"/home/husiyu/project/MLFF/dataset/cu1646/"
+# change the *.pt path
+path = dir + "0329basebn1/model/latest.pt"
+
+
 # ==========================part1:数据读取==========================
 batch_size = 1
 test_data_path=pm.test_data_path
 torch_test_data = get_torch_data(test_data_path)
 if pm.is_scale:
-    scaler=load('./scaler.pkl')
+    scaler=load(dir + 'scaler.pkl')
     torch_test_data.feat = scaler.transform(torch_test_data.feat)
     dfeat_tmp = torch_test_data.dfeat
     dfeat_tmp = dfeat_tmp.transpose(0, 1, 3, 2)
@@ -486,10 +492,11 @@ if pm.is_scale:
     torch_test_data.dfeat = dfeat_tmp
 
 loader_test = Data.DataLoader(torch_test_data, batch_size=batch_size, shuffle=False)
-if opt_dp:  # 此处应读training中保存的stat
-    davg, dstd, ener_shift = torch_test_data.get_stat(image_num=10)
+if opt_dp:  # 此处应读training中保存的stat 
+    davg = np.load(dir + "davg.npy")
+    dstd = np.load(dir + "dstd.npy")
+    ener_shift = np.load(dir + "ener_shift.npy")
     stat = [davg, dstd, ener_shift]
-
 # ==========================part2:load模型==========================
 if opt_dp:
     model = DP(opt_net_cfg, opt_act, device, stat, opt_magic)
@@ -497,24 +504,8 @@ else:
     model = MLFFNet(device)
 model.to(device)
 
-# change the *.pt path
-# path = r"/home/husiyu/software/MLFFdataset/cutest_dp/record/model/latest.pt"
-# path = r"/home/husiyu/software/MLFFdataset/cutest/record/model/latest.pt"
-path = r"/home/husiyu/project/MLFF/dataset/cu1646/0329basebn1/model/latest.pt"
-
 checkpoint = torch.load(path)
 model.load_state_dict(checkpoint['model'])
-# if opt_follow_mode==True:
-#     checkpoint = torch.load(opt_model_file,map_location=device)
-#     model.load_state_dict(checkpoint['model'],strict=False)
-
-# if (opt_recover_mode == True):
-#     if (opt_session_name == ''):
-#         raise RuntimeError("you must run follow-mode from an existing session")
-#     opt_latest_file = opt_model_dir+'latest.pt'
-#     checkpoint = torch.load(opt_latest_file,map_location=device)
-#     model.load_state_dict(checkpoint['model'])
-#     # optimizer.load_state_dict(checkpoint['optimizer'])
 
 nr_total_sample = 0
 test_loss = 0.

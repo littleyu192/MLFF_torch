@@ -650,7 +650,8 @@ def valid(sample_batches, model, criterion):
     atom_number = Ei_label.shape[1]
     Etot_label = torch.sum(Ei_label, dim=1)
 
-    model.train()
+    # model.train()
+    model.eval()
     if opt_dp:
         Etot_predict, Ei_predict, Force_predict = model(dR, dfeat, dR_neigh_list, natoms_img, egroup_weight, divider)
     else:
@@ -762,10 +763,16 @@ loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=
 if opt_dp:
     davg, dstd, ener_shift = torch_train_data.get_stat(image_num=10)
     stat = [davg, dstd, ener_shift]
+    np.save("./davg.npy", davg)
+    np.save("./dstd.npy", dstd)
+    np.save("./ener_shift", ener_shift)
 
-loader_valid = Data.DataLoader(torch_valid_data, batch_size=batch_size, shuffle=True)
-if opt_dp:
-    davg, dstd, ener_shift = torch_valid_data.get_stat(image_num=2)
+loader_valid = Data.DataLoader(torch_valid_data, batch_size=batch_size, shuffle=False)
+# if opt_dp:
+#     davg = np.load("./davg.npy")
+#     dstd = np.load("./dstd.npy")
+#     ener_shift = np.load("./ener_shift.npy")
+#     stat = [davg, dstd, ener_shift]
 
 # if torch.cuda.device_count() > 1:
     # model = nn.DataParallel(model)
