@@ -55,6 +55,8 @@ src/bin/*
 *__pycache__/
 *pytest_cache/
 
+src/inference/build/*
+
 ##
 # for running intermediate directories
 #
