@@ -30,13 +30,14 @@ def run_write_egroup():
 
 def write_natoms_dfeat():
     max_natom = int(np.loadtxt(os.path.join(pm.OutputPath, 'max_natom')))
-    pp.collectAllSourceFiles()
+    #pp.collectAllSourceFiles()
     f_train_natom = open(pm.f_train_natoms, 'w')
     f_test_natom = open(pm.f_test_natoms, 'w')
     kk = 0
     f_train_dfeat = {}
     f_test_dfeat = {}
     dfeat_names = {}
+    
     for i in pm.use_Ftype:
         f_train_dfeat[i] = open(pm.f_train_dfeat+str(i), 'w')
         f_test_dfeat[i] = open(pm.f_test_dfeat+str(i), 'w')
@@ -71,6 +72,7 @@ def write_natoms_dfeat():
     egroup_test = np.empty([0, egroup_all.shape[1]])
     # ep_train = np.empty([0, ep_all.shape[1]])
     # ep_test = np.empty([0, ep_all.shape[1]])
+    #print ( pm.sourceFileList)
     for system in pm.sourceFileList:
 
         infodata = pd.read_csv(os.path.join(system, 'info.txt.Ftype'+str(
@@ -108,7 +110,11 @@ def write_natoms_dfeat():
 
         elif pm.test_ratio == 1:
             testImg = np.arange(0, ImgNum)
-                        
+            #print (ImgNum)
+            #print (type(dfeat_names[1]))
+            #print (len(dfeat_names[1][0]))
+
+            #print (testImg)
             for i in testImg:
                 f_test_natom.writelines(str(int(natom))+' '+str(int(natom))+'\n')
                 for mm in pm.use_Ftype:
@@ -134,8 +140,6 @@ def write_natoms_dfeat():
     f_test_natom.close()
     for i in pm.use_Ftype:
         f_test_dfeat[i].close()
-
-
 
 def write_dR_neigh():
     # 需要生成一个自己的info文件 先用gen2b的代替
