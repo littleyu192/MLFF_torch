@@ -22,12 +22,16 @@ n_epoch = 150
 
 prefix = r'./'
 trainSetDir = r'./PWdata'
-codedir=r'/home/MLFF_torch'
+codedir=r'/home/to/your/MLFF_torch'
 fortranFitSourceDir=codedir+'/src/pre_data/fit/'
 fitModelDir = r'./fread_dfeat'
 train_data_path = r'./train_data/final_train'
 test_data_path = r'./train_data/final_test'
 dRneigh_path = trainSetDir + r'/dRneigh.dat'
+
+prediction_data_path = r'./prediction_data'
+model_path = r'/path/to/your/latest.pt/or/better.pt'
+
 test_ratio = 0.2
 
 genFeatDir = r'./gen_feature'
@@ -228,7 +232,7 @@ ClusterNum=[3,2]
 
 #******** for fit.input *******************************
 
-fortranFitAtomRepulsingEnergies=[0.000,0.000]            #fortran fitting时对每种原子设置的排斥能量的大小，此值必须设置，无default值！(list_like)
+fortranFitAtomRepulsingEnergies=[0.000 for i in range(len(atomType))]            #fortran fitting时对每种原子设置的排斥能量的大小，此值必须设置，无default值！(list_like)
 fortranFitAtomRadii=[2.83 for i in range(len(atomType))]                        #fortran fitting时对每种原子设置的半径大小，此值必须设置，无default值！(list_like)
 fortranFitWeightOfEnergy=0.8                    #fortran fitting时最后fit时各个原子能量所占的权重(linear和grr公用参数)  default:0.9
 fortranFitWeightOfEtot=0.0                      #fortran fitting时最后fit时Image总能量所占的权重(linear和grr公用参数)  default:0.0
@@ -287,7 +291,7 @@ tf_dtype = 'float64' # dtype of tensorflow trainning, 'float32' faster than 'flo
 activation_func='softplus'     # could choose 'softplus' and 'elup1' now
 ntypes=len(atomType)
 nLayers = 3
-nNodes = np.array([[15,15],[15,15],[1,1]])
+nNodes = np.array([[15 for i in range(len(atomType))],[15 for i in range(len(atomType))],[1 for i in range(len(atomType))]])
 #nLayers=3
 #nNodes = np.array([[120,120],[120,120],[120,120],[1,1]])
 b_init=np.array([1.0 for i in atomType])      # energy of one atom, for different types, just a rough value
