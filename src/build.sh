@@ -17,10 +17,13 @@ ln -s ../pre_data/gen_data.py .
 ln -s ../pre_data/data_loader_2type.py .
 ln -s ../train.py .
 ln -s ../test.py .
+ln -s ../predict.py . 
+
 chmod +x ./mlff.py
 chmod +x ./seper.py
 chmod +x ./gen_data.py
 chmod +x ./data_loader_2type.py
 chmod +x ./train.py
 chmod +x ./test.py
+chmod +x ./predict.py
 cd ..            # back to src dir
