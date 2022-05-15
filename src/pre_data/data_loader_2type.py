@@ -19,7 +19,8 @@ class MovementDataset(Dataset):
     def __init__(self, feat_path, dfeat_path,
                  egroup_path, egroup_weight_path, divider_path,
                  itype_path, nblist_path, weight_all_path,
-                 energy_path, force_path, ind_img_path, natoms_img_path , dR_neigh_path=None):  # , natoms_path
+                 energy_path, force_path, ind_img_path, natoms_img_path,
+                 dR_neigh_path=None, Ri_path=None, Ri_d_path=None):  # , natoms_path
 
         super(MovementDataset, self).__init__()
         self.device = torch.device(
@@ -46,11 +47,59 @@ class MovementDataset(Dataset):
         if dR_neigh_path:
             self.use_dR_neigh = True
             tmp = np.load(dR_neigh_path)
-            # import ipdb;ipdb.set_trace()
             self.dR = tmp[:, :, :, :3]
             self.dR_neigh_list = np.squeeze(tmp[:, :, :, 3:], axis=-1).astype(int)
             self.force = -1 * self.force
-        
+
+            if (not os.path.exists(Ri_path)) or (not os.path.exists(Ri_d_path)):
+                self.get_stat()
+                self.prepare(Ri_path, Ri_d_path)
+
+            self.Ri_all = np.load(Ri_path) #(12, 108, 100, 4)
+            self.Ri_d_all = np.load(Ri_d_path)
+    
+    def prepare(self, Ri_path, Ri_d_path):
+        image_dR = self.dR
+        list_neigh = self.dR_neigh_list
+
+        natoms_sum = self.natoms_img[0, 0]
+        natoms_per_type = self.natoms_img[0, 1:]
+
+        image_dR = np.reshape(image_dR, (-1, natoms_sum, self.ntypes * pm.maxNeighborNum, 3))
+        list_neigh = np.reshape(list_neigh, (-1, natoms_sum, self.ntypes * pm.maxNeighborNum))
+
+        image_dR = torch.tensor(image_dR, device=self.device, dtype=torch.double)
+        list_neigh = torch.tensor(list_neigh, device=self.device, dtype=torch.int)
+
+        # deepmd neighbor id 从 0 开始，MLFF从1开始
+        mask = list_neigh > 0
+
+        dR2 = torch.zeros_like(list_neigh, dtype=torch.double)
+        Rij = torch.zeros_like(list_neigh, dtype=torch.double)
+        dR2[mask] = torch.sum(image_dR[mask] * image_dR[mask], -1)
+        Rij[mask] = torch.sqrt(dR2[mask])
+
+        nr = torch.zeros_like(dR2)
+        inr = torch.zeros_like(dR2)
+
+        dR2_copy = dR2.unsqueeze(-1).repeat(1, 1, 1, 3)
+        Ri_xyz = torch.zeros_like(dR2_copy)
+
+        nr[mask] = dR2[mask] / Rij[mask]
+        Ri_xyz[mask] = image_dR[mask] / dR2_copy[mask]
+        inr[mask] = 1 / Rij[mask]
+
+        davg = torch.tensor(self.davg, device=self.device, dtype=torch.float64)
+        dstd = torch.tensor(self.dstd, device=self.device, dtype=torch.float64)
+
+        Ri, Ri_d = self.__smooth(image_dR, nr, Ri_xyz, mask, inr, davg, dstd, natoms_per_type)
+
+        Ri = Ri.detach().cpu().numpy()
+        Ri_d = Ri_d.detach().cpu().numpy()
+
+        np.save(Ri_path, Ri)
+        np.save(Ri_d_path, Ri_d)
+
     def __getitem__(self, index):
         # index = index + 10
         ind_image = np.zeros(2)
@@ -74,6 +123,8 @@ class MovementDataset(Dataset):
         if self.use_dR_neigh:
             dic['input_dR'] = self.dR[self.ind_img[index]:self.ind_img[index+1]]
             dic['input_dR_neigh_list'] = self.dR_neigh_list[self.ind_img[index]:self.ind_img[index+1]]
+            dic['input_Ri'] = self.Ri_all[index]  
+            dic['input_Ri_d'] = self.Ri_d_all[index]
         return dic
     
     def __len__(self):
@@ -87,8 +138,8 @@ class MovementDataset(Dataset):
         if np.abs(val) < 1e-2:
             val = 1e-2
         return val
-
-    def __smooth(self, x, Ri_xyz, mask, inr):
+    
+    def __smooth(self, image_dR, x, Ri_xyz, mask, inr, davg, dstd, natoms):
 
         inr2 = torch.zeros_like(inr)
         inr3 = torch.zeros_like(inr)
@@ -126,10 +177,60 @@ class MovementDataset(Dataset):
 
         res[mask] = 1.0 / x[mask]
         Ri = torch.cat((res.unsqueeze(-1), Ri_xyz), dim=-1)
+        Ri_d = torch.zeros_like(Ri).unsqueeze(-1).repeat(1, 1, 1, 1, 3) # 2 108 100 4 3
+        tmp = torch.zeros_like(x)
+
+        # deriv of component 1/r
+        tmp[mask] = image_dR[:, :, :, 0][mask] * inr3[mask] * vv[mask] - Ri[:, :, :, 0][mask] * dvv[mask] * image_dR[:, :, :, 0][mask] * inr[mask]
+        Ri_d[:, :, :, 0, 0][mask] = tmp[mask]
+        tmp[mask] = image_dR[:, :, :, 1][mask] * inr3[mask] * vv[mask] - Ri[:, :, :, 0][mask] * dvv[mask] * image_dR[:, :, :, 1][mask] * inr[mask]
+        Ri_d[:, :, :, 0, 1][mask] = tmp[mask]
+        tmp[mask] = image_dR[:, :, :, 2][mask] * inr3[mask] * vv[mask] - Ri[:, :, :, 0][mask] * dvv[mask] * image_dR[:, :, :, 2][mask] * inr[mask]
+        Ri_d[:, :, :, 0, 2][mask] = tmp[mask]
+
+        # deriv of component x/r
+        tmp[mask] = (2 * image_dR[:, :, :, 0][mask] * image_dR[:, :, :, 0][mask] * inr4[mask] - inr2[mask]) * vv[mask] - Ri[:, :, :, 1][mask] * dvv[mask] * image_dR[:, :, :, 0][mask] * inr[mask]
+        Ri_d[:, :, :, 1, 0][mask] = tmp[mask]
+        tmp[mask] = (2 * image_dR[:, :, :, 0][mask] * image_dR[:, :, :, 1][mask] * inr4[mask]) * vv[mask] - Ri[:, :, :, 1][mask] * dvv[mask] * image_dR[:, :, :, 1][mask] * inr[mask]
+        Ri_d[:, :, :, 1, 1][mask] = tmp[mask]
+        tmp[mask] = (2 * image_dR[:, :, :, 0][mask] * image_dR[:, :, :, 2][mask] * inr4[mask]) * vv[mask] - Ri[:, :, :, 1][mask] * dvv[mask] * image_dR[:, :, :, 2][mask] * inr[mask]
+        Ri_d[:, :, :, 1, 2][mask] = tmp[mask]
+       
+        # deriv of component y/r
+        tmp[mask] = (2 * image_dR[:, :, :, 1][mask] * image_dR[:, :, :, 0][mask] * inr4[mask]) * vv[mask] - Ri[:, :, :, 2][mask] * dvv[mask] * image_dR[:, :, :, 0][mask] * inr[mask]
+        Ri_d[:, :, :, 2, 0][mask] = tmp[mask]
+        tmp[mask] = (2 * image_dR[:, :, :, 1][mask] * image_dR[:, :, :, 1][mask] * inr4[mask] - inr2[mask]) * vv[mask] - Ri[:, :, :, 2][mask] * dvv[mask] * image_dR[:, :, :, 1][mask] * inr[mask]
+        Ri_d[:, :, :, 2, 1][mask] = tmp[mask]
+        tmp[mask] = (2 * image_dR[:, :, :, 1][mask] * image_dR[:, :, :, 2][mask] * inr4[mask]) * vv[mask] - Ri[:, :, :, 2][mask] * dvv[mask] * image_dR[:, :, :, 2][mask] * inr[mask]
+        Ri_d[:, :, :, 2, 2][mask] = tmp[mask]
+    
+        # deriv of component z/r
+        tmp[mask] = (2 * image_dR[:, :, :, 2][mask] * image_dR[:, :, :, 0][mask] * inr4[mask]) * vv[mask] - Ri[:, :, :, 3][mask] * dvv[mask] * image_dR[:, :, :, 0][mask] * inr[mask]
+        Ri_d[:, :, :, 3, 0][mask] = tmp[mask]
+        tmp[mask] = (2 * image_dR[:, :, :, 2][mask] * image_dR[:, :, :, 1][mask] * inr4[mask]) * vv[mask] - Ri[:, :, :, 3][mask] * dvv[mask] * image_dR[:, :, :, 1][mask] * inr[mask]
+        Ri_d[:, :, :, 3, 1][mask] = tmp[mask]
+        tmp[mask] = (2 * image_dR[:, :, :, 2][mask] * image_dR[:, :, :, 2][mask] * inr4[mask] - inr2[mask]) * vv[mask] - Ri[:, :, :, 3][mask] * dvv[mask] * image_dR[:, :, :, 2][mask] * inr[mask]
+        Ri_d[:, :, :, 3, 2][mask] = tmp[mask]
 
         vv_copy = vv.unsqueeze(-1).repeat(1, 1, 1, 4)
         Ri[mask] *= vv_copy[mask]
-        return Ri
+
+        for ntype in range(self.ntypes):
+            atom_num_ntype = natoms[ntype]
+            davg_ntype = davg[ntype].reshape(-1, 4).squeeze().repeat(atom_num_ntype, 1, 1) #[32,100,4]
+            dstd_ntype = dstd[ntype].reshape(-1, 4).squeeze().repeat(atom_num_ntype, 1, 1) #[32,100,4]
+            if ntype == 0:
+                davg_res = davg_ntype
+                dstd_res = dstd_ntype
+            else:
+                davg_res = torch.concat((davg_res, davg_ntype), dim=0)
+                dstd_res = torch.concat((dstd_res, dstd_ntype), dim=0)
+        Ri = (Ri - davg_res) / dstd_res  #[1,64,200,4]
+        dstd_res = dstd_res.unsqueeze(-1).repeat(1, 1, 1, 3)
+        Ri_d = Ri_d / dstd_res 
+        
+        # res[mask_2] = 0.5 * torch.cos(math.pi * (x[mask_2]-10)/(25-10)) + 0.5 * torch.ones_like(x[mask_2])
+        return Ri, Ri_d
 
     def __compute_stat(self, image_num=10):
 
@@ -169,10 +270,11 @@ class MovementDataset(Dataset):
         nr[mask] = dR2[mask] / Rij[mask]
         Ri_xyz[mask] = image_dR[mask] / dR2_copy[mask]
         inr[mask] = 1 / Rij[mask]
-        Ri = self.__smooth(nr, Ri_xyz, mask, inr)
-        Ri2 = Ri * Ri
 
-        # Ri = Ri.reshape((-1, 4))
+        davg = torch.zeros((pm.maxNeighborNum * self.ntypes, 4), dtype=torch.float64, device=self.device)
+        dstd = torch.ones((pm.maxNeighborNum * self.ntypes, 4), dtype=torch.float64, device=self.device)
+        Ri, _ = self.__smooth(image_dR, nr, Ri_xyz, mask, inr, davg, dstd, natoms_per_type)
+        Ri2 = Ri * Ri
 
         atom_sum = 0
 
@@ -229,8 +331,6 @@ class MovementDataset(Dataset):
         # energy_one = np.ones_like(energy_sum) * natoms_per_type[ntype]
         ener_shift, _, _, _ = np.linalg.lstsq([natoms_per_type], [energy_avg], rcond=rcond)
         self.ener_shift = ener_shift.tolist()
-        
-        
 
     def get_stat(self, image_num=20, rcond=1e-3):
         # image_num = batch_size * batch_stat_num
@@ -249,8 +349,12 @@ def get_torch_data(examplespath):
     f_feat = os.path.join(examplespath+'/feat_scaled.npy')
     if pm.dR_neigh:
         f_dR_neigh = os.path.join(examplespath+'/dR_neigh.npy')
+        f_Ri = os.path.join(examplespath+'/Ri_all.npy')
+        f_Ri_d = os.path.join(examplespath+'/Ri_d_all.npy')
     else:
         f_dR_neigh = None
+        f_Ri = None
+        f_Ri_d = None
     f_dfeat = os.path.join(examplespath+'/dfeat_scaled.npy')
     f_egroup = os.path.join(examplespath+'/egroup.npy')
     f_egroup_weight = os.path.join(examplespath+'/egroup_weight.npy')
@@ -269,5 +373,5 @@ def get_torch_data(examplespath):
     torch_data = MovementDataset(f_feat, f_dfeat,
                                  f_egroup, f_egroup_weight, f_divider,
                                  f_itype, f_nblist, f_weight_all,
-                                 f_energy, f_force, ind_img, natoms_img, f_dR_neigh)
+                                 f_energy, f_force, ind_img, natoms_img, f_dR_neigh, f_Ri, f_Ri_d)
     return torch_data
