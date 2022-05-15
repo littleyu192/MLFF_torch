@@ -337,9 +337,9 @@ class LKalmanFilter(nn.Module):
 
         A = 1 / tmp
 
-        # time_A = time.time()
-        # print("A inversion time: ", time_A - time0)
-        # torch.cuda.synchronize()
+        time_A = time.time()
+        print("A inversion time: ", time_A - time0)
+        torch.cuda.synchronize()
 
         for i in range(self.weights_num):
             time1 = time.time()
@@ -369,7 +369,7 @@ class LKalmanFilter(nn.Module):
 
         torch.cuda.synchronize()
         time_end = time.time()
-        # print("===========update all weights: ", time_end - time_A, 's ==========')
+        print("update all weights: ", time_end - time_A, 's')
         
         # 4. update kalman_lambda
         self.kalman_lambda = self.kalman_nue * self.kalman_lambda + 1 - self.kalman_nue
@@ -399,7 +399,7 @@ class LKalmanFilter(nn.Module):
             param.grad.zero_()
         torch.cuda.synchronize()
         time5 = time.time()
-        print("==========restore weight: ", time5 - time_end, 's ==========')
+        print("restore weight: ", time5 - time_end, 's')
 
     def __sample(self, select_num, group_num, natoms):
         if select_num % group_num:
@@ -416,21 +416,15 @@ class LKalmanFilter(nn.Module):
         )
         torch.cuda.synchronize()
         time1 = time.time()
-        print("step(1): force forward time: ", time1 - time_start, "s")
-
+        print("step(1): energy forward time: ", time1 - time_start, "s")
         
         errore = Etot_label.item() - Etot_predict.item()
         natoms_sum = inputs[3][0, 0]
         errore = errore / natoms_sum
-
-        # cri = nn.MSELoss(reduction='mean')
-        # errore1 = cri(Etot_label, Etot_predict)
-        
-        # errore2 = (Etot_label - Etot_predict)
-        # errore2.backward()
-        # for name, param in self.model.named_parameters():
-        #     print(name)
-        #     import ipdb;ipdb.set_trace()
+        # mask = errore < 0
+        # errore[mask] = -update_prefactor * errore[mask]
+        # Etot_predict[mask] = -update_prefactor * Etot_predict[mask]
+        # Etot_predict.backward()
 
         if errore < 0:
             errore = -update_prefactor * errore
@@ -439,7 +433,7 @@ class LKalmanFilter(nn.Module):
             errore = update_prefactor * errore
             (update_prefactor * Etot_predict).backward()
         time2 = time.time()
-        print("step(2): force loss backward time: ", time2 - time1, "s")
+        print("step(2): energy loss backward time: ", time2 - time1, "s")
 
         weights = []
         H = []
@@ -461,12 +455,11 @@ class LKalmanFilter(nn.Module):
 
         torch.cuda.synchronize()
         time_reshape = time.time()
-        print("step(3): w and b distribute time:", time_reshape - time2, "s")
+        print("w and b distribute time:", time_reshape - time2, "s")
 
         self.__update(H, errore, weights)
         torch.cuda.synchronize()
         time_end = time.time()
-        print("step(4): weights update by energy:", time_end - time_reshape, "s")
         print("Layerwised KF update Energy time:", time_end - time_start, "s")
 
     def update_force(self, inputs, Force_label):
@@ -481,9 +474,9 @@ class LKalmanFilter(nn.Module):
             Etot_predict, Ei_predict, force_predict = self.model(
                 inputs[0], inputs[1], inputs[2], inputs[3], inputs[4], inputs[5]
             )
-            # torch.cuda.synchronize()
-            # time1 = time.time()
-            # print("force forward time: ", time1 - time0, "s")
+            torch.cuda.synchronize()
+            time1 = time.time()
+            print("step(1): force forward time: ", time1 - time0, "s")
             error_tmp = Force_label[:, index[i]] - force_predict[:, index[i]]
             error_tmp = self.f_prefactor * error_tmp
             mask = error_tmp < 0
@@ -496,8 +489,9 @@ class LKalmanFilter(nn.Module):
             # loss.backward()
             weights = []
             H = []
-            # time2 = time.time()
-            # print("force loss backward time: ", time2 - time1, "s")
+            time2 = time.time()
+            print("force loss backward time: ", time2 - time1, "s")
+
             for name, param in self.model.named_parameters():
                 # H.append((param.grad / natoms_sum).T.reshape(param.grad.nelement(), 1))
                 if param.ndim > 1:
@@ -515,10 +509,14 @@ class LKalmanFilter(nn.Module):
                     tmp = param.data.reshape(param.data.nelement(), 1)
                 res = self.__split_weights(tmp)
                 weights = weights + res
+            torch.cuda.synchronize()
+            time_reshape = time.time()
+            print("w and b distribute time:", time_reshape - time2, "s")
             self.__update(H, error, weights)
-            # torch.cuda.synchronize()
-            # time3 = time.time()
-            # print("force update:", time3 - time2, "s")
+            torch.cuda.synchronize()
+            time3 = time.time()
+            print("step(3): force update time:", time3 - time2, "s")
+
         torch.cuda.synchronize()
         time_end = time.time()
 
