@@ -3,6 +3,7 @@ subroutine molecular_dynamics_kernel(Etot,fatom,e_stress)
         use mod_mpi
         use mod_control, only : MCTRL_iMD, MCTRL_AL,MCTRL_output_nstep
         use mod_data
+        use IFPORT
    !     use common_module_99,only : iatom_987,totNel_987
    !     use param_escan,only : inode_tot,n1L,n2L,n3L
    !     use data,only:is_SOM
@@ -41,10 +42,14 @@ subroutine molecular_dynamics_kernel(Etot,fatom,e_stress)
         ! INTEGER*4  access, status
         logical*2::alive
 
+        character(100) :: cmd_name, flag, etot_name, ei_name, fi_name
+        integer(2) :: s
+
+
         inquire(file='vel_constraint',exist=alive)
         !     status = access ("add_force",' ')    ! blank mode
         !   if (status .eq. 0 ) then
-          if (alive) then
+        if (alive) then
             open(10,file="vel_constraint")
             rewind(10)
             read(10,*) const_vel_num
@@ -61,29 +66,77 @@ subroutine molecular_dynamics_kernel(Etot,fatom,e_stress)
             const_vel_num=0
         endif
 
-
         !
         allocate(r_his(3,matom_1,0:2))
         ! 
+        
         call init_type_md(md)
-        !
+        
+        ! Here MD starts. Do a write_final for dp
+        
+        !if (iflag_model.eq.4) then
+        !   call write_finalconfig(md)  
+        !endif
+         
         MCTRL_ido_stop=0
         MCTRL_ido_ns=1
 
-       !  call Etotcalc_mdwrap(md,MCTRL_scf0,fatom_old,Etot,E_st,err_st,convergE,fatom,e_stress,precision_flag,0)
+        !  call Etotcalc_mdwrap(md,MCTRL_scf0,fatom_old,Etot,E_st,err_st,convergE,fatom,e_stress,precision_flag,0)
         !     fatom(:,1:natom/2)=0.01
         !     fatom(:,natom/2:natom)=-0.01
         ! e_stress=0.d0
         ! Etot=2.d0
         AL_tmp=MCTRL_AL*A_AU_1   ! convert to A
-        call ML_FF_EF(Etot,fatom,MCTRL_xatom,AL_tmp,MCTRL_natom)
-        write(*,*) "MLFF tot energy: ", Etot
+        
+        if ((iflag_model.eq.1) .or. (iflag_model.eq.2) .or. (iflag_model.eq.3)) then 
+            call ML_FF_EF(Etot,fatom,MCTRL_xatom,AL_tmp,MCTRL_natom)
+        end if 
+
+        !preprocessing for dp model 
+        if (iflag_model.eq.4) then
+
+            ! read atom.config as the initial image
+            write(*,*) "calling pytorch..."
+            s = runqq("predict.py","--dp=True -n DP_cfg_dp --outputname=atom.config > out 2> err")
+            write(*,*) "pytorch routine ends"
+
+            ! load from file 
+            etot_name = "etot.tmp" 
+            ei_name = "ei.tmp"
+            fi_name = "force.tmp"
+
+
+            open(9, file = etot_name, status = "old")
+            read(9,*) Etot
+            close(9)
+            
+            open(10, file = fi_name, status = "old")
+            do i=1,MCTRL_natom
+                read(10,*) fatom(1:3,i)
+            end do
+            close(10)
+
+            open(11,file = ei_name, status = "old")
+            do i=1,MCTRL_natom
+                read(11,*) e_atom(i)
+            end do 
+            close(11)
+
+        endif   
+
+        write(*,*) "MLFF tot energy in eV: ", Etot
+
         Etot=Etot/Hartree_eV  ! convert back to Hartree
+        
         e_stress=0.d0
         fatom(:,1:natom)=fatom(:,1:natom)*A_AU_1/Hartree_eV  ! convert to Hatree/Bohr
+                
+        call exchange_data_scf2md(md,fatom,Etot,e_stress) 
         
-        call exchange_data_scf2md(md,fatom,Etot,e_stress)
-        !
+        !write(*,*) "MLFF tot energy in Hartree: ", Etot 
+
+        !return 
+
         if(inode .eq. 1) then
             print*, '***********************************************'
             print*, '*                                             *' 
@@ -91,10 +144,7 @@ subroutine molecular_dynamics_kernel(Etot,fatom,e_stress)
             print*, '*                                             *' 
             print*, '***********************************************'
         endif
-        ! 
-        ! call stdout_message("")
-        !call stdout_message("molecular dynamics initialize ...")
-        !    write(*,*) "molecular dynamics initialize..."
+
         call md_init(md)
         !
         !TODO: initialize plumed
@@ -102,95 +152,57 @@ subroutine molecular_dynamics_kernel(Etot,fatom,e_stress)
         !--------------------------------
         ! MD LOOP
         !--------------------------------
+        
         do istep=1,MCTRL_MDstep
-           if(inode.eq.1) then
-           write(*,*) "MD step=",istep
-           endif
-!            call get_cpu_memory(cpu_vm1, cpu_rss1)
+            if(inode.eq.1) then
+                write(*,*) "MD step=",istep
+            endif
+
             tt1=mpi_wtime()
             !
             call update_time(md)
-            !
-           !  write(message,*) "md begin istep, time = ",istep,md.curtime,"fs"
-           ! write(*,*) message
+
             tt=mpi_wtime()
-            !  call stdout_message("")
-            ! call stdout_message(message,unit1=6,unit2=22)
-            !
-            !desiredT in [T1,T2]
+
             call update_T(md,istep)
 
-            !
-           ! if(MCTRL_iMD.ne.101) then
-           !    call interpolation_keeping()
-           ! endif
-            !--------------------------------
-            ! move atom
-            !--------------------------------
             call update_r(md,istep)
-
-            !
-            !--------------------------------
-            ! rho,ug interpolation
-            !--------------------------------
-           !  if(MCTRL_iMD.ne.101) then
-           ! call interpolation()
-           ! endif
-            !
-            !--------------------------------
+            
+            ! write final config for dp
+            if (iflag_model.eq.4) then
+               call write_finalconfig(md)  
+            endif 
+            
             ! new force and Etot
             !--------------------------------
             call exchange_data_md2scf(md)
+            
             call MPI_Bcast(MCTRL_xatom,MCTRL_natom*3,MPI_REAL8,0,MPI_COMM_WORLD,ierr)
 
-!            if(md.method == 4 .or. md.method == 5 .or. md.method == 100 .or.  &
-!            (md.method==7.and.mod(istep-1,md.Berendsen_cell_steps).eq.0)) then
-         !          call update_box_relates()
-!                if(inode.eq.1) then
-!                    write(*,*) "LATTICE OF THIS STEP:"
-!                    write(*,*)  md.h(:,1)
-!                    write(*,*)  md.h(:,2)
-!                    write(*,*)  md.h(:,3)
-!                endif
-!            endif
-           !  call Etotcalc_mdwrap(md,MCTRL_scf1,fatom_old,Etot,E_st,err_st,convergE,fatom,e_stress,precision_flag,istep)
-
             AL_tmp=MCTRL_AL*A_AU_1   ! convert to A
+            
             call ML_FF_EF(Etot,fatom,MCTRL_xatom,AL_tmp,MCTRL_natom)
 
-
+            !if md then a new routine
+            !
             Etot=Etot/Hartree_eV  ! convert back to Hartree
             fatom(:,1:natom)=fatom(:,1:natom)*A_AU_1/Hartree_eV  ! convert to Hatree/Bohr
 
-!            Etot=2.0
-!            fatom(:,1:natom/2)=0.01
-!            fatom(:,natom/2:natom)=-0.01
-!            e_stress=0.0
-
-          !    call check_error_and_restart()
             call exchange_data_scf2md(md,fatom,Etot,e_stress)
 
-            !
-            !
-            !--------------------------------
-            ! new velocity
-            !--------------------------------
             call update_v(md)
 
-            !--------------------------------
-            ! post processing
-            !--------------------------------
             call get_energy_kinetic(md)
 
 
             call get_temperature(md)
+
             ! the scaling must follow get_energy_kinetic & get_temperature
             call energy_scaling(md,istep)
 
 
             do j=1,const_vel_num
-        
-           
+
                 md.v(1,const_vel_atom(j))= const_vx(j)   !give a force on x axis
                 md.v(2,const_vel_atom(j))= const_vy(j)
                 md.v(3,const_vel_atom(j))= const_vz(j)
@@ -211,8 +223,7 @@ subroutine molecular_dynamics_kernel(Etot,fatom,e_stress)
             call write_MOVEMENT(md,istep,MCTRL_MDstep)
             call write_finalconfig(md)    
             endif
-
-!            call write_finalconfig(md)    ! cost time !
+            !            call write_finalconfig(md)    ! cost time !
 
             !if(.true.) then
             !    call write_diffusion_coeff(md)
@@ -221,19 +232,20 @@ subroutine molecular_dynamics_kernel(Etot,fatom,e_stress)
             !
             tt=mpi_wtime()-tt
             !write(message,*) "md end istep, time = ",istep,md.curtime,"fs"
-           ! call stdout_message(message,unit1=6,unit2=22)
+            ! call stdout_message(message,unit1=6,unit2=22)
             !write(*,*) message
             !write(message,*) "step MD used time: ",tt, "s"
-           !   call stdout_message(message)
+            !   call stdout_message(message)
             !write(*,*) message
-           !
+            !
 !            call get_cpu_memory(cpu_vm2, cpu_rss2)
 !           write(*,991) cpu_rss1, cpu_rss2, cpu_rss2-cpu_rss1
 !           991   format("**MD CPU memleak: ", 3(f15.3, 1x))
-           tt2=mpi_wtime()
-           if(inode.eq.1) then
-           write(6,*) "time MDstep", tt2-tt1
-           endif
+            tt2=mpi_wtime()
+            
+            if(inode.eq.1) then
+                write(6,*) "time MDstep", tt2-tt1
+            endif
         enddo
         !    
         deallocate(r_his)

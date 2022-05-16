@@ -1,5 +1,5 @@
 subroutine ML_FF_EF(Etot,fatom,xatom,AL,natom_tmp)
-
+        use IFPORT
         use mod_mpi
         use mod_data, only : iflag_model, e_atom
         use calc_ftype1, only : feat_M1,dfeat_M1,nfeat0M1,gen_feature_type1,  &
@@ -20,7 +20,7 @@ subroutine ML_FF_EF(Etot,fatom,xatom,AL,natom_tmp)
         use calc_deepMD2_feature, only : feat_M8,dfeat_M8,nfeat0M8,gen_deepMD2_feature,  &
                 nfeat0M8,num_neigh_alltypeM8,list_neigh_alltypeM8,natom8,m_neigh8
 
-!  Note: num_neigh)alltypeM1,2; list_neigh_altypeM1,2 should be the same for 1 & 2
+        !  Note: num_neigh)alltypeM1,2; list_neigh_altypeM1,2 should be the same for 1 & 2
         use calc_lin, only : cal_energy_force_lin,Etot_pred_lin,force_pred_lin,nfeat_type_l,ifeat_type_l,energy_pred_lin
         use calc_VV, only : cal_energy_force_VV,Etot_pred_VV,force_pred_VV,nfeat_type_v,ifeat_type_v, energy_pred_vv
         use calc_NN, only : cal_energy_force_NN,Etot_pred_NN,force_pred_NN,nfeat_type_n,ifeat_type_n, energy_pred_nn
@@ -34,398 +34,426 @@ subroutine ML_FF_EF(Etot,fatom,xatom,AL,natom_tmp)
         real*8,allocatable,dimension (:,:) :: feat
         real*8,allocatable,dimension (:,:,:,:) :: dfeat
         integer nfeat0, count
-        integer ii,jj,iat,kk
+        integer ii,jj,iat,kk,i
         real*8 tt1,tt2,tt3,tt4,tt5
         integer nfeat_type
         integer ifeat_type(100)
         integer num_neigh_alltypeM_use(natom_tmp)
         integer, allocatable, dimension (:,:) :: list_neigh_alltypeM_use
-      
-
         
-        if(iflag_model.eq.1) then
+        !for calling predict.py
+        character(200) :: cmd_name, flag, etot_name, ei_name, fi_name
+        integer(2):: s
 
-        nfeat_type=nfeat_type_l
-        ifeat_type=ifeat_type_l
-        endif
+        ! nothing should be done for dp which is model #4 
+        if ((iflag_model.eq.1) .or. (iflag_model.eq.2) .or. (iflag_model.eq.3)) then 
         
-        if(iflag_model.eq.2) then
+            if(iflag_model.eq.1) then
 
-        nfeat_type=nfeat_type_v
-        ifeat_type=ifeat_type_v
-        endif
+            nfeat_type=nfeat_type_l
+            ifeat_type=ifeat_type_l
+            endif
+            
+            if(iflag_model.eq.2) then
 
-        if(iflag_model.eq.3) then
-        nfeat_type=nfeat_type_n
-        ifeat_type=ifeat_type_n
-        endif
+            nfeat_type=nfeat_type_v
+            ifeat_type=ifeat_type_v
+            endif
+
+            if(iflag_model.eq.3) then
+            nfeat_type=nfeat_type_n
+            ifeat_type=ifeat_type_n
+            endif
+            
+
+            nfeat0=0
+            do kk = 1, nfeat_type
+                    if (ifeat_type(kk)  .eq. 1) then
+                    call gen_feature_type1(AL,xatom)
+                    nfeat0=nfeat0+nfeat0M1
+                    endif
+                    if (ifeat_type(kk)  .eq. 2) then
+                    call gen_feature_type2(AL,xatom)
+                    nfeat0=nfeat0+nfeat0M2
+                    endif
+                    if (ifeat_type(kk)  .eq. 3) then
+                    call gen_feature_2bgauss(AL,xatom)
+                    nfeat0=nfeat0+nfeat0M3
+                    endif
+                    if (ifeat_type(kk)  .eq. 4) then
+                    call gen_3bcos_feature(AL,xatom)
+                    nfeat0=nfeat0+nfeat0M4
+                    endif
+                    if (ifeat_type(kk)  .eq. 5) then
+                    call gen_MTP_feature(AL,xatom)
+                    nfeat0=nfeat0+nfeat0M5
+                    endif
+                    if (ifeat_type(kk)  .eq. 6) then
+                    call gen_SNAP_feature(AL,xatom)
+                    nfeat0=nfeat0+nfeat0M6
+                    endif
+                    if (ifeat_type(kk)  .eq. 7) then
+                    call gen_deepMD1_feature(AL,xatom)
+                    nfeat0=nfeat0+nfeat0M7
+                    endif
+                    if (ifeat_type(kk)  .eq. 8) then
+                    call gen_deepMD2_feature(AL,xatom)
+                    nfeat0=nfeat0+nfeat0M8
+                    endif
+
+            enddo
+
+            if (ifeat_type(1)  .eq. 1) then 
+                    natom=natom1
+                    m_neigh=m_neigh1
+                    num_neigh_alltypeM_use = num_neigh_alltypeM1
+            if(allocated(list_neigh_alltypeM_use)) then
+                deallocate(list_neigh_alltypeM_use)
+            endif
+            allocate(list_neigh_alltypeM_use(m_neigh, natom))
+                    list_neigh_alltypeM_use = list_neigh_alltypeM1
+            endif
+            if (ifeat_type(1)  .eq. 2) then 
+            natom=natom2   
+            m_neigh=m_neigh2
+                    num_neigh_alltypeM_use = num_neigh_alltypeM2
+            if(allocated(list_neigh_alltypeM_use)) then
+                deallocate(list_neigh_alltypeM_use)
+            endif
+            allocate(list_neigh_alltypeM_use(m_neigh, natom))
+                    list_neigh_alltypeM_use = list_neigh_alltypeM2
+            endif                  
+            if (ifeat_type(1)  .eq. 3) then 
+            natom=natom3
+            m_neigh=m_neigh3
+                    num_neigh_alltypeM_use = num_neigh_alltypeM3
+            if(allocated(list_neigh_alltypeM_use)) then
+                deallocate(list_neigh_alltypeM_use)
+            endif
+            allocate(list_neigh_alltypeM_use(m_neigh, natom))
+                    list_neigh_alltypeM_use = list_neigh_alltypeM3
+            endif
+            if (ifeat_type(1)  .eq. 4) then 
+            natom=natom4 
+            m_neigh=m_neigh4
+                    num_neigh_alltypeM_use = num_neigh_alltypeM4
+            if(allocated(list_neigh_alltypeM_use)) then
+                deallocate(list_neigh_alltypeM_use)
+            endif
+            allocate(list_neigh_alltypeM_use(m_neigh, natom))
+                    list_neigh_alltypeM_use = list_neigh_alltypeM4
+            endif
+            if (ifeat_type(1)  .eq. 5) then 
+            natom=natom5
+            m_neigh=m_neigh5
+                    num_neigh_alltypeM_use = num_neigh_alltypeM5
+            if(allocated(list_neigh_alltypeM_use)) then
+                deallocate(list_neigh_alltypeM_use)
+            endif
+            allocate(list_neigh_alltypeM_use(m_neigh, natom))
+                    list_neigh_alltypeM_use = list_neigh_alltypeM5
+            endif
+            if (ifeat_type(1)  .eq. 6) then 
+            natom=natom6   
+            m_neigh=m_neigh6
+                    num_neigh_alltypeM_use = num_neigh_alltypeM6
+            if(allocated(list_neigh_alltypeM_use)) then
+                deallocate(list_neigh_alltypeM_use)
+            endif
+            allocate(list_neigh_alltypeM_use(m_neigh, natom))
+                    list_neigh_alltypeM_use = list_neigh_alltypeM6
+            endif                  
+            if (ifeat_type(1)  .eq. 7) then 
+            natom=natom7
+            m_neigh=m_neigh7
+                    num_neigh_alltypeM_use = num_neigh_alltypeM7
+            if(allocated(list_neigh_alltypeM_use)) then
+                deallocate(list_neigh_alltypeM_use)
+            endif
+            allocate(list_neigh_alltypeM_use(m_neigh, natom))
+                    list_neigh_alltypeM_use = list_neigh_alltypeM7
+            endif
+            if (ifeat_type(1)  .eq. 8) then 
+                natom=natom8 
+                m_neigh=m_neigh8
+                num_neigh_alltypeM_use = num_neigh_alltypeM8
+            if(allocated(list_neigh_alltypeM_use)) then
+                deallocate(list_neigh_alltypeM_use)
+            endif
+            allocate(list_neigh_alltypeM_use(m_neigh, natom))
+                    list_neigh_alltypeM_use = list_neigh_alltypeM8
+            endif
+
+            if(natom_tmp.ne.natom) then
+                    write(6,*) "natom.ne.natom_tmp,stop",natom,natom_tmp
+                    stop
+            endif
+
+
+            ! nfeat0=nfeat0M1+nfeat0M2
+
+            !cccccccccccccccccccccccccccccccccccccccccccccccccccccc
+            !  Assemble different feature types
+            allocate(feat(nfeat0,natom_n))
+            allocate(dfeat(nfeat0,natom_n,m_neigh,3))
+            
+            count =0
+            do kk = 1, nfeat_type
+
+                    if (ifeat_type(kk)  .eq. 1) then
+                    do iat=1,natom_n
+                    do ii=1,nfeat0M1
+                    feat(ii+count,iat)=feat_M1(ii,iat)
+                    enddo
+                    enddo
+                    count=count+nfeat0M1
+                    endif
+
+                    if (ifeat_type(kk)  .eq. 2) then
+                    do iat=1,natom_n
+                    do ii=1,nfeat0M2
+                    feat(ii+count,iat)=feat_M2(ii,iat)
+                    enddo
+                    enddo
+                    count=count+nfeat0M2
+                    endif
+
+                    if (ifeat_type(kk)  .eq. 3) then
+                    do iat=1,natom_n
+                    do ii=1,nfeat0M3
+                    feat(ii+count,iat)=feat_M3(ii,iat)
+                    enddo
+                    enddo
+                    count=count+nfeat0M3
+                    endif
+
+                    if (ifeat_type(kk)  .eq. 4) then
+                    do iat=1,natom_n
+                    do ii=1,nfeat0M4
+                    feat(ii+count,iat)=feat_M4(ii,iat)
+                    enddo
+                    enddo
+                    count=count+nfeat0M4
+                    endif
+
+                    if (ifeat_type(kk)  .eq. 5) then
+                    do iat=1,natom_n
+                    do ii=1,nfeat0M5
+                    feat(ii+count,iat)=feat_M5(ii,iat)
+                    enddo
+                    enddo
+                    count=count+nfeat0M5
+                    endif
+
+                    if (ifeat_type(kk)  .eq. 6) then
+                    do iat=1,natom_n
+                    do ii=1,nfeat0M6
+                    feat(ii+count,iat)=feat_M6(ii,iat)
+                    enddo
+                    enddo
+                    count=count+nfeat0M6
+                    endif
+
+                    if (ifeat_type(kk)  .eq. 7) then
+                    do iat=1,natom_n
+                    do ii=1,nfeat0M7
+                    feat(ii+count,iat)=feat_M7(ii,iat)
+                    enddo
+                    enddo
+                    count=count+nfeat0M7
+                    endif
+
+                    if (ifeat_type(kk)  .eq. 8) then
+                    do iat=1,natom_n
+                    do ii=1,nfeat0M8
+                    feat(ii+count,iat)=feat_M8(ii,iat)
+                    enddo
+                    enddo
+                    count=count+nfeat0M8
+                    endif
+               
+            
+            enddo
+
+            count=0
+            do kk = 1, nfeat_type
+            
+
+                    if (ifeat_type(kk)  .eq. 1) then
+                    do jj=1,m_neigh
+                    do iat=1,natom_n
+                    do ii=1,nfeat0M1
+                    dfeat(ii+count,iat,jj,1)=dfeat_M1(ii,iat,jj,1)
+                    dfeat(ii+count,iat,jj,2)=dfeat_M1(ii,iat,jj,2)
+                    dfeat(ii+count,iat,jj,3)=dfeat_M1(ii,iat,jj,3)
+                    enddo
+                    enddo
+                    enddo
+                    count=count+nfeat0M1
+                    endif
+
+                    if (ifeat_type(kk)  .eq. 2) then
+                    do jj=1,m_neigh
+                    do iat=1,natom_n
+                    do ii=1,nfeat0M2
+                    dfeat(ii+count,iat,jj,1)=dfeat_M2(ii,iat,jj,1)
+                    dfeat(ii+count,iat,jj,2)=dfeat_M2(ii,iat,jj,2)
+                    dfeat(ii+count,iat,jj,3)=dfeat_M2(ii,iat,jj,3)
+                    enddo
+                    enddo
+                    enddo
+                    count=count+nfeat0M2
+                    endif
+
+                    if (ifeat_type(kk)  .eq. 3) then
+                    do jj=1,m_neigh
+                    do iat=1,natom_n
+                    do ii=1,nfeat0M3
+                    dfeat(ii+count,iat,jj,1)=dfeat_M3(ii,iat,jj,1)
+                    dfeat(ii+count,iat,jj,2)=dfeat_M3(ii,iat,jj,2)
+                    dfeat(ii+count,iat,jj,3)=dfeat_M3(ii,iat,jj,3)
+                    enddo
+                    enddo
+                    enddo
+                    count=count+nfeat0M3
+                    endif
+
+                    if (ifeat_type(kk)  .eq. 4) then
+                    do jj=1,m_neigh
+                    do iat=1,natom_n
+                    do ii=1,nfeat0M4
+                    dfeat(ii+count,iat,jj,1)=dfeat_M4(ii,iat,jj,1)
+                    dfeat(ii+count,iat,jj,2)=dfeat_M4(ii,iat,jj,2)
+                    dfeat(ii+count,iat,jj,3)=dfeat_M4(ii,iat,jj,3)
+                    enddo
+                    enddo
+                    enddo
+                    count=count+nfeat0M4
+                    endif
+
+                    if (ifeat_type(kk)  .eq. 5) then
+                    do jj=1,m_neigh
+                    do iat=1,natom_n
+                    do ii=1,nfeat0M5
+                    dfeat(ii+count,iat,jj,1)=dfeat_M5(ii,iat,jj,1)
+                    dfeat(ii+count,iat,jj,2)=dfeat_M5(ii,iat,jj,2)
+                    dfeat(ii+count,iat,jj,3)=dfeat_M5(ii,iat,jj,3)
+                    enddo
+                    enddo
+                    enddo
+                    count=count+nfeat0M5
+                    endif
+
+                    if (ifeat_type(kk)  .eq. 6) then
+                    do jj=1,m_neigh
+                    do iat=1,natom_n
+                    do ii=1,nfeat0M6
+                    dfeat(ii+count,iat,jj,1)=dfeat_M6(ii,iat,jj,1)
+                    dfeat(ii+count,iat,jj,2)=dfeat_M6(ii,iat,jj,2)
+                    dfeat(ii+count,iat,jj,3)=dfeat_M6(ii,iat,jj,3)
+                    enddo
+                    enddo
+                    enddo
+                    count=count+nfeat0M6
+                    endif
+
+                    if (ifeat_type(kk)  .eq. 7) then
+                    do jj=1,m_neigh
+                    do iat=1,natom_n
+                    do ii=1,nfeat0M7
+                    dfeat(ii+count,iat,jj,1)=dfeat_M7(ii,iat,jj,1)
+                    dfeat(ii+count,iat,jj,2)=dfeat_M7(ii,iat,jj,2)
+                    dfeat(ii+count,iat,jj,3)=dfeat_M7(ii,iat,jj,3)
+                    enddo
+                    enddo
+                    enddo
+                    count=count+nfeat0M7
+                    endif
+
+                    if (ifeat_type(kk)  .eq. 8) then
+                    do jj=1,m_neigh
+                    do iat=1,natom_n
+                    do ii=1,nfeat0M8
+                    dfeat(ii+count,iat,jj,1)=dfeat_M8(ii,iat,jj,1)
+                    dfeat(ii+count,iat,jj,2)=dfeat_M8(ii,iat,jj,2)
+                    dfeat(ii+count,iat,jj,3)=dfeat_M8(ii,iat,jj,3)
+                    enddo
+                    enddo
+                    enddo
+                    count=count+nfeat0M8
+                    endif
+
+            enddo    
+
+        endif 
         
-
-        nfeat0=0
-        do kk = 1, nfeat_type
-                if (ifeat_type(kk)  .eq. 1) then
-                call gen_feature_type1(AL,xatom)
-                nfeat0=nfeat0+nfeat0M1
-                endif
-                if (ifeat_type(kk)  .eq. 2) then
-                call gen_feature_type2(AL,xatom)
-                nfeat0=nfeat0+nfeat0M2
-                endif
-                if (ifeat_type(kk)  .eq. 3) then
-                call gen_feature_2bgauss(AL,xatom)
-                nfeat0=nfeat0+nfeat0M3
-                endif
-                if (ifeat_type(kk)  .eq. 4) then
-                call gen_3bcos_feature(AL,xatom)
-                nfeat0=nfeat0+nfeat0M4
-                endif
-                if (ifeat_type(kk)  .eq. 5) then
-                call gen_MTP_feature(AL,xatom)
-                nfeat0=nfeat0+nfeat0M5
-                endif
-                if (ifeat_type(kk)  .eq. 6) then
-                call gen_SNAP_feature(AL,xatom)
-                nfeat0=nfeat0+nfeat0M6
-                endif
-                if (ifeat_type(kk)  .eq. 7) then
-                call gen_deepMD1_feature(AL,xatom)
-                nfeat0=nfeat0+nfeat0M7
-                endif
-                if (ifeat_type(kk)  .eq. 8) then
-                call gen_deepMD2_feature(AL,xatom)
-                nfeat0=nfeat0+nfeat0M8
-                endif
-
-        enddo
-
-        if (ifeat_type(1)  .eq. 1) then 
-                natom=natom1
-                m_neigh=m_neigh1
-                num_neigh_alltypeM_use = num_neigh_alltypeM1
-        if(allocated(list_neigh_alltypeM_use)) then
-            deallocate(list_neigh_alltypeM_use)
-        endif
-        allocate(list_neigh_alltypeM_use(m_neigh, natom))
-                list_neigh_alltypeM_use = list_neigh_alltypeM1
-        endif
-        if (ifeat_type(1)  .eq. 2) then 
-        natom=natom2   
-        m_neigh=m_neigh2
-                num_neigh_alltypeM_use = num_neigh_alltypeM2
-        if(allocated(list_neigh_alltypeM_use)) then
-            deallocate(list_neigh_alltypeM_use)
-        endif
-        allocate(list_neigh_alltypeM_use(m_neigh, natom))
-                list_neigh_alltypeM_use = list_neigh_alltypeM2
-        endif                  
-        if (ifeat_type(1)  .eq. 3) then 
-        natom=natom3
-        m_neigh=m_neigh3
-                num_neigh_alltypeM_use = num_neigh_alltypeM3
-        if(allocated(list_neigh_alltypeM_use)) then
-            deallocate(list_neigh_alltypeM_use)
-        endif
-        allocate(list_neigh_alltypeM_use(m_neigh, natom))
-                list_neigh_alltypeM_use = list_neigh_alltypeM3
-        endif
-        if (ifeat_type(1)  .eq. 4) then 
-        natom=natom4 
-        m_neigh=m_neigh4
-                num_neigh_alltypeM_use = num_neigh_alltypeM4
-        if(allocated(list_neigh_alltypeM_use)) then
-            deallocate(list_neigh_alltypeM_use)
-        endif
-        allocate(list_neigh_alltypeM_use(m_neigh, natom))
-                list_neigh_alltypeM_use = list_neigh_alltypeM4
-        endif
-        if (ifeat_type(1)  .eq. 5) then 
-        natom=natom5
-        m_neigh=m_neigh5
-                num_neigh_alltypeM_use = num_neigh_alltypeM5
-        if(allocated(list_neigh_alltypeM_use)) then
-            deallocate(list_neigh_alltypeM_use)
-        endif
-        allocate(list_neigh_alltypeM_use(m_neigh, natom))
-                list_neigh_alltypeM_use = list_neigh_alltypeM5
-        endif
-        if (ifeat_type(1)  .eq. 6) then 
-        natom=natom6   
-        m_neigh=m_neigh6
-                num_neigh_alltypeM_use = num_neigh_alltypeM6
-        if(allocated(list_neigh_alltypeM_use)) then
-            deallocate(list_neigh_alltypeM_use)
-        endif
-        allocate(list_neigh_alltypeM_use(m_neigh, natom))
-                list_neigh_alltypeM_use = list_neigh_alltypeM6
-        endif                  
-        if (ifeat_type(1)  .eq. 7) then 
-        natom=natom7
-        m_neigh=m_neigh7
-                num_neigh_alltypeM_use = num_neigh_alltypeM7
-        if(allocated(list_neigh_alltypeM_use)) then
-            deallocate(list_neigh_alltypeM_use)
-        endif
-        allocate(list_neigh_alltypeM_use(m_neigh, natom))
-                list_neigh_alltypeM_use = list_neigh_alltypeM7
-        endif
-        if (ifeat_type(1)  .eq. 8) then 
-            natom=natom8 
-            m_neigh=m_neigh8
-            num_neigh_alltypeM_use = num_neigh_alltypeM8
-        if(allocated(list_neigh_alltypeM_use)) then
-            deallocate(list_neigh_alltypeM_use)
-        endif
-        allocate(list_neigh_alltypeM_use(m_neigh, natom))
-                list_neigh_alltypeM_use = list_neigh_alltypeM8
-        endif
-
-        if(natom_tmp.ne.natom) then
-                write(6,*) "natom.ne.natom_tmp,stop",natom,natom_tmp
-                stop
-        endif
-
-
-        ! nfeat0=nfeat0M1+nfeat0M2
-
-!cccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!  Assemble different feature types
-        allocate(feat(nfeat0,natom_n))
-        allocate(dfeat(nfeat0,natom_n,m_neigh,3))
-        
-        count =0
-        do kk = 1, nfeat_type
-
-                if (ifeat_type(kk)  .eq. 1) then
-                do iat=1,natom_n
-                do ii=1,nfeat0M1
-                feat(ii+count,iat)=feat_M1(ii,iat)
-                enddo
-                enddo
-                count=count+nfeat0M1
-                endif
-
-                if (ifeat_type(kk)  .eq. 2) then
-                do iat=1,natom_n
-                do ii=1,nfeat0M2
-                feat(ii+count,iat)=feat_M2(ii,iat)
-                enddo
-                enddo
-                count=count+nfeat0M2
-                endif
-
-                if (ifeat_type(kk)  .eq. 3) then
-                do iat=1,natom_n
-                do ii=1,nfeat0M3
-                feat(ii+count,iat)=feat_M3(ii,iat)
-                enddo
-                enddo
-                count=count+nfeat0M3
-                endif
-
-                if (ifeat_type(kk)  .eq. 4) then
-                do iat=1,natom_n
-                do ii=1,nfeat0M4
-                feat(ii+count,iat)=feat_M4(ii,iat)
-                enddo
-                enddo
-                count=count+nfeat0M4
-                endif
-
-                if (ifeat_type(kk)  .eq. 5) then
-                do iat=1,natom_n
-                do ii=1,nfeat0M5
-                feat(ii+count,iat)=feat_M5(ii,iat)
-                enddo
-                enddo
-                count=count+nfeat0M5
-                endif
-
-                if (ifeat_type(kk)  .eq. 6) then
-                do iat=1,natom_n
-                do ii=1,nfeat0M6
-                feat(ii+count,iat)=feat_M6(ii,iat)
-                enddo
-                enddo
-                count=count+nfeat0M6
-                endif
-
-                if (ifeat_type(kk)  .eq. 7) then
-                do iat=1,natom_n
-                do ii=1,nfeat0M7
-                feat(ii+count,iat)=feat_M7(ii,iat)
-                enddo
-                enddo
-                count=count+nfeat0M7
-                endif
-
-                if (ifeat_type(kk)  .eq. 8) then
-                do iat=1,natom_n
-                do ii=1,nfeat0M8
-                feat(ii+count,iat)=feat_M8(ii,iat)
-                enddo
-                enddo
-                count=count+nfeat0M8
-                endif
-           
-        
-        enddo
-
-        count=0
-        do kk = 1, nfeat_type
-        
-
-                if (ifeat_type(kk)  .eq. 1) then
-                do jj=1,m_neigh
-                do iat=1,natom_n
-                do ii=1,nfeat0M1
-                dfeat(ii+count,iat,jj,1)=dfeat_M1(ii,iat,jj,1)
-                dfeat(ii+count,iat,jj,2)=dfeat_M1(ii,iat,jj,2)
-                dfeat(ii+count,iat,jj,3)=dfeat_M1(ii,iat,jj,3)
-                enddo
-                enddo
-                enddo
-                count=count+nfeat0M1
-                endif
-
-                if (ifeat_type(kk)  .eq. 2) then
-                do jj=1,m_neigh
-                do iat=1,natom_n
-                do ii=1,nfeat0M2
-                dfeat(ii+count,iat,jj,1)=dfeat_M2(ii,iat,jj,1)
-                dfeat(ii+count,iat,jj,2)=dfeat_M2(ii,iat,jj,2)
-                dfeat(ii+count,iat,jj,3)=dfeat_M2(ii,iat,jj,3)
-                enddo
-                enddo
-                enddo
-                count=count+nfeat0M2
-                endif
-
-                if (ifeat_type(kk)  .eq. 3) then
-                do jj=1,m_neigh
-                do iat=1,natom_n
-                do ii=1,nfeat0M3
-                dfeat(ii+count,iat,jj,1)=dfeat_M3(ii,iat,jj,1)
-                dfeat(ii+count,iat,jj,2)=dfeat_M3(ii,iat,jj,2)
-                dfeat(ii+count,iat,jj,3)=dfeat_M3(ii,iat,jj,3)
-                enddo
-                enddo
-                enddo
-                count=count+nfeat0M3
-                endif
-
-                if (ifeat_type(kk)  .eq. 4) then
-                do jj=1,m_neigh
-                do iat=1,natom_n
-                do ii=1,nfeat0M4
-                dfeat(ii+count,iat,jj,1)=dfeat_M4(ii,iat,jj,1)
-                dfeat(ii+count,iat,jj,2)=dfeat_M4(ii,iat,jj,2)
-                dfeat(ii+count,iat,jj,3)=dfeat_M4(ii,iat,jj,3)
-                enddo
-                enddo
-                enddo
-                count=count+nfeat0M4
-                endif
-
-                if (ifeat_type(kk)  .eq. 5) then
-                do jj=1,m_neigh
-                do iat=1,natom_n
-                do ii=1,nfeat0M5
-                dfeat(ii+count,iat,jj,1)=dfeat_M5(ii,iat,jj,1)
-                dfeat(ii+count,iat,jj,2)=dfeat_M5(ii,iat,jj,2)
-                dfeat(ii+count,iat,jj,3)=dfeat_M5(ii,iat,jj,3)
-                enddo
-                enddo
-                enddo
-                count=count+nfeat0M5
-                endif
-
-                if (ifeat_type(kk)  .eq. 6) then
-                do jj=1,m_neigh
-                do iat=1,natom_n
-                do ii=1,nfeat0M6
-                dfeat(ii+count,iat,jj,1)=dfeat_M6(ii,iat,jj,1)
-                dfeat(ii+count,iat,jj,2)=dfeat_M6(ii,iat,jj,2)
-                dfeat(ii+count,iat,jj,3)=dfeat_M6(ii,iat,jj,3)
-                enddo
-                enddo
-                enddo
-                count=count+nfeat0M6
-                endif
-
-                if (ifeat_type(kk)  .eq. 7) then
-                do jj=1,m_neigh
-                do iat=1,natom_n
-                do ii=1,nfeat0M7
-                dfeat(ii+count,iat,jj,1)=dfeat_M7(ii,iat,jj,1)
-                dfeat(ii+count,iat,jj,2)=dfeat_M7(ii,iat,jj,2)
-                dfeat(ii+count,iat,jj,3)=dfeat_M7(ii,iat,jj,3)
-                enddo
-                enddo
-                enddo
-                count=count+nfeat0M7
-                endif
-
-                if (ifeat_type(kk)  .eq. 8) then
-                do jj=1,m_neigh
-                do iat=1,natom_n
-                do ii=1,nfeat0M8
-                dfeat(ii+count,iat,jj,1)=dfeat_M8(ii,iat,jj,1)
-                dfeat(ii+count,iat,jj,2)=dfeat_M8(ii,iat,jj,2)
-                dfeat(ii+count,iat,jj,3)=dfeat_M8(ii,iat,jj,3)
-                enddo
-                enddo
-                enddo
-                count=count+nfeat0M8
-                endif
-
-        enddo    
-
-        ! do ii=1,nfeat0M1
-        ! dfeat(ii,iat,jj,1)=dfeat_M1(ii,iat,jj,1)
-        ! dfeat(ii,iat,jj,2)=dfeat_M1(ii,iat,jj,2)
-        ! dfeat(ii,iat,jj,3)=dfeat_M1(ii,iat,jj,3)
-        ! enddo
-        ! enddo
-        ! do iat=1,natom_n
-        ! do ii=1,nfeat0M2
-        ! dfeat(ii+nfeat0M1,iat,jj,1)=dfeat_M2(ii,iat,jj,1)
-        ! dfeat(ii+nfeat0M1,iat,jj,2)=dfeat_M2(ii,iat,jj,2)
-        ! dfeat(ii+nfeat0M1,iat,jj,3)=dfeat_M2(ii,iat,jj,3)
-        ! enddo
-        ! enddo
-        ! enddo
-!cccccccccccccccccccccccccccccccccccccccccccccccccccccc
- 
+        ! branches for imodel 
 
         if(iflag_model.eq.1) then
-        call cal_energy_force_lin(feat,dfeat,num_neigh_alltypeM_use,  &
-         list_neigh_alltypeM_use,AL,xatom,natom,nfeat0,m_neigh)
-        Etot=Etot_pred_lin    ! unit?
-        e_atom(1:natom_tmp)=energy_pred_lin(1:natom_tmp)
-        fatom(:,1:natom_tmp)=force_pred_lin(:,1:natom_tmp)   ! unit, and - sign?
+            call cal_energy_force_lin(feat,dfeat,num_neigh_alltypeM_use,  &
+             list_neigh_alltypeM_use,AL,xatom,natom,nfeat0,m_neigh)
+            Etot=Etot_pred_lin    ! unit?
+            e_atom(1:natom_tmp)=energy_pred_lin(1:natom_tmp)
+            fatom(:,1:natom_tmp)=force_pred_lin(:,1:natom_tmp)   ! unit, and - sign?
         endif
 
         if(iflag_model.eq.2) then
-        call cal_energy_force_VV(feat,dfeat,num_neigh_alltypeM_use,  &
-         list_neigh_alltypeM_use,AL,xatom,natom,nfeat0,m_neigh)
-        Etot=Etot_pred_VV    ! unit?
-        e_atom(1:natom_tmp)=energy_pred_vv(1:natom_tmp)
-        fatom(:,1:natom_tmp)=force_pred_VV(:,1:natom_tmp)   ! unit, and - sign?
+            call cal_energy_force_VV(feat,dfeat,num_neigh_alltypeM_use,  &
+             list_neigh_alltypeM_use,AL,xatom,natom,nfeat0,m_neigh)
+            Etot=Etot_pred_VV    ! unit?
+            e_atom(1:natom_tmp)=energy_pred_vv(1:natom_tmp)
+            fatom(:,1:natom_tmp)=force_pred_VV(:,1:natom_tmp)   ! unit, and - sign?
         endif
 
         if(iflag_model.eq.3) then
-        call cal_energy_force_NN(feat,dfeat,num_neigh_alltypeM_use,  &
-         list_neigh_alltypeM_use,AL,xatom,natom,nfeat0,m_neigh)
-        Etot=Etot_pred_NN    ! unit?
-        e_atom(1:natom_tmp)=energy_pred_nn(1:natom_tmp)
-        fatom(:,1:natom_tmp)=force_pred_NN(:,1:natom_tmp)   ! unit, and - sign?
+            call cal_energy_force_NN(feat,dfeat,num_neigh_alltypeM_use,  &
+             list_neigh_alltypeM_use,AL,xatom,natom,nfeat0,m_neigh)
+            
+            Etot=Etot_pred_NN    ! unit?
+            e_atom(1:natom_tmp)=energy_pred_nn(1:natom_tmp)
+            fatom(:,1:natom_tmp)=force_pred_NN(:,1:natom_tmp)   ! unit, and - sign?
+            
         endif
+            
+        if(iflag_model.eq.4) then 
+            write(*,*) "calling pytorch..."
+            s = runqq("predict.py","--dp=True -n DP_cfg_dp 2> err > out")
+            write(*,*) "pytorch routine ends"
 
+            ! load from file 
+            etot_name = "etot.tmp" 
+            ei_name = "ei.tmp"
+            fi_name = "force.tmp"
 
+            open(9, file = etot_name, status = "old")
+            read(9,*) Etot
+            close(9)
+            
+            open(10, file = fi_name, status = "old")
+            do i=1,natom_tmp
+                read(10,*) fatom(1:3,i)
+            end do
+            close(10)
 
-        deallocate(feat)
-        deallocate(dfeat)
-        deallocate(list_neigh_alltypeM_use)
+            open(11,file = ei_name, status = "old")
+            do i=1,natom_tmp
+                read(11,*) e_atom(i)
+            end do 
+            close(11)
+
+            !do i=1,natom_tmp
+            !    write(*,*) e_atom(i)
+            !end do
+            ! read etot ei force.tmp
+        endif        
+
+        if ((iflag_model.eq.1) .or. (iflag_model.eq.2) .or. (iflag_model.eq.3)) then 
+        
+            deallocate(feat)
+            deallocate(dfeat)
+            deallocate(list_neigh_alltypeM_use)
+
+        endif
 
         return
 end subroutine ML_FF_EF

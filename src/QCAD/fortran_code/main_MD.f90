@@ -104,52 +104,67 @@ program main_MD
          ifeat_type=ifeat_type_v
          endif
 
-         if(iflag_model.eq.3) then
-         call set_paths_NN('.')
-         call load_model_NN()
-         call set_image_info_NN(iatom,is_reset,natom)
-         nfeat_type=nfeat_type_n
-         ifeat_type=ifeat_type_n
-         endif
-        
-        
-         is_reset=.true.
-         do kk = 1, nfeat_type
-          if (ifeat_type(kk)  .eq. 1) then
-            write(*,*) "load1"
-            call load_model_type1()      ! load up the parameter etc
-            call set_image_info_type1(iatom,is_reset,natom)
-          endif
-          if (ifeat_type(kk)  .eq. 2) then
-            call load_model_type2()      ! load up the parameter etc
-            call set_image_info_type2(iatom,is_reset,natom)
-          endif
-          if (ifeat_type(kk)  .eq. 3) then
-            call load_model_type3()      ! load up the parameter etc
-            call set_image_info_type3(iatom,is_reset,natom)
-          endif
-          if (ifeat_type(kk)  .eq. 4) then
-            call load_model_type4()      ! load up the parameter etc
-            call set_image_info_type4(iatom,is_reset,natom)
-          endif
-          if (ifeat_type(kk)  .eq. 5) then
-            call load_model_type5()      ! load up the parameter etc
-            call set_image_info_type5(iatom,is_reset,natom)
-          endif
-          if (ifeat_type(kk)  .eq. 6) then
-            call load_model_type6()      ! load up the parameter etc
-            call set_image_info_type6(iatom,is_reset,natom)
-          endif
-          if (ifeat_type(kk)  .eq. 7) then
-            call load_model_type7()      ! load up the parameter etc
-            call set_image_info_type7(iatom,is_reset,natom)
-          endif
-          if (ifeat_type(kk)  .eq. 8) then
-            call load_model_type8()      ! load up the parameter etc
-            call set_image_info_type8(iatom,is_reset,natom)
-          endif
-  
-          enddo
+        if(iflag_model.eq.3) then
+            call set_paths_NN('.')
+            call load_model_NN()
+            call set_image_info_NN(iatom,is_reset,natom)
+            nfeat_type=nfeat_type_n
+            ifeat_type=ifeat_type_n
+        endif
+
+        !if(iflag_model.eq.4) then
+
+        !    write(*,*) "asdasdsad"
+            !call set_paths_NN('.')
+            !call load_model_NN()
+            !call set_image_info_NN(iatom,is_reset,natom)
+            !nfeat_type=nfeat_type_n
+            !ifeat_type=ifeat_type_n
+        !endif
+
+
+        is_reset=.true.
+
+
+
+        if ((iflag_model.eq.1) .or. (iflag_model.eq.2) .or. (iflag_model.eq.3)) then 
+
+            do kk = 1, nfeat_type
+              if (ifeat_type(kk)  .eq. 1) then
+                write(*,*) "load1"
+                call load_model_type1()      ! load up the parameter etc
+                call set_image_info_type1(iatom,is_reset,natom)
+              endif
+              if (ifeat_type(kk)  .eq. 2) then
+                call load_model_type2()      ! load up the parameter etc
+                call set_image_info_type2(iatom,is_reset,natom)
+              endif
+              if (ifeat_type(kk)  .eq. 3) then
+                call load_model_type3()      ! load up the parameter etc
+                call set_image_info_type3(iatom,is_reset,natom)
+              endif
+              if (ifeat_type(kk)  .eq. 4) then
+                call load_model_type4()      ! load up the parameter etc
+                call set_image_info_type4(iatom,is_reset,natom)
+              endif
+              if (ifeat_type(kk)  .eq. 5) then
+                call load_model_type5()      ! load up the parameter etc
+                call set_image_info_type5(iatom,is_reset,natom)
+              endif
+              if (ifeat_type(kk)  .eq. 6) then
+                call load_model_type6()      ! load up the parameter etc
+                call set_image_info_type6(iatom,is_reset,natom)
+              endif
+              if (ifeat_type(kk)  .eq. 7) then
+                call load_model_type7()      ! load up the parameter etc
+                call set_image_info_type7(iatom,is_reset,natom)
+              endif
+              if (ifeat_type(kk)  .eq. 8) then
+                call load_model_type8()      ! load up the parameter etc
+                call set_image_info_type8(iatom,is_reset,natom)
+              endif
+            enddo
+        endif
          !TODO: whether we need to set which one we use
         !  call load_model_type1()      ! load up the parameter etc
         !  call set_image_info_type1(iatom,is_reset,natom)

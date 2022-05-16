@@ -326,7 +326,7 @@ def run_md100(imodel=1, atom_type=[16], num_process=1):
     subprocess.run(command, shell=True)
     
     # create md.input
-    f = open('MD.input', 'w')
+    f = open('md.input', 'w')
     f.write('xatom.config\n')
     f.write('100, 1000, 1.0, 600, 600\n') # only the first 100 used in md100
     f.write('F\n')
@@ -338,7 +338,7 @@ def run_md100(imodel=1, atom_type=[16], num_process=1):
     f.close()
 
     # create md100.input
-    f = open('MD100.input', 'w')
+    f = open('md100.input', 'w')
     f.write('%d %d %d %d %d\n' % (nimage, nskip1, nskip2, nskip3, njump))
     f.write(in_movement)
     f.write('\n')
