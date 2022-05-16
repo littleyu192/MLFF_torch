@@ -30,7 +30,7 @@ def run_write_egroup():
 
 def write_natoms_dfeat():
     max_natom = int(np.loadtxt(os.path.join(pm.OutputPath, 'max_natom')))
-    #pp.collectAllSourceFiles()
+    pp.collectAllSourceFiles()
     f_train_natom = open(pm.f_train_natoms, 'w')
     f_test_natom = open(pm.f_test_natoms, 'w')
     kk = 0
@@ -110,11 +110,6 @@ def write_natoms_dfeat():
 
         elif pm.test_ratio == 1:
             testImg = np.arange(0, ImgNum)
-            #print (ImgNum)
-            #print (type(dfeat_names[1]))
-            #print (len(dfeat_names[1][0]))
-
-            #print (testImg)
             for i in testImg:
                 f_test_natom.writelines(str(int(natom))+' '+str(int(natom))+'\n')
                 for mm in pm.use_Ftype:
