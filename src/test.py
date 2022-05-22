@@ -392,7 +392,8 @@ def test(sample_batches, model, criterion):
         if pm.dR_neigh:
             dR = Variable(sample_batches['input_dR'].double().to(device), requires_grad=True)
             dR_neigh_list = Variable(sample_batches['input_dR_neigh_list'].to(device))
-
+            Ri = Variable(sample_batches['input_Ri'].double().to(device), requires_grad=True)
+            Ri_d = Variable(sample_batches['input_Ri_d'].to(device))
     elif (opt_dtype == 'float32'):
         Ei_label = Variable(sample_batches['output_energy'][:,:,:].float().to(device))
         Force_label = Variable(sample_batches['output_force'][:,:,:].float().to(device))   #[40,108,3]
@@ -405,7 +406,8 @@ def test(sample_batches, model, criterion):
         if pm.dR_neigh:
             dR = Variable(sample_batches['input_dR'].float().to(device), requires_grad=True)
             dR_neigh_list = Variable(sample_batches['input_dR_neigh_list'].to(device))
-
+            Ri = Variable(sample_batches['input_Ri'].double().to(device), requires_grad=True)
+            Ri_d = Variable(sample_batches['input_Ri_d'].to(device))
     else:
         error("train(): unsupported opt_dtype %s" %opt_dtype)
         raise RuntimeError("train(): unsupported opt_dtype %s" %opt_dtype)
@@ -419,7 +421,7 @@ def test(sample_batches, model, criterion):
 
     model.eval()
     if opt_dp:
-        Etot_predict, Ei_predict, Force_predict = model(dR, dfeat, dR_neigh_list, natoms_img, egroup_weight, divider)
+        Etot_predict, Ei_predict, Force_predict = model(Ri, Ri_d, dR_neigh_list, natoms_img, egroup_weight, divider)
     else:
         Etot_predict, Ei_predict, Force_predict = model(input_data, dfeat, neighbor, natoms_img, egroup_weight, divider)
     
@@ -473,9 +475,9 @@ info("Training: batch_size = %d" %batch_size)
 
 
 # change the directory where you trained the model
-dir = r"/home/husiyu/project/MLFF/dataset/cu1646/"
+dir = r"/data/data/husiyu/software/MLFFdataset/cu1/"
 # change the *.pt path
-path = dir + "0329basebn1/model/latest.pt"
+path = dir + "b5120n24g6f2/model/better.pt"
 
 
 # ==========================part1:数据读取==========================
