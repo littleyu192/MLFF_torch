@@ -141,6 +141,8 @@ class MovementDataset(Dataset):
     
     def __smooth(self, image_dR, x, Ri_xyz, mask, inr, davg, dstd, natoms):
 
+        batch_size = image_dR.shape[0]
+
         inr2 = torch.zeros_like(inr)
         inr3 = torch.zeros_like(inr)
         inr4 = torch.zeros_like(inr)
@@ -217,17 +219,18 @@ class MovementDataset(Dataset):
 
         for ntype in range(self.ntypes):
             atom_num_ntype = natoms[ntype]
-            davg_ntype = davg[ntype].reshape(-1, 4).squeeze().repeat(atom_num_ntype, 1, 1) #[32,100,4]
-            dstd_ntype = dstd[ntype].reshape(-1, 4).squeeze().repeat(atom_num_ntype, 1, 1) #[32,100,4]
+            davg_ntype = davg[ntype].reshape(-1, 4).repeat(batch_size, atom_num_ntype, 1, 1) #[32,100,4]
+            dstd_ntype = dstd[ntype].reshape(-1, 4).repeat(batch_size, atom_num_ntype, 1, 1) #[32,100,4]
             if ntype == 0:
                 davg_res = davg_ntype
                 dstd_res = dstd_ntype
             else:
-                davg_res = torch.concat((davg_res, davg_ntype), dim=0)
-                dstd_res = torch.concat((dstd_res, dstd_ntype), dim=0)
-        Ri = (Ri - davg_res) / dstd_res  #[1,64,200,4]
-        dstd_res = dstd_res.unsqueeze(-1).repeat(1, 1, 1, 3)
-        Ri_d = Ri_d / dstd_res 
+                davg_res = torch.concat((davg_res, davg_ntype), dim=1)
+                dstd_res = torch.concat((dstd_res, dstd_ntype), dim=1)
+
+        Ri[mask] = (Ri[mask] - davg_res[mask]) / dstd_res[mask]
+        dstd_res = dstd_res.unsqueeze(-1).repeat(1, 1, 1, 1, 3)
+        Ri_d[mask] = Ri_d[mask] / dstd_res[mask]
         
         # res[mask_2] = 0.5 * torch.cos(math.pi * (x[mask_2]-10)/(25-10)) + 0.5 * torch.ones_like(x[mask_2])
         return Ri, Ri_d
@@ -271,8 +274,8 @@ class MovementDataset(Dataset):
         Ri_xyz[mask] = image_dR[mask] / dR2_copy[mask]
         inr[mask] = 1 / Rij[mask]
 
-        davg = torch.zeros((pm.maxNeighborNum * self.ntypes, 4), dtype=torch.float64, device=self.device)
-        dstd = torch.ones((pm.maxNeighborNum * self.ntypes, 4), dtype=torch.float64, device=self.device)
+        davg = torch.zeros((self.ntypes, pm.maxNeighborNum * self.ntypes, 4), dtype=torch.float64, device=self.device)
+        dstd = torch.ones((self.ntypes, pm.maxNeighborNum * self.ntypes, 4), dtype=torch.float64, device=self.device)
         Ri, _ = self.__smooth(image_dR, nr, Ri_xyz, mask, inr, davg, dstd, natoms_per_type)
         Ri2 = Ri * Ri
 
