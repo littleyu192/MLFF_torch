@@ -96,8 +96,8 @@ class FCNet(nn.Module):
         # print('L[1]='+str(L[1]))
         # print('dL[1]='+str(dL[1]))
         # predict = F.linear(L[pm.nLayers-2], self.weights[-1], bias=self.bias[-1])  #网络的最后一层
-        #predict = torch.matmul(L[pm.nLayers-2], self.weights[-1].t()) + self.bias[-1]
-        predict = torch.matmul(Fout_temp,self.weights[-1].t())+self.bias[-1]
+        predict = torch.matmul(L[pm.nLayers-2], self.weights[-1].t()) + self.bias[-1]
+        # predict = torch.matmul(Fout_temp,self.weights[-1].t())+self.bias[-1]
         '''warning!!! if loss this dL, will make bias.2 to be None grad'''
         dL.append(1.0*predict)
         ilayer += 1
