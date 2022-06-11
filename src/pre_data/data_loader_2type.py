@@ -227,11 +227,15 @@ class MovementDataset(Dataset):
             else:
                 davg_res = torch.concat((davg_res, davg_ntype), dim=1)
                 dstd_res = torch.concat((dstd_res, dstd_ntype), dim=1)
+        # mask
+        # Ri[mask] = (Ri[mask] - davg_res[mask]) / dstd_res[mask]
+        # dstd_res = dstd_res.unsqueeze(-1).repeat(1, 1, 1, 1, 3)
+        # Ri_d[mask] = Ri_d[mask] / dstd_res[mask]
 
-        Ri[mask] = (Ri[mask] - davg_res[mask]) / dstd_res[mask]
+        Ri = (Ri - davg_res) / dstd_res
         dstd_res = dstd_res.unsqueeze(-1).repeat(1, 1, 1, 1, 3)
-        Ri_d[mask] = Ri_d[mask] / dstd_res[mask]
-        
+        Ri_d = Ri_d / dstd_res
+
         # res[mask_2] = 0.5 * torch.cos(math.pi * (x[mask_2]-10)/(25-10)) + 0.5 * torch.ones_like(x[mask_2])
         return Ri, Ri_d
 
