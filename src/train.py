@@ -436,32 +436,33 @@ def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
     if (opt_dtype == 'float64'):
         Ei_label = Variable(sample_batches['output_energy'][:,:,:].double().to(device))
         Force_label = Variable(sample_batches['output_force'][:,:,:].double().to(device))   #[40,108,3]
-        Egroup_label = Variable(sample_batches['input_egroup'].double().to(device))
-        input_data = Variable(sample_batches['input_feat'].double().to(device), requires_grad=True)
-        dfeat = Variable(sample_batches['input_dfeat'].double().to(device))  #[40,108,100,42,3]
-        egroup_weight = Variable(sample_batches['input_egroup_weight'].double().to(device))
-        divider = Variable(sample_batches['input_divider'].double().to(device))
-        # Ep_label = Variable(sample_batches['output_ep'][:,:,:].double().to(device))
         if pm.dR_neigh:
             dR = Variable(sample_batches['input_dR'].double().to(device), requires_grad=True)
             dR_neigh_list = Variable(sample_batches['input_dR_neigh_list'].to(device))
             Ri = Variable(sample_batches['input_Ri'].double().to(device), requires_grad=True)
             Ri_d = Variable(sample_batches['input_Ri_d'].to(device))
+        else:
+            Egroup_label = Variable(sample_batches['input_egroup'].double().to(device))
+            input_data = Variable(sample_batches['input_feat'].double().to(device), requires_grad=True)
+            dfeat = Variable(sample_batches['input_dfeat'].double().to(device))  #[40,108,100,42,3]
+            egroup_weight = Variable(sample_batches['input_egroup_weight'].double().to(device))
+            divider = Variable(sample_batches['input_divider'].double().to(device))
 
     elif (opt_dtype == 'float32'):
         Ei_label = Variable(sample_batches['output_energy'][:,:,:].float().to(device))
         Force_label = Variable(sample_batches['output_force'][:,:,:].float().to(device))   #[40,108,3]
-        Egroup_label = Variable(sample_batches['input_egroup'].float().to(device))
-        input_data = Variable(sample_batches['input_feat'].float().to(device), requires_grad=True)
-        dfeat = Variable(sample_batches['input_dfeat'].float().to(device))  #[40,108,100,42,3]
-        egroup_weight = Variable(sample_batches['input_egroup_weight'].float().to(device))
-        divider = Variable(sample_batches['input_divider'].float().to(device))
-        # Ep_label = Variable(sample_batches['output_ep'][:,:,:].float().to(device))
         if pm.dR_neigh:
             dR = Variable(sample_batches['input_dR'].float().to(device), requires_grad=True)
             dR_neigh_list = Variable(sample_batches['input_dR_neigh_list'].to(device))
             Ri = Variable(sample_batches['input_Ri'].double().to(device), requires_grad=True)
             Ri_d = Variable(sample_batches['input_Ri_d'].to(device))
+        else:
+            Egroup_label = Variable(sample_batches['input_egroup'].float().to(device))
+            input_data = Variable(sample_batches['input_feat'].float().to(device), requires_grad=True)
+            dfeat = Variable(sample_batches['input_dfeat'].float().to(device))  #[40,108,100,42,3]
+            egroup_weight = Variable(sample_batches['input_egroup_weight'].float().to(device))
+            divider = Variable(sample_batches['input_divider'].float().to(device))
+
     else:
         error("train(): unsupported opt_dtype %s" %opt_dtype)
         raise RuntimeError("train(): unsupported opt_dtype %s" %opt_dtype)
@@ -473,11 +474,8 @@ def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
     ind_img = Variable(sample_batches['ind_image'].int().to(device))
     natoms_img = Variable(sample_batches['natoms_img'].int().to(device))
     # dumping what you want here
-    #
-    dump("defat.shape= %s" %(dfeat.shape,))
+   
     dump("neighbor.shape = %s" %(neighbor.shape,))
-    dump("dump dfeat ------------------->")
-    dump(dfeat)
     dump("dump neighbor ------------------->")
     dump(neighbor)
 
@@ -495,7 +493,8 @@ def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
     # import ipdb;ipdb.set_trace()
     if opt_dp:
         # Etot_predict, Ei_predict, Force_predict = model(dR, dfeat, dR_neigh_list, natoms_img, egroup_weight, divider)  # online cacl Ri and Ri_d 
-        Etot_predict, Ei_predict, Force_predict = model(Ri, Ri_d, dR_neigh_list, natoms_img, egroup_weight, divider)
+        # Etot_predict, Ei_predict, Force_predict = model(Ri, Ri_d, dR_neigh_list, natoms_img, egroup_weight, divider)
+        Etot_predict, Ei_predict, Force_predict = model(Ri, Ri_d, dR_neigh_list, natoms_img, None, None)
     else:
         Etot_predict, Ei_predict, Force_predict = model(input_data, dfeat, neighbor, natoms_img, egroup_weight, divider)
     
@@ -565,32 +564,32 @@ def train_kalman(sample_batches, model, kalman, criterion, last_epoch, real_lr):
     if (opt_dtype == 'float64'):
         Ei_label = Variable(sample_batches['output_energy'][:,:,:].double().to(device))
         Force_label = Variable(sample_batches['output_force'][:,:,:].double().to(device))   #[40,108,3]
-        Egroup_label = Variable(sample_batches['input_egroup'].double().to(device))
-        input_data = Variable(sample_batches['input_feat'].double().to(device), requires_grad=True)
-        dfeat = Variable(sample_batches['input_dfeat'].double().to(device))  #[40,108,100,42,3]
-        egroup_weight = Variable(sample_batches['input_egroup_weight'].double().to(device))
-        divider = Variable(sample_batches['input_divider'].double().to(device))
-        # Ep_label = Variable(sample_batches['output_ep'][:,:,:].double().to(device))
         if pm.dR_neigh:
             dR = Variable(sample_batches['input_dR'].double().to(device), requires_grad=True)
             dR_neigh_list = Variable(sample_batches['input_dR_neigh_list'].to(device))
             Ri = Variable(sample_batches['input_Ri'].double().to(device), requires_grad=True)
             Ri_d = Variable(sample_batches['input_Ri_d'].to(device))
+        else:
+            Egroup_label = Variable(sample_batches['input_egroup'].double().to(device))
+            input_data = Variable(sample_batches['input_feat'].double().to(device), requires_grad=True)
+            dfeat = Variable(sample_batches['input_dfeat'].double().to(device))  #[40,108,100,42,3]
+            egroup_weight = Variable(sample_batches['input_egroup_weight'].double().to(device))
+            divider = Variable(sample_batches['input_divider'].double().to(device))
 
     elif (opt_dtype == 'float32'):
         Ei_label = Variable(sample_batches['output_energy'][:,:,:].float().to(device))
         Force_label = Variable(sample_batches['output_force'][:,:,:].float().to(device))   #[40,108,3]
-        Egroup_label = Variable(sample_batches['input_egroup'].float().to(device))
-        input_data = Variable(sample_batches['input_feat'].float().to(device), requires_grad=True)
-        dfeat = Variable(sample_batches['input_dfeat'].float().to(device))  #[40,108,100,42,3]
-        egroup_weight = Variable(sample_batches['input_egroup_weight'].float().to(device))
-        divider = Variable(sample_batches['input_divider'].float().to(device))
-        # Ep_label = Variable(sample_batches['output_ep'][:,:,:].float().to(device))
         if pm.dR_neigh:
             dR = Variable(sample_batches['input_dR'].float().to(device), requires_grad=True)
             dR_neigh_list = Variable(sample_batches['input_dR_neigh_list'].to(device))
             Ri = Variable(sample_batches['input_Ri'].double().to(device), requires_grad=True)
             Ri_d = Variable(sample_batches['input_Ri_d'].to(device))
+        else:
+            Egroup_label = Variable(sample_batches['input_egroup'].float().to(device))
+            input_data = Variable(sample_batches['input_feat'].float().to(device), requires_grad=True)
+            dfeat = Variable(sample_batches['input_dfeat'].float().to(device))  #[40,108,100,42,3]
+            egroup_weight = Variable(sample_batches['input_egroup_weight'].float().to(device))
+            divider = Variable(sample_batches['input_divider'].float().to(device))
     else:
         error("train(): unsupported opt_dtype %s" %opt_dtype)
         raise RuntimeError("train(): unsupported opt_dtype %s" %opt_dtype)
@@ -604,7 +603,8 @@ def train_kalman(sample_batches, model, kalman, criterion, last_epoch, real_lr):
 
     if opt_dp:
         # kalman_inputs = [dR, dfeat, dR_neigh_list, natoms_img, egroup_weight, divider]
-        kalman_inputs = [Ri, Ri_d, dR_neigh_list, natoms_img, egroup_weight, divider]
+        # kalman_inputs = [Ri, Ri_d, dR_neigh_list, natoms_img, egroup_weight, divider]
+        kalman_inputs = [Ri, Ri_d, dR_neigh_list, natoms_img, None, None]
     else:
         kalman_inputs = [input_data, dfeat, neighbor, natoms_img, egroup_weight, divider]
 
@@ -613,7 +613,8 @@ def train_kalman(sample_batches, model, kalman, criterion, last_epoch, real_lr):
 
     if opt_dp:
         # Etot_predict, Ei_predict, Force_predict = model(dR, dfeat, dR_neigh_list, natoms_img, egroup_weight, divider)
-        Etot_predict, Ei_predict, Force_predict = model(Ri, Ri_d, dR_neigh_list, natoms_img, egroup_weight, divider)
+        # Etot_predict, Ei_predict, Force_predict = model(Ri, Ri_d, dR_neigh_list, natoms_img, egroup_weight, divider)
+        Etot_predict, Ei_predict, Force_predict = model(Ri, Ri_d, dR_neigh_list, natoms_img, None, None)
     else:
         Etot_predict, Ei_predict, Force_predict = model(input_data, dfeat, neighbor, natoms_img, egroup_weight, divider)
 
@@ -631,32 +632,32 @@ def valid(sample_batches, model, criterion):
     if (opt_dtype == 'float64'):
         Ei_label = Variable(sample_batches['output_energy'][:,:,:].double().to(device))
         Force_label = Variable(sample_batches['output_force'][:,:,:].double().to(device))   #[40,108,3]
-        Egroup_label = Variable(sample_batches['input_egroup'].double().to(device))
-        input_data = Variable(sample_batches['input_feat'].double().to(device), requires_grad=True)
-        dfeat = Variable(sample_batches['input_dfeat'].double().to(device))  #[40,108,100,42,3]
-        egroup_weight = Variable(sample_batches['input_egroup_weight'].double().to(device))
-        divider = Variable(sample_batches['input_divider'].double().to(device))
-        # Ep_label = Variable(sample_batches['output_ep'][:,:,:].double().to(device))
         if pm.dR_neigh:
             dR = Variable(sample_batches['input_dR'].double().to(device), requires_grad=True)
             dR_neigh_list = Variable(sample_batches['input_dR_neigh_list'].to(device))
             Ri = Variable(sample_batches['input_Ri'].double().to(device), requires_grad=True)
             Ri_d = Variable(sample_batches['input_Ri_d'].to(device))
+        else:
+            Egroup_label = Variable(sample_batches['input_egroup'].double().to(device))
+            input_data = Variable(sample_batches['input_feat'].double().to(device), requires_grad=True)
+            dfeat = Variable(sample_batches['input_dfeat'].double().to(device))  #[40,108,100,42,3]
+            egroup_weight = Variable(sample_batches['input_egroup_weight'].double().to(device))
+            divider = Variable(sample_batches['input_divider'].double().to(device))
 
     elif (opt_dtype == 'float32'):
         Ei_label = Variable(sample_batches['output_energy'][:,:,:].float().to(device))
         Force_label = Variable(sample_batches['output_force'][:,:,:].float().to(device))   #[40,108,3]
-        Egroup_label = Variable(sample_batches['input_egroup'].float().to(device))
-        input_data = Variable(sample_batches['input_feat'].float().to(device), requires_grad=True)
-        dfeat = Variable(sample_batches['input_dfeat'].float().to(device))  #[40,108,100,42,3]
-        egroup_weight = Variable(sample_batches['input_egroup_weight'].float().to(device))
-        divider = Variable(sample_batches['input_divider'].float().to(device))
-        # Ep_label = Variable(sample_batches['output_ep'][:,:,:].float().to(device))
         if pm.dR_neigh:
             dR = Variable(sample_batches['input_dR'].float().to(device), requires_grad=True)
             dR_neigh_list = Variable(sample_batches['input_dR_neigh_list'].to(device))
             Ri = Variable(sample_batches['input_Ri'].double().to(device), requires_grad=True)
             Ri_d = Variable(sample_batches['input_Ri_d'].to(device))
+        else:
+            Egroup_label = Variable(sample_batches['input_egroup'].float().to(device))
+            input_data = Variable(sample_batches['input_feat'].float().to(device), requires_grad=True)
+            dfeat = Variable(sample_batches['input_dfeat'].float().to(device))  #[40,108,100,42,3]
+            egroup_weight = Variable(sample_batches['input_egroup_weight'].float().to(device))
+            divider = Variable(sample_batches['input_divider'].float().to(device))
 
     else:
         error("train(): unsupported opt_dtype %s" %opt_dtype)
@@ -673,7 +674,8 @@ def valid(sample_batches, model, criterion):
     model.eval()
     if opt_dp:
         # Etot_predict, Ei_predict, Force_predict = model(dR, dfeat, dR_neigh_list, natoms_img, egroup_weight, divider)
-        Etot_predict, Ei_predict, Force_predict = model(Ri, Ri_d, dR_neigh_list, natoms_img, egroup_weight, divider)
+        # Etot_predict, Ei_predict, Force_predict = model(Ri, Ri_d, dR_neigh_list, natoms_img, egroup_weight, divider)
+        Etot_predict, Ei_predict, Force_predict = model(Ri, Ri_d, dR_neigh_list, natoms_img, None, None)
     else:
         Etot_predict, Ei_predict, Force_predict = model(input_data, dfeat, neighbor, natoms_img, egroup_weight, divider)
     
@@ -897,7 +899,7 @@ min_loss = np.inf
 iter = 1
 epoch_print = 1 
 iter_print = 1 
-
+time_training_start = time.time()
 for epoch in range(start_epoch, n_epoch + 1):
     if (epoch == n_epoch):
         last_epoch = True
@@ -912,7 +914,7 @@ for epoch in range(start_epoch, n_epoch + 1):
     loss_F = 0.
     # lr_bn32 = math.sqrt(32) 
     for i_batch, sample_batches in enumerate(loader_train):
-        nr_batch_sample = sample_batches['input_feat'].shape[0]
+        nr_batch_sample = sample_batches['output_energy'].shape[0]
         debug("nr_batch_sample = %s" %nr_batch_sample)
         global_step = (epoch - 1) * len(loader_train) + i_batch * nr_batch_sample
         real_lr = adjust_lr(global_step)
@@ -924,21 +926,27 @@ for epoch in range(start_epoch, n_epoch + 1):
         
         if pm.use_GKalman == True:
             real_lr = 0.001
+            time_start = time.time()
             batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
                 train_kalman(sample_batches, model, Gkalman, nn.MSELoss(), last_epoch, real_lr)
+            time_end = time.time()
         elif pm.use_LKalman == True:
             real_lr = 0.001
+            time_start = time.time()
             batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
                 train_kalman(sample_batches, model, Lkalman, nn.MSELoss(), last_epoch, real_lr)
+            time_end = time.time()
         elif pm.use_SKalman == True:
             real_lr = 0.001
+            time_start = time.time()
             batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
                 train_kalman(sample_batches, model, Skalman, nn.MSELoss(), last_epoch, real_lr)
+            time_end = time.time()
         else:
-            # pass
+            time_start = time.time()
             batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
                 train(sample_batches, model, optimizer, nn.MSELoss(), last_epoch, real_lr)
-            
+            time_end = time.time()
 
         # print("batch loss:" + str(batch_loss.item()))
         # # print("batch mse ei:" + str(batch_loss_Ei.item()))
@@ -950,10 +958,10 @@ for epoch in range(start_epoch, n_epoch + 1):
         f_err_log = opt_session_dir+'iter_loss.dat'
         if iter == 1:
             fid_err_log = open(f_err_log, 'w')
-            fid_err_log.write('iter\t loss\t RMSE_Etot\t RMSE_Ei\t RMSE_F\t lr\n')
+            fid_err_log.write('iter\t loss\t RMSE_Etot\t RMSE_Ei\t RMSE_F\t lr\t time(s)\n')
         if iter % iter_print == 0:
             fid_err_log = open(f_err_log, 'a')
-            fid_err_log.write('%d %e %e %e %e %e \n'%(iter, batch_loss, math.sqrt(batch_loss_Etot)/natoms_sum, math.sqrt(batch_loss_Ei), math.sqrt(batch_loss_F), real_lr))
+            fid_err_log.write('%d %e %e %e %e %e %s \n'%(iter, batch_loss, math.sqrt(batch_loss_Etot)/natoms_sum, math.sqrt(batch_loss_Ei), math.sqrt(batch_loss_F), real_lr, time_end-time_start))
         else:
             pass
 
@@ -981,13 +989,14 @@ for epoch in range(start_epoch, n_epoch + 1):
     info("epoch_loss = %.16f (RMSE_Etot = %.16f, RMSE_Ei = %.16f, RMSE_F = %.16f)" \
         %(loss, RMSE_Etot, RMSE_Ei, RMSE_F))
 
+    time_training_end = time.time()
     epoch_err_log = opt_session_dir+'epoch_loss.dat'
     if epoch == 1:
         f_epoch_err_log = open(epoch_err_log, 'w')
-        f_epoch_err_log.write('epoch\t loss\t RMSE_Etot\t RMSE_Ei\t RMSE_F\t lr\n')
+        f_epoch_err_log.write('epoch\t loss\t RMSE_Etot\t RMSE_Ei\t RMSE_F\t lr\t time\n')
     if epoch % epoch_print == 0:
         f_epoch_err_log = open(epoch_err_log, 'a')
-        f_epoch_err_log.write('%d %e %e %e %e %e \n'%(epoch, loss, RMSE_Etot, RMSE_Ei, RMSE_F, real_lr))
+        f_epoch_err_log.write('%d %e %e %e %e %e %s\n'%(epoch, loss, RMSE_Etot, RMSE_Ei, RMSE_F, real_lr, time_training_end-time_training_start))
     else:
         pass    
 
@@ -1026,9 +1035,10 @@ for epoch in range(start_epoch, n_epoch + 1):
         valid_loss_Etot = 0.
         valid_loss_Ei = 0.
         valid_loss_F = 0.
+        time_valid_start = time.time()
         for i_batch, sample_batches in enumerate(loader_valid):
             natoms_sum = sample_batches['natoms_img'][0, 0].item()
-            nr_batch_sample = sample_batches['input_feat'].shape[0]
+            nr_batch_sample = sample_batches['output_energy'].shape[0]
             valid_error_iter, batch_loss_Etot, batch_loss_Ei, batch_loss_F = valid(sample_batches, model, nn.MSELoss())
             # n_iter = (epoch - 1) * len(loader_valid) + i_batch + 1
             valid_loss += valid_error_iter * nr_batch_sample
@@ -1057,14 +1067,14 @@ for epoch in range(start_epoch, n_epoch + 1):
         valid_RMSE_F = valid_loss_F ** 0.5
         info("valid_loss = %.16f (valid_RMSE_Etot = %.16f, valid_RMSE_Ei = %.16f, valid_RMSE_F = %.16f)" \
              %(valid_loss, valid_RMSE_Etot, valid_RMSE_Ei, valid_RMSE_F))
-
+        time_valid_end = time.time()
         f_err_log =  opt_session_dir + 'epoch_loss_valid.dat'
         if not os.path.exists(f_err_log):
             fid_err_log = open(f_err_log, 'w')
-            fid_err_log.write('epoch\t valid_RMSE_Etot\t valid_RMSE_Ei\t valid_RMSE_F\n')
+            fid_err_log.write('epoch\t valid_RMSE_Etot\t valid_RMSE_Ei\t valid_RMSE_F\t time(s)\n')
         if epoch % epoch_print == 0:
             fid_err_log = open(f_err_log, 'a')
-            fid_err_log.write('%d %e %e %e \n'%(epoch, valid_RMSE_Etot, valid_RMSE_Ei, valid_RMSE_F))
+            fid_err_log.write('%d %e %e %e %s\n'%(epoch, valid_RMSE_Etot, valid_RMSE_Ei, valid_RMSE_F, time_valid_end-time_valid_start))
         
         if valid_loss < min_loss:
             min_loss = valid_loss
