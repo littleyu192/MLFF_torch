@@ -25,25 +25,24 @@ class MovementDataset(Dataset):
         super(MovementDataset, self).__init__()
         self.device = torch.device(
             'cuda' if torch.cuda.is_available() else 'cpu')
-        self.feat = np.load(feat_path)
-        self.dfeat = np.load(dfeat_path)
-        self.egroup = np.load(egroup_path)
-        self.egroup_weight = np.load(egroup_weight_path)
-        self.divider = np.load(divider_path)
-
-        # self.natoms_sum = natoms
-        # self.natoms = pd.read_csv(natoms_path)   #/fread_dfeat/NN_output/natoms_train.csv
-        self.itype = np.load(itype_path)
-        self.nblist = np.load(nblist_path)
-        self.weight_all = np.load(weight_all_path)
-        self.ind_img = np.load(ind_img_path)
 
         self.energy = np.load(energy_path)
         self.force = np.load(force_path)
-        self.use_dR_neigh = False
-        
         self.ntypes = pm.ntypes
         self.natoms_img = np.load(natoms_img_path)
+        self.nblist = np.load(nblist_path)
+        self.ind_img = np.load(ind_img_path)
+        self.itype = np.load(itype_path)
+
+        if pm.dR_neigh == False:
+            self.feat = np.load(feat_path)
+            self.dfeat = np.load(dfeat_path)
+            self.egroup = np.load(egroup_path)
+            self.egroup_weight = np.load(egroup_weight_path)
+            self.divider = np.load(divider_path)
+            self.weight_all = np.load(weight_all_path)
+            self.use_dR_neigh = False
+                
         if dR_neigh_path:
             self.use_dR_neigh = True
             tmp = np.load(dR_neigh_path)
@@ -106,20 +105,27 @@ class MovementDataset(Dataset):
         ind_image[0] = self.ind_img[index]
         ind_image[1] = self.ind_img[index+1]
         dic = {
-            'input_feat': self.feat[self.ind_img[index]:self.ind_img[index+1]],
-            'input_dfeat': self.dfeat[self.ind_img[index]:self.ind_img[index+1]],
-            'input_egroup': self.egroup[self.ind_img[index]:self.ind_img[index+1]],
-            'input_egroup_weight': self.egroup_weight[self.ind_img[index]:self.ind_img[index+1]],
-            'input_divider': self.divider[self.ind_img[index]:self.ind_img[index+1]],
+            # 'input_feat': self.feat[self.ind_img[index]:self.ind_img[index+1]],
+            # 'input_dfeat': self.dfeat[self.ind_img[index]:self.ind_img[index+1]],
+            # 'input_egroup': self.egroup[self.ind_img[index]:self.ind_img[index+1]],
+            # 'input_egroup_weight': self.egroup_weight[self.ind_img[index]:self.ind_img[index+1]],
+            # 'input_divider': self.divider[self.ind_img[index]:self.ind_img[index+1]],
+            # 'input_weight_all': self.weight_all[self.ind_img[index]:self.ind_img[index+1]],
+
             'input_itype': self.itype[self.ind_img[index]:self.ind_img[index+1]],
             'input_nblist': self.nblist[self.ind_img[index]:self.ind_img[index+1]],
-            'input_weight_all': self.weight_all[self.ind_img[index]:self.ind_img[index+1]],
-
             'output_energy': self.energy[self.ind_img[index]:self.ind_img[index+1]],
             'output_force': self.force[self.ind_img[index]:self.ind_img[index+1]],
             'ind_image': ind_image,
             'natoms_img': self.natoms_img[index]
         }
+        if pm.dR_neigh == False:
+            dic['input_feat'] = self.feat[self.ind_img[index]:self.ind_img[index+1]]
+            dic['input_dfeat'] = self.dfeat[self.ind_img[index]:self.ind_img[index+1]]
+            dic['input_egroup'] =  self.egroup[self.ind_img[index]:self.ind_img[index+1]]
+            dic['input_egroup_weight'] = self.egroup_weight[self.ind_img[index]:self.ind_img[index+1]]
+            dic['input_divider'] = self.divider[self.ind_img[index]:self.ind_img[index+1]]
+            dic['input_weight_all'] = self.weight_all[self.ind_img[index]:self.ind_img[index+1]]
         if self.use_dR_neigh:
             dic['input_dR'] = self.dR[self.ind_img[index]:self.ind_img[index+1]]
             dic['input_dR_neigh_list'] = self.dR_neigh_list[self.ind_img[index]:self.ind_img[index+1]]
@@ -353,30 +359,35 @@ def get_torch_data(examplespath):
     data_file_frompwmat : read train_data.csv or test_data.csv
     '''
     # examplespath='./train_data/final_train'   # for example
-    f_feat = os.path.join(examplespath+'/feat_scaled.npy')
+    f_itype = os.path.join(examplespath+'/itypes.npy')
+    f_nblist = os.path.join(examplespath+'/nblist.npy')
+    ind_img = os.path.join(examplespath+'/ind_img.npy')
+    natoms_img = os.path.join(examplespath+'/natoms_img.npy')
+    f_energy = os.path.join(examplespath+'/engy_scaled.npy')
+    f_force = os.path.join(examplespath+'/fors_scaled.npy')
+
     if pm.dR_neigh:
         f_dR_neigh = os.path.join(examplespath+'/dR_neigh.npy')
         f_Ri = os.path.join(examplespath+'/Ri_all.npy')
         f_Ri_d = os.path.join(examplespath+'/Ri_d_all.npy')
+        f_feat = None
+        f_dfeat = None
+        f_egroup = None
+        f_egroup_weight = None
+        f_weight_all = None
+        f_divider = None
+
     else:
+        f_feat = os.path.join(examplespath+'/feat_scaled.npy')
+        f_dfeat = os.path.join(examplespath+'/dfeat_scaled.npy')
+        f_egroup = os.path.join(examplespath+'/egroup.npy')
+        f_egroup_weight = os.path.join(examplespath+'/egroup_weight.npy')
+        f_weight_all = os.path.join(examplespath+'/weight_all.npy')
+        f_divider = os.path.join(examplespath+'/divider.npy')
         f_dR_neigh = None
         f_Ri = None
         f_Ri_d = None
-    f_dfeat = os.path.join(examplespath+'/dfeat_scaled.npy')
-    f_egroup = os.path.join(examplespath+'/egroup.npy')
-    f_egroup_weight = os.path.join(examplespath+'/egroup_weight.npy')
-    f_divider = os.path.join(examplespath+'/divider.npy')
-
-    f_itype = os.path.join(examplespath+'/itypes.npy')
-    f_nblist = os.path.join(examplespath+'/nblist.npy')
-    f_weight_all = os.path.join(examplespath+'/weight_all.npy')
-    ind_img = os.path.join(examplespath+'/ind_img.npy')
-    natoms_img = os.path.join(examplespath+'/natoms_img.npy')
-
-    f_energy = os.path.join(examplespath+'/engy_scaled.npy')
-    f_force = os.path.join(examplespath+'/fors_scaled.npy')
-    # f_force = os.path.join(examplespath+'/force.npy')
-
+    
     torch_data = MovementDataset(f_feat, f_dfeat,
                                  f_egroup, f_egroup_weight, f_divider,
                                  f_itype, f_nblist, f_weight_all,
