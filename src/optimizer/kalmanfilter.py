@@ -351,14 +351,7 @@ class LKalmanFilter(nn.Module):
             # print("update K: ", time2 - time1)
 
             # 2. update weights
-            weights[i] = weights[i] + A * error * K
-            if i == 2:
-                with open("/data/data/husiyu/software/MLFFdataset/Cu/ak_i2_1e2.log", "a") as log_file:
-                    log_file.write("layer2weights: 25*25 with skip connection: 1e_2**********************************\n")
-                    np.savetxt(log_file, (A*K).cpu())
-            else:
-                pass
-            
+            weights[i] = weights[i] + A * error * K 
             # torch.cuda.synchronize()
             # time3 = time.time()
             # print("update weights time: ", time3 - time2)
