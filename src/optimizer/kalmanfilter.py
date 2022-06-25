@@ -346,25 +346,23 @@ class LKalmanFilter(nn.Module):
             
             # 1. get the Kalman Gain Matrix
             K = torch.matmul(self.P[i], H[i])
-            K = torch.matmul(K, A)
             # torch.cuda.synchronize()
             # time2 = time.time()
             # print("update K: ", time2 - time1)
 
             # 2. update weights
-            weights[i] = weights[i] + K * error
+            weights[i] = weights[i] + A * error * K 
             # torch.cuda.synchronize()
             # time3 = time.time()
             # print("update weights time: ", time3 - time2)
             
             # 3. update P
             self.P[i] = (1 / self.kalman_lambda) * (
-                self.P[i] - torch.matmul(K, torch.matmul(H[i].T, self.P[i]))
-            )
+                self.P[i] - A * torch.matmul(K, K.T))
             # torch.cuda.synchronize()
             # time4 = time.time()
             # print("update P: ", time4 - time3, "size ", self.P[i].shape[0])
-            self.P[i] = (self.P[i] + self.P[i].T) / 2
+            # self.P[i] = (self.P[i] + self.P[i].T) / 2
             
 
         torch.cuda.synchronize()
