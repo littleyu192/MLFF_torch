@@ -64,37 +64,72 @@ class MovementDataset(Dataset):
         natoms_sum = self.natoms_img[0, 0]
         natoms_per_type = self.natoms_img[0, 1:]
 
-        image_dR = np.reshape(image_dR, (-1, natoms_sum, self.ntypes * pm.maxNeighborNum, 3))
-        list_neigh = np.reshape(list_neigh, (-1, natoms_sum, self.ntypes * pm.maxNeighborNum))
-
-        image_dR = torch.tensor(image_dR, device=self.device, dtype=torch.double)
-        list_neigh = torch.tensor(list_neigh, device=self.device, dtype=torch.int)
-
-        # deepmd neighbor id 从 0 开始，MLFF从1开始
-        mask = list_neigh > 0
-
-        dR2 = torch.zeros_like(list_neigh, dtype=torch.double)
-        Rij = torch.zeros_like(list_neigh, dtype=torch.double)
-        dR2[mask] = torch.sum(image_dR[mask] * image_dR[mask], -1)
-        Rij[mask] = torch.sqrt(dR2[mask])
-
-        nr = torch.zeros_like(dR2)
-        inr = torch.zeros_like(dR2)
-
-        dR2_copy = dR2.unsqueeze(-1).repeat(1, 1, 1, 3)
-        Ri_xyz = torch.zeros_like(dR2_copy)
-
-        nr[mask] = dR2[mask] / Rij[mask]
-        Ri_xyz[mask] = image_dR[mask] / dR2_copy[mask]
-        inr[mask] = 1 / Rij[mask]
-
         davg = torch.tensor(self.davg, device=self.device, dtype=torch.float64)
         dstd = torch.tensor(self.dstd, device=self.device, dtype=torch.float64)
 
-        Ri, Ri_d = self.__smooth(image_dR, nr, Ri_xyz, mask, inr, davg, dstd, natoms_per_type)
+        image_num = self.natoms_img.shape[0]
 
-        Ri = Ri.detach().cpu().numpy()
-        Ri_d = Ri_d.detach().cpu().numpy()
+        img_seq = [0]
+        seq_len = 0
+        tmp_img = self.natoms_img[0]
+        for i in range(image_num):
+            if (self.natoms_img[i] != tmp_img).sum() > 0 or seq_len >= 1000:
+                img_seq.append(i)
+                seq_len = 1
+                tmp_img = self.natoms_img[i]
+            else:
+                seq_len += 1
+
+        if img_seq[-1] != image_num:
+            img_seq.append(image_num)
+
+        for i in range(len(img_seq) - 1):
+            start_index = img_seq[i]
+            end_index = img_seq[i + 1]
+            
+            natoms_sum = self.natoms_img[start_index, 0]
+            natoms_per_type = self.natoms_img[start_index, 1:]
+
+            image_dR_i = image_dR[self.ind_img[start_index] : self.ind_img[end_index]]
+            list_neigh_i = list_neigh[self.ind_img[start_index] : self.ind_img[end_index]]
+
+            image_dR_i = np.reshape(image_dR_i, (-1, natoms_sum, self.ntypes * pm.maxNeighborNum, 3))
+            list_neigh_i = np.reshape(list_neigh_i, (-1, natoms_sum, self.ntypes * pm.maxNeighborNum))
+
+            image_dR_i = torch.tensor(image_dR_i, device=self.device, dtype=torch.float64)
+            list_neigh_i = torch.tensor(list_neigh_i, device=self.device, dtype=torch.int)
+
+            # deepmd neighbor id 从 0 开始，MLFF从1开始
+            mask = list_neigh_i > 0
+
+            dR2 = torch.zeros_like(list_neigh_i, dtype=torch.float64)
+            Rij = torch.zeros_like(list_neigh_i, dtype=torch.float64)
+            dR2[mask] = torch.sum(image_dR_i[mask] * image_dR_i[mask], -1)
+            Rij[mask] = torch.sqrt(dR2[mask])
+
+            nr = torch.zeros_like(dR2)
+            inr = torch.zeros_like(dR2)
+
+            dR2_copy = dR2.unsqueeze(-1).repeat(1, 1, 1, 3)
+            Ri_xyz = torch.zeros_like(dR2_copy)
+
+            nr[mask] = dR2[mask] / Rij[mask]
+            Ri_xyz[mask] = image_dR_i[mask] / dR2_copy[mask]
+            inr[mask] = 1 / Rij[mask]
+
+            Ri_i, Ri_d_i = self.__smooth(image_dR_i, nr, Ri_xyz, mask, inr, davg, dstd, natoms_per_type)
+
+            Ri_i = Ri_i.reshape(-1, self.ntypes * pm.maxNeighborNum, 4)
+            Ri_d_i = Ri_d_i.reshape(-1, self.ntypes * pm.maxNeighborNum, 4, 3)
+
+            if i == 0:
+                Ri = Ri_i.detach().cpu().numpy()
+                Ri_d = Ri_d_i.detach().cpu().numpy()
+            else:
+                Ri_i = Ri_i.detach().cpu().numpy()
+                Ri_d_i = Ri_d_i.detach().cpu().numpy()
+                Ri = np.concatenate((Ri, Ri_i), 0)
+                Ri_d = np.concatenate((Ri_d, Ri_d_i), 0)
 
         np.save(Ri_path, Ri)
         np.save(Ri_d_path, Ri_d)
@@ -119,18 +154,19 @@ class MovementDataset(Dataset):
             'ind_image': ind_image,
             'natoms_img': self.natoms_img[index]
         }
-        if pm.dR_neigh == False:
+        
+        if self.use_dR_neigh:
+            dic['input_dR'] = self.dR[self.ind_img[index]:self.ind_img[index+1]]
+            dic['input_dR_neigh_list'] = self.dR_neigh_list[self.ind_img[index]:self.ind_img[index+1]]
+            dic['input_Ri'] = self.Ri_all[self.ind_img[index]:self.ind_img[index+1]]  
+            dic['input_Ri_d'] = self.Ri_d_all[self.ind_img[index]:self.ind_img[index+1]]
+        else:
             dic['input_feat'] = self.feat[self.ind_img[index]:self.ind_img[index+1]]
             dic['input_dfeat'] = self.dfeat[self.ind_img[index]:self.ind_img[index+1]]
             dic['input_egroup'] =  self.egroup[self.ind_img[index]:self.ind_img[index+1]]
             dic['input_egroup_weight'] = self.egroup_weight[self.ind_img[index]:self.ind_img[index+1]]
             dic['input_divider'] = self.divider[self.ind_img[index]:self.ind_img[index+1]]
             dic['input_weight_all'] = self.weight_all[self.ind_img[index]:self.ind_img[index+1]]
-        if self.use_dR_neigh:
-            dic['input_dR'] = self.dR[self.ind_img[index]:self.ind_img[index+1]]
-            dic['input_dR_neigh_list'] = self.dR_neigh_list[self.ind_img[index]:self.ind_img[index+1]]
-            dic['input_Ri'] = self.Ri_all[index]  
-            dic['input_Ri_d'] = self.Ri_d_all[index]
         return dic
     
     def __len__(self):
@@ -263,14 +299,14 @@ class MovementDataset(Dataset):
         image_dR = np.reshape(image_dR, (-1, natoms_sum, self.ntypes * pm.maxNeighborNum, 3))
         list_neigh = np.reshape(list_neigh, (-1, natoms_sum, self.ntypes * pm.maxNeighborNum))
 
-        image_dR = torch.tensor(image_dR, device=self.device, dtype=torch.double)
+        image_dR = torch.tensor(image_dR, device=self.device, dtype=torch.float64)
         list_neigh = torch.tensor(list_neigh, device=self.device, dtype=torch.int)
 
         # deepmd neighbor id 从 0 开始，MLFF从1开始
         mask = list_neigh > 0
 
-        dR2 = torch.zeros_like(list_neigh, dtype=torch.double)
-        Rij = torch.zeros_like(list_neigh, dtype=torch.double)
+        dR2 = torch.zeros_like(list_neigh, dtype=torch.float64)
+        Rij = torch.zeros_like(list_neigh, dtype=torch.float64)
         dR2[mask] = torch.sum(image_dR[mask] * image_dR[mask], -1)
         Rij[mask] = torch.sqrt(dR2[mask])
 
