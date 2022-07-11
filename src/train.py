@@ -481,7 +481,7 @@ def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
 
     # model = model.cuda()
     # model = torch.nn.parallel.DistributedDataParallel(model)
-    # model.train()
+    model.train()
     
     # parm={}
     # np.set_printoptions(precision=16)
