@@ -685,7 +685,7 @@ class SKalmanFilter(nn.Module):
 
 # This splitting schedule get params in: 
 #   1350 = 25 + 625 + 625 + 25 + 25 + 25
-#   20000 = 5120 + 5120 + 5120 + 4640
+#   20000 = 5120 + 5120 + 5120 + 4640; 20000=10240+9760
 #   5100 = 2500 + 2500 + 50 + 50
 #   101 = 50 + 50 + 1
 class L1KalmanFilter(nn.Module):
@@ -735,7 +735,6 @@ class L1KalmanFilter(nn.Module):
         
         self.weights_num = len(self.P)
         self.param_packed_index = param_packed_index
-        # import ipdb;ipdb.set_trace()
 
     def __split_weights(self, weight):
         param_num = weight.nelement()
