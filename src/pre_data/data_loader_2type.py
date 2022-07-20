@@ -20,7 +20,7 @@ class MovementDataset(Dataset):
                  egroup_path, egroup_weight_path, divider_path,
                  itype_path, nblist_path, weight_all_path,
                  energy_path, force_path, ind_img_path, natoms_img_path,
-                 dR_neigh_path=None, Ri_path=None, Ri_d_path=None, stat_path=None):  # , natoms_path
+                 dR_neigh_path=None, Ri_path=None, Ri_d_path=None, stat_path=None, is_train=True):  # , natoms_path
 
         super(MovementDataset, self).__init__()
         self.device = torch.device(
@@ -53,15 +53,24 @@ class MovementDataset(Dataset):
             # if (not os.path.exists(Ri_path)) or (not os.path.exists(Ri_d_path)):
             #     self.get_stat()
             #     self.prepare(Ri_path, Ri_d_path)
-            if True:
-                stat_path = './train_data'
-                if True:
+            # if True:
+            self.get_stat()
+            if (not os.path.exists(Ri_path)) or (not os.path.exists(Ri_d_path)):
+                self.prepare(Ri_path, Ri_d_path)
+
+            if is_train:
+                np.save(stat_path+"/davg.npy", self.davg)
+                np.save(stat_path+"/dstd.npy", self.dstd)
+                np.save(stat_path+"/ener_shift", self.ener_shift)
+            else:
+                if os.path.exists(stat_path+'/davg.npy') and os.path.exists(stat_path+'/dstd.npy'):
                     self.davg = np.load(stat_path+"/davg.npy")
                     self.dstd = np.load(stat_path+"/dstd.npy")
                     self.ener_shift = np.load(stat_path+"/ener_shift.npy")
                 else:
-                    self.get_stat()
-                self.prepare(Ri_path, Ri_d_path)
+                    raise RuntimeError("davg.npy and dstd.npy not found")
+                    
+                
 
             self.Ri_all = np.load(Ri_path) #(12, 108, 100, 4)
             self.Ri_d_all = np.load(Ri_d_path)
@@ -434,17 +443,12 @@ def get_torch_data(examplespath, is_train=True):
         f_Ri = None
         f_Ri_d = None
     
-    if is_train:
-        torch_data = MovementDataset(f_feat, f_dfeat,
-                                 f_egroup, f_egroup_weight, f_divider,
-                                 f_itype, f_nblist, f_weight_all,
-                                 f_energy, f_force, ind_img, natoms_img, f_dR_neigh, f_Ri, f_Ri_d)
-    else:
-        stat_path = os.path.join(pm.train_data_path+'/..')
-        torch_data = MovementDataset(f_feat, f_dfeat,
-                                 f_egroup, f_egroup_weight, f_divider,
-                                 f_itype, f_nblist, f_weight_all,
-                                 f_energy, f_force, ind_img, natoms_img, f_dR_neigh, f_Ri, f_Ri_d, stat_path)
+
+    stat_path = os.path.join(pm.train_data_path+'/..')
+    torch_data = MovementDataset(f_feat, f_dfeat,
+                                f_egroup, f_egroup_weight, f_divider,
+                                f_itype, f_nblist, f_weight_all,
+                                f_energy, f_force, ind_img, natoms_img, f_dR_neigh, f_Ri, f_Ri_d, stat_path, is_train)
 
     
     return torch_data

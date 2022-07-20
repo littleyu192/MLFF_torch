@@ -746,9 +746,7 @@ torch_train_data = get_torch_data(train_data_path)
 if opt_dp:
     davg, dstd, ener_shift = torch_train_data.get_stat(image_num=10)
     stat = [davg, dstd, ener_shift]
-    np.save(pm.train_data_path+"/../davg.npy", davg)
-    np.save(pm.train_data_path+"/../dstd.npy", dstd)
-    np.save(pm.train_data_path+"/../ener_shift", ener_shift)
+    
 
 valid_data_path=pm.test_data_path
 torch_valid_data = get_torch_data(valid_data_path, False)
