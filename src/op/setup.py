@@ -1,7 +1,7 @@
 from setuptools import setup
 from torch.utils.cpp_extension import BuildExtension, CUDAExtension
-import sys
-sys.path.append("/home/husiyu/tools/cuda-11/bin")
+#import sys
+#sys.path.append("/home/husiyu/tools/cuda-11/bin")
 
 setup(
     name="op",
