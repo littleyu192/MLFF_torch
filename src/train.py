@@ -19,7 +19,7 @@ from loss.AutomaticWeightedLoss import AutomaticWeightedLoss
 from model.MLFF_v1 import MLFF
 from model.MLFF import MLFFNet
 
-from optimizer.kalmanfilter import GKalmanFilter, LKalmanFilter, SKalmanFilter
+from optimizer.kalmanfilter import GKalmanFilter, LKalmanFilter, SKalmanFilter, L1KalmanFilter, L2KalmanFilter
 
 from model.dp import DP
 import torch.utils.data as Data
@@ -743,9 +743,15 @@ info("scheduler: opt_autograd = %s" %opt_autograd)
 train_data_path = pm.train_data_path
 torch_train_data = get_torch_data(train_data_path)
 
+if opt_dp:
+    davg, dstd, ener_shift = torch_train_data.get_stat(image_num=10)
+    stat = [davg, dstd, ener_shift]
+    np.save(pm.train_data_path+"/../davg.npy", davg)
+    np.save(pm.train_data_path+"/../dstd.npy", dstd)
+    np.save(pm.train_data_path+"/../ener_shift", ener_shift)
 
 valid_data_path=pm.test_data_path
-torch_valid_data = get_torch_data(valid_data_path)
+torch_valid_data = get_torch_data(valid_data_path, False)
 
 
 # ===================for scaler feature and dfeature==========================
@@ -778,12 +784,7 @@ if pm.is_scale:
 
 
 loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=True)
-if opt_dp:
-    davg, dstd, ener_shift = torch_train_data.get_stat(image_num=10)
-    stat = [davg, dstd, ener_shift]
-    np.save("./davg.npy", davg)
-    np.save("./dstd.npy", dstd)
-    np.save("./ener_shift", ener_shift)
+
 
 loader_valid = Data.DataLoader(torch_valid_data, batch_size=batch_size, shuffle=False)
 # if opt_dp:
@@ -892,8 +893,15 @@ if pm.use_GKalman == True:
     Gkalman = GKalmanFilter(model, kalman_lambda=0.98, kalman_nue=0.99870, device=device)
 if pm.use_LKalman == True:
     Lkalman = LKalmanFilter(model, kalman_lambda=0.98, kalman_nue=0.99870, device=device, nselect=opt_nselect, groupsize=opt_groupsize, blocksize=opt_blocksize, fprefactor=opt_fprefactor)
+if pm.use_L1Kalman == True:
+    L1kalman = L1KalmanFilter(model, kalman_lambda=0.98, kalman_nue=0.99870, device=device, nselect=opt_nselect, groupsize=opt_groupsize, blocksize=opt_blocksize, fprefactor=opt_fprefactor)
+if pm.use_L2Kalman == True:
+    L2kalman = L2KalmanFilter(model, kalman_lambda=0.98, kalman_nue=0.99870, device=device, nselect=opt_nselect, groupsize=opt_groupsize, blocksize=opt_blocksize, fprefactor=opt_fprefactor)
+
 if pm.use_SKalman == True:
     Skalman = SKalmanFilter(model, kalman_lambda=0.98, kalman_nue=0.99870, device=device)
+
+
 
 min_loss = np.inf
 iter = 1
@@ -935,6 +943,18 @@ for epoch in range(start_epoch, n_epoch + 1):
             time_start = time.time()
             batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
                 train_kalman(sample_batches, model, Lkalman, nn.MSELoss(), last_epoch, real_lr)
+            time_end = time.time()
+        elif pm.use_L1Kalman == True:
+            real_lr = 0.001
+            time_start = time.time()
+            batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
+                train_kalman(sample_batches, model, L1kalman, nn.MSELoss(), last_epoch, real_lr)
+            time_end = time.time()
+        elif pm.use_L2Kalman == True:
+            real_lr = 0.001
+            time_start = time.time()
+            batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
+                train_kalman(sample_batches, model, L2kalman, nn.MSELoss(), last_epoch, real_lr)
             time_end = time.time()
         elif pm.use_SKalman == True:
             real_lr = 0.001

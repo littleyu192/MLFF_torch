@@ -20,7 +20,7 @@ class MovementDataset(Dataset):
                  egroup_path, egroup_weight_path, divider_path,
                  itype_path, nblist_path, weight_all_path,
                  energy_path, force_path, ind_img_path, natoms_img_path,
-                 dR_neigh_path=None, Ri_path=None, Ri_d_path=None):  # , natoms_path
+                 dR_neigh_path=None, Ri_path=None, Ri_d_path=None, stat_path=None):  # , natoms_path
 
         super(MovementDataset, self).__init__()
         self.device = torch.device(
@@ -50,12 +50,22 @@ class MovementDataset(Dataset):
             self.dR_neigh_list = np.squeeze(tmp[:, :, :, 3:], axis=-1).astype(int)
             self.force = -1 * self.force
 
-            if (not os.path.exists(Ri_path)) or (not os.path.exists(Ri_d_path)):
-                self.get_stat()
+            # if (not os.path.exists(Ri_path)) or (not os.path.exists(Ri_d_path)):
+            #     self.get_stat()
+            #     self.prepare(Ri_path, Ri_d_path)
+            if True:
+                stat_path = './train_data'
+                if True:
+                    self.davg = np.load(stat_path+"/davg.npy")
+                    self.dstd = np.load(stat_path+"/dstd.npy")
+                    self.ener_shift = np.load(stat_path+"/ener_shift.npy")
+                else:
+                    self.get_stat()
                 self.prepare(Ri_path, Ri_d_path)
 
             self.Ri_all = np.load(Ri_path) #(12, 108, 100, 4)
             self.Ri_d_all = np.load(Ri_d_path)
+                
     
     def prepare(self, Ri_path, Ri_d_path):
         image_dR = self.dR
@@ -388,7 +398,7 @@ class MovementDataset(Dataset):
         return self.davg, self.dstd, self.ener_shift
 
 
-def get_torch_data(examplespath):
+def get_torch_data(examplespath, is_train=True):
     '''
     input para:
     examplespath : npy_file_dir
@@ -424,8 +434,17 @@ def get_torch_data(examplespath):
         f_Ri = None
         f_Ri_d = None
     
-    torch_data = MovementDataset(f_feat, f_dfeat,
+    if is_train:
+        torch_data = MovementDataset(f_feat, f_dfeat,
                                  f_egroup, f_egroup_weight, f_divider,
                                  f_itype, f_nblist, f_weight_all,
                                  f_energy, f_force, ind_img, natoms_img, f_dR_neigh, f_Ri, f_Ri_d)
+    else:
+        stat_path = os.path.join(pm.train_data_path+'/..')
+        torch_data = MovementDataset(f_feat, f_dfeat,
+                                 f_egroup, f_egroup_weight, f_divider,
+                                 f_itype, f_nblist, f_weight_all,
+                                 f_energy, f_force, ind_img, natoms_img, f_dR_neigh, f_Ri, f_Ri_d, stat_path)
+
+    
     return torch_data

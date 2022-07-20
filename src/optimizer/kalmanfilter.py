@@ -351,7 +351,14 @@ class LKalmanFilter(nn.Module):
             # print("update K: ", time2 - time1)
 
             # 2. update weights
-            weights[i] = weights[i] + A * error * K 
+            weights[i] = weights[i] + A * error * K
+            if i == 2:
+                with open("/data/data/husiyu/software/MLFFdataset/Cu/ak_i2_1e2.log", "a") as log_file:
+                    log_file.write("layer2weights: 25*25 with skip connection: 1e_2**********************************\n")
+                    np.savetxt(log_file, (A*K).cpu())
+            else:
+                pass
+            
             # torch.cuda.synchronize()
             # time3 = time.time()
             # print("update weights time: ", time3 - time2)
@@ -683,10 +690,14 @@ class SKalmanFilter(nn.Module):
         print("Sliced KF update Force time:", time_end - time_start, "s")
 
 
-
-class LayerKalmanFilter1(nn.Module):
+# This splitting schedule get params in: 
+#   1350 = 25 + 625 + 625 + 25 + 25 + 25
+#   20000 = 5120 + 5120 + 5120 + 4640
+#   5100 = 2500 + 2500 + 50 + 50
+#   101 = 50 + 50 + 1
+class L1KalmanFilter(nn.Module):
     def __init__(self, model, kalman_lambda, kalman_nue, device, nselect, groupsize, blocksize, fprefactor):
-        super(LKalmanFilter1, self).__init__()
+        super(L1KalmanFilter, self).__init__()
         self.kalman_lambda = kalman_lambda
         self.kalman_nue = kalman_nue
         self.device = device
@@ -731,6 +742,7 @@ class LayerKalmanFilter1(nn.Module):
         
         self.weights_num = len(self.P)
         self.param_packed_index = param_packed_index
+        # import ipdb;ipdb.set_trace()
 
     def __split_weights(self, weight):
         param_num = weight.nelement()
@@ -982,3 +994,303 @@ class LayerKalmanFilter1(nn.Module):
         print("SPLITTING1: Layerwised KF update Force time:", time_end - time_start, "s")
 
 
+
+# This splitting schedule bonding weights with bias
+class L2KalmanFilter(nn.Module):
+    def __init__(self, model, kalman_lambda, kalman_nue, device, nselect, groupsize, blocksize, fprefactor):
+        super(L2KalmanFilter, self).__init__()
+        self.kalman_lambda = kalman_lambda
+        self.kalman_nue = kalman_nue
+        self.device = device
+        self.model = model
+        self.n_select = nselect #24
+        self.Force_group_num = groupsize #6
+        self.block_size = blocksize #1024 #5120 4096
+        self.f_prefactor = fprefactor
+        self.__init_P()
+
+    def __init_P(self):
+
+        param_nums = []
+        
+        param_sum = 0
+        for name, param in self.model.named_parameters():
+            import ipdb;ipdb.set_trace()
+            param_num = param.data.nelement()
+            if param_sum + param_num > self.block_size:
+                param_nums.append(param_sum)
+                param_sum = param_num
+            else:
+                param_sum += param_num
+        param_nums.append(param_sum)
+
+        self.P = []
+        param_packed_index = []
+        for param_num in param_nums:
+            if param_num >= self.block_size:
+                block_num = math.ceil(param_num / self.block_size)
+                for i in range(block_num):
+                    if i != block_num - 1:
+                        self.P.append(torch.eye(self.block_size).to(self.device))
+                        param_packed_index.append(self.block_size)
+                    else:
+                        self.P.append(
+                            torch.eye(param_num - self.block_size * i).to(self.device)
+                        )
+                        param_packed_index.append(param_num - self.block_size * i)
+            else:
+                self.P.append(torch.eye(param_num).to(self.device))
+                param_packed_index.append(param_num)
+        
+        self.weights_num = len(self.P)
+        self.param_packed_index = param_packed_index
+        # import ipdb;ipdb.set_trace()
+
+    def __split_weights(self, weight):
+        param_num = weight.nelement()
+        res = []
+        if param_num < self.block_size:
+            res.append(weight)
+        else:
+            block_num = math.ceil(param_num / self.block_size)
+            for i in range(block_num):
+                if i != block_num - 1:
+                    res.append(weight[i * self.block_size : (i + 1) * self.block_size])
+                else:
+                    res.append(weight[i * self.block_size :])
+        return res
+
+    def __update(self, H, error, weights):
+        torch.cuda.synchronize()
+        time0 = time.time()
+        tmp = 0
+        for i in range(self.weights_num):
+            tmp = tmp + (
+                self.kalman_lambda + torch.matmul(torch.matmul(H[i].T, self.P[i]), H[i])
+            )
+
+        A = 1 / tmp
+
+        # time_A = time.time()
+        # print("A inversion time: ", time_A - time0)
+        # torch.cuda.synchronize()
+
+        for i in range(self.weights_num):
+            time1 = time.time()
+            
+            # 1. get the Kalman Gain Matrix
+            K = torch.matmul(self.P[i], H[i])
+            # torch.cuda.synchronize()
+            # time2 = time.time()
+            # print("update K: ", time2 - time1)
+
+            # 2. update weights
+            weights[i] = weights[i] + A * error * K 
+            # torch.cuda.synchronize()
+            # time3 = time.time()
+            # print("update weights time: ", time3 - time2)
+            
+            # 3. update P
+            self.P[i] = (1 / self.kalman_lambda) * (
+                self.P[i] - A * torch.matmul(K, K.T))
+            # torch.cuda.synchronize()
+            # time4 = time.time()
+            # print("update P: ", time4 - time3, "size ", self.P[i].shape[0])
+            # self.P[i] = (self.P[i] + self.P[i].T) / 2
+            
+
+        # torch.cuda.synchronize()
+        # time_end = time.time()
+        # print("update all weights: ", time_end - time_A, 's')
+        
+        # 4. update kalman_lambda
+        self.kalman_lambda = self.kalman_nue * self.kalman_lambda + 1 - self.kalman_nue
+        # import ipdb; ipdb.set_trace()
+
+        i = 0
+        param_sum = 0
+        for name, param in self.model.named_parameters():
+            param_num = param.nelement()
+            weight_tmp = weights[i][param_sum : param_sum + param_num]
+            if param_num < self.block_size:
+                if param.ndim > 1:
+                    param.data = weight_tmp.reshape(param.data.T.shape).T
+                else:
+                    param.data = weight_tmp.reshape(param.data.shape)
+                
+                param_sum += param_num
+                
+                if param_sum == self.param_packed_index[i]:
+                    i += 1
+                    param_sum = 0
+            else:
+                block_num = math.ceil(param_num / self.block_size)
+                for j in range(block_num):
+                    if j == 0:
+                        tmp_weight = weights[i]
+                    else:
+                        tmp_weight = torch.concat([tmp_weight, weights[i]], dim=0)
+                    i += 1
+                param.data = tmp_weight.reshape(param.data.T.shape).T
+            if param.grad.grad_fn is not None:
+                param.grad.detach_()
+            else:
+                param.grad.requires_grad_(False)
+            param.grad.zero_()
+        # torch.cuda.synchronize()
+        # time5 = time.time()
+        # print("restore weight: ", time5 - time_end, 's')
+
+    def __sample(self, select_num, group_num, natoms):
+        if select_num % group_num:
+            raise Exception("divider")
+        index = range(natoms)
+        res = np.random.choice(index, select_num).reshape(-1, group_num)
+        return res
+
+    def update_energy(self, inputs, Etot_label, update_prefactor=1):
+        torch.cuda.synchronize()
+        time_start = time.time()
+        Etot_predict, Ei_predict, force_predict = self.model(
+            inputs[0], inputs[1], inputs[2], inputs[3], inputs[4], inputs[5], is_calc_f=False
+        )
+        # torch.cuda.synchronize()
+        # time1 = time.time()
+        # print("step(1): energy forward time: ", time1 - time_start, "s")
+        
+        errore = Etot_label.item() - Etot_predict.item()
+        natoms_sum = inputs[3][0, 0]
+        errore = errore / natoms_sum
+        # mask = errore < 0
+        # errore[mask] = -update_prefactor * errore[mask]
+        # Etot_predict[mask] = -update_prefactor * Etot_predict[mask]
+        # Etot_predict.backward()
+
+        if errore < 0:
+            errore = -update_prefactor * errore
+            (-update_prefactor * Etot_predict).backward()
+        else:
+            errore = update_prefactor * errore
+            (update_prefactor * Etot_predict).backward()
+        # time2 = time.time()
+        # print("step(2): energy loss backward time: ", time2 - time1, "s")
+
+        weights = []
+        H = []
+        param_index = 0
+        param_sum = 0
+        for name, param in self.model.named_parameters():
+            # H.append((param.grad / natoms_sum).T.reshape(param.grad.nelement(), 1))
+            if param.ndim > 1:
+                tmp = param.data.T.reshape(param.data.nelement(), 1)
+                tmp_grad = (param.grad / natoms_sum).T.reshape(param.grad.nelement(), 1)
+            else:
+                tmp = param.data.reshape(param.data.nelement(), 1)
+                tmp_grad = (param.grad / natoms_sum).reshape(param.grad.nelement(), 1)
+
+            tmp = self.__split_weights(tmp)
+            tmp_grad = self.__split_weights(tmp_grad)
+
+            for split_grad, split_weight in zip(tmp_grad, tmp):
+                nelement = split_grad.nelement()
+
+                if param_sum == 0:
+                    res_grad = split_grad
+                    res = split_weight
+                else:
+                    res_grad = torch.concat((res_grad, split_grad), dim=0)
+                    res = torch.concat((res, split_weight), dim=0)
+                
+                param_sum += nelement
+            
+                if param_sum == self.param_packed_index[param_index]:
+                    H.append(res_grad)
+                    weights.append(res)
+                    param_sum = 0
+                    param_index += 1
+        # import ipdb; ipdb.set_trace()
+
+        # torch.cuda.synchronize()
+        # time_reshape = time.time()
+        # print("w and b distribute time:", time_reshape - time2, "s")
+
+        self.__update(H, errore, weights)
+        torch.cuda.synchronize()
+        time_end = time.time()
+        print("SPLITTING1: Layerwised KF update Energy time:", time_end - time_start, "s")
+
+    def update_force(self, inputs, Force_label):
+        torch.cuda.synchronize()
+        time_start = time.time()
+        natoms_sum = inputs[3][0, 0]
+        index = self.__sample(self.n_select, self.Force_group_num, natoms_sum)
+
+        for i in range(index.shape[0]):
+            # torch.cuda.synchronize()
+            # time0 = time.time()
+            Etot_predict, Ei_predict, force_predict = self.model(
+                inputs[0], inputs[1], inputs[2], inputs[3], inputs[4], inputs[5]
+            )
+            # torch.cuda.synchronize()
+            # time1 = time.time()
+            # print("step(1): force forward time: ", time1 - time0, "s")
+            error_tmp = Force_label[:, index[i]] - force_predict[:, index[i]]
+            error_tmp = self.f_prefactor * error_tmp
+            mask = error_tmp < 0
+            error_tmp[mask] = -1 * error_tmp[mask]
+            error = error_tmp.mean() / natoms_sum
+            tmp_force_predict = force_predict[:, index[i]]
+            tmp_force_predict[mask] = -self.f_prefactor * tmp_force_predict[mask]
+            tmp_force_predict.sum().backward()
+            # loss = tmp_force_predict.sum()
+            # loss.backward()
+            weights = []
+            H = []
+            # time2 = time.time()
+            # print("force loss backward time: ", time2 - time1, "s")
+
+            param_index = 0
+            param_sum = 0
+            for name, param in self.model.named_parameters():
+                if param.ndim > 1:
+                    tmp = param.data.T.reshape(param.data.nelement(), 1)
+                    tmp_grad = (param.grad / (self.Force_group_num * 3.0) / natoms_sum).T.reshape(param.grad.nelement(), 1)
+                else:
+                    tmp = param.data.reshape(param.data.nelement(), 1)
+                    tmp_grad = (
+                        param.grad / (self.Force_group_num * 3.0) / natoms_sum
+                    ).reshape(param.grad.nelement(), 1)
+
+                tmp = self.__split_weights(tmp)
+                tmp_grad = self.__split_weights(tmp_grad)
+
+                for split_grad, split_weight in zip(tmp_grad, tmp):
+                    nelement = split_grad.nelement()
+
+                    if param_sum == 0:
+                        res_grad = split_grad
+                        res = split_weight
+                    else:
+                        res_grad = torch.concat((res_grad, split_grad), dim=0)
+                        res = torch.concat((res, split_weight), dim=0)
+                    
+                    param_sum += nelement
+                
+                    if param_sum == self.param_packed_index[param_index]:
+                        H.append(res_grad)
+                        weights.append(res)
+                        param_sum = 0
+                        param_index += 1
+
+            # torch.cuda.synchronize()
+            # time_reshape = time.time()
+            # print("w and b distribute time:", time_reshape - time2, "s")
+            self.__update(H, error, weights)
+            # torch.cuda.synchronize()
+            # time3 = time.time()
+            # print("step(3): force update time:", time3 - time2, "s")
+
+        torch.cuda.synchronize()
+        time_end = time.time()
+
+        print("SPLITTING1: Layerwised KF update Force time:", time_end - time_start, "s")
