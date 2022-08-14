@@ -351,14 +351,7 @@ class LKalmanFilter(nn.Module):
             # print("update K: ", time2 - time1)
 
             # 2. update weights
-            weights[i] = weights[i] + A * error * K
-            if i == 2:
-                with open("/data/data/husiyu/software/MLFFdataset/Cu/ak_i2_1e2.log", "a") as log_file:
-                    log_file.write("layer2weights: 25*25 with skip connection: 1e_2**********************************\n")
-                    np.savetxt(log_file, (A*K).cpu())
-            else:
-                pass
-            
+            weights[i] = weights[i] + A * error * K 
             # torch.cuda.synchronize()
             # time3 = time.time()
             # print("update weights time: ", time3 - time2)
@@ -692,7 +685,7 @@ class SKalmanFilter(nn.Module):
 
 # This splitting schedule get params in: 
 #   1350 = 25 + 625 + 625 + 25 + 25 + 25
-#   20000 = 5120 + 5120 + 5120 + 4640
+#   20000 = 5120 + 5120 + 5120 + 4640; 20000=10240+9760
 #   5100 = 2500 + 2500 + 50 + 50
 #   101 = 50 + 50 + 1
 class L1KalmanFilter(nn.Module):
@@ -742,7 +735,6 @@ class L1KalmanFilter(nn.Module):
         
         self.weights_num = len(self.P)
         self.param_packed_index = param_packed_index
-        # import ipdb;ipdb.set_trace()
 
     def __split_weights(self, weight):
         param_num = weight.nelement()
