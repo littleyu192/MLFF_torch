@@ -32,11 +32,57 @@ np.random.seed(2021)
 # Ei Neural Network
 ################################################################
 
+
+
+# try1:
 def dtanh(x):
     return 1.0-torch.tanh(x)**2
 
 ACTIVE = torch.tanh
 dACTIVE = dtanh
+
+
+
+# ACTIVE = F.softplus 
+# ACTIVE = torch.relu  
+
+# try2:
+# def dsigmoid(x):
+#     return torch.sigmoid(x) * (1 - torch.sigmoid(x))
+# ACTIVE = torch.sigmoid
+# dACTIVE = dsigmoid
+
+# try3:
+# ACTIVE = F.softplus
+# dACTIVE = torch.sigmoid
+
+
+# try4:
+# ACTIVE = torch.relu
+# def drelu(x):
+#     res = torch.zeros_like(x)
+#     mask = x > 0
+#     res[mask] = 1
+#     return res
+# dACTIVE = drelu
+
+# def no_act(x):
+#     return x
+# def no_dact(x):
+#     return torch.ones_like(x)
+# ACTIVE = no_act
+# dACTIVE = no_dact
+
+# try5:
+# ACTIVE = torch.nn.LeakyReLU(negative_slope=0.01, inplace=False)
+# def dLeakyReLU(x):
+#     res = torch.ones_like(x)
+#     mask = x < 0
+#     res[mask] = 0.01
+#     return res
+# dACTIVE = dLeakyReLU
+
+
 
 #device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 device = torch.device('cpu')
