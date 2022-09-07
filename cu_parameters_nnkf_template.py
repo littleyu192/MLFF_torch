@@ -3,88 +3,80 @@ import os
 import torch
 import torch.nn.functional as F
 
-isCalcFeat=False
-isFitLinModel=False
+isCalcFeat=1
+isFitLinModel=0
 isClassify=False
-isRunMd=False                                   
+isRunMd=False                                   #是否训练运行md  default:False
 isRunMd_nn=False
-isFollowMd=False                                
-isFitVdw=False  
+isFollowMd=False                                #是否是接续上次的md继续运行  default:False
+isFitVdw=False  #训练时需关掉
 isRunMd100_nn=False
 isRunMd100=False
 add_force=False     # for NN md
 pbc = False
 is_nn_do_profile = False
-
-n_epoch = 150
-
 #************** Dir **********************
 
 prefix = r'./'
 trainSetDir = r'./PWdata'
-codedir=r'/home/to/your/MLFF_torch'
+codedir=r'/data/data/husiyu/software/MLFF_torch_intel_v1'
 fortranFitSourceDir=codedir+'/src/pre_data/fit/'
 fitModelDir = r'./fread_dfeat'
 train_data_path = r'./train_data/final_train'
 test_data_path = r'./train_data/final_test'
 dRneigh_path = trainSetDir + r'/dRneigh.dat'
-
-prediction_data_path = r'./prediction_data'
-model_path = r'/path/to/your/latest.pt/or/better.pt'
-
 test_ratio = 0.2
 
 genFeatDir = r'./gen_feature'
-mdImageFileDir=r'./MD'                              
+mdImageFileDir=r'./MD'                              #设置md的初始image的文件所在的文件夹  default:'.'
 
-isNNfinetuning=True
-
-#************** Inference **********************
-isNewMd100=True
-imodel = 1            #1: linear 2:vv 3: NN  
-md_num_process = 12   # mpirun -n ${md_num_process} main_MD.x. Default is 1
-is_md100_egroup = False
-is_md100_show_X11_fig = False
-
-#isRunMd100_nn=True
-#inference=True
-#linear预测时需要打开
-# isRunMd100=True
-#add_force=True     # for NN md
-
-#************** Feature Generation *********************
-atomType=[29]                                  
+#********* for gen_feature.in *********************
+atomType=[29]                                  #铜有29个同位素,相当于29个种类的cu
 maxNeighborNum=100
 natoms=[108]
 
 iflag_PCA=0
 Rc_M=6.0                     # max of Rcut
 
-#Ftype_name={1:'gen_2b_feature',2:'gen_3b_feature'}
-# Ftype2_name='gen_3b_feature'
-#use_Ftype=[1,2]
 Ftype_name={1:'gen_2b_feature', 2:'gen_3b_feature',
             3:'gen_2bgauss_feature', 4:'gen_3bcos_feature',
             5:'gen_MTP_feature', 6:'gen_SNAP_feature',
             7:'gen_deepMD1_feature', 8:'gen_deepMD2_feature',
             }
 
-#************** Training *********************
-
-use_Ftype=[1,2]  # in dp model, use only one type of feature in generate data
+#use_Ftype=[1,2,3,4,5,6,7,8]
+use_Ftype=[1, 2]
 nFeatures=42
-batch_size = 1
-dR_neigh = False
-use_GKalman = False
-use_LKalman = False
-use_SKalman = False
-is_scale = False   # in NNKF， set True
-use_storage_scaler = False
-storage_scaler = False  # in NNKF，set True
+dR_neigh = 0
+use_GKalman = 1
+use_LKalman = 0
+use_SKalman = 0 
+use_L1Kalman = 0
+use_L2Kalman = 0
+
+
+is_scale = False
 itype_Ei_mean=[166.46]
+use_storage_scaler = False
+storage_scaler = False
 
+n_epoch=30
 
-DP_cfg_dp = {
+DeepMD_cfg = {
+    'embeding_net': {
+        'network_size': [16, 32, 64], # 第一维表示输入的维度
+	'bias': True,
+	'resnet_dt': True,
+	'activation': F.softplus,    #torch.sigmoid,
+	},
+    'fitting_net': {
+	'network_size': [120, 120, 120, 1],
+	'activation': F.softplus,    #torch.sigmoid,
+	'bias': True,
+	}
+}
+
+DeepMD_cfg_dp = {
     'embeding_net': {
         'network_size': [25, 50, 100], 
 	'bias': True,
@@ -99,7 +91,7 @@ DP_cfg_dp = {
 	}
 }
 
-DP_cfg_dp_kf = {
+DeepMD_cfg_dp_kf = {
     'embeding_net': {
         'network_size': [25, 25, 25], 
 	'bias': True,
@@ -113,28 +105,49 @@ DP_cfg_dp_kf = {
 	'bias': True,
 	}
 }
+DeepMD_cfg_dp_kf_mini = {
+    'embeding_net': {
+        'network_size': [5, 5, 5], 
+	'bias': True,
+	'resnet_dt': False,
+	'activation': torch.tanh,
+	},
+    'fitting_net': {
+	'network_size': [10, 10, 10, 1],
+	'activation': torch.tanh,
+	'resnet_dt': True,
+	'bias': True,
+	}
+}
 
+MLFF_dmirror_cfg1 = [
+	('linear', nFeatures, 30, True),
+	('activation',),
+	('linear', 30, 60, True),
+	('activation',),
+	('linear', 60, 1, True)
+	]
 
 nfeat_type=len(use_Ftype)
 Ftype1_para={
     'numOf2bfeat':[24,24],       # [itpye1,itype2]
-    'Rc':[6.0 for i in range(len(atomType))],
-    'Rm':[5.8 for i in range(len(atomType))],   # 'Rc':[5.5,5.5], 'Rm':[5.0,5.0],
-    'iflag_grid':[3 for i in range(len(atomType))],                      # 1 or 2 or 3
-    'fact_base':[0.2 for i in range(len(atomType))],
-    'dR1':[0.5 for i in range(len(atomType))],
+    'Rc':[6.0,6.0],
+    'Rm':[5.8,5.8],   # 'Rc':[5.5,5.5], 'Rm':[5.0,5.0],
+    'iflag_grid':[3,3],                      # 1 or 2 or 3
+    'fact_base':[0.2,0.2],
+    'dR1':[0.5,0.5],
     'iflag_ftype':3       # same value for different types, iflag_ftype:1,2,3 when 3, iflag_grid must be 3
 }
 Ftype2_para={
-    'numOf3bfeat1':[3 for i in range(len(atomType))],     # 3*3=9
-    'numOf3bfeat2':[3 for i in range(len(atomType))],     # 3*3=9   总的特征数24+9+9=42
-    'Rc':[5.5 for i in range(len(atomType))],
-    'Rc2':[5.5 for i in range(len(atomType))],
-    'Rm':[5.0 for i in range(len(atomType))],
-    'iflag_grid':[3 for i in range(len(atomType))],                      # 1 or 2 or 3
-    'fact_base':[0.2 for i in range(len(atomType))],
-    'dR1':[0.5 for i in range(len(atomType))],
-    'dR2':[0.5 for i in range(len(atomType))],
+    'numOf3bfeat1':[3,3],     # 3*3=9
+    'numOf3bfeat2':[3,3],     # 3*3=9   总的特征数24+9+9=42
+    'Rc':[5.5,5.5],
+    'Rc2':[5.5,5.5],
+    'Rm':[5.0,5.0],
+    'iflag_grid':[3,3],                      # 1 or 2 or 3
+    'fact_base':[0.2,0.2],
+    'dR1':[0.5,0.5],
+    'dR2':[0.5,0.5],
     'iflag_ftype':3   # same value for different types, iflag_ftype:1,2,3 when 3, iflag_grid must be 3
 }
 Ftype3_para={           # 2bgauss
@@ -209,8 +222,7 @@ Ftype8_para={
         ]
     }
 
-use_storage_scaler = False
-storage_scaler = False
+
 
 E_tolerance=999.0
 # iflag_ftype=3        # Seems like, this should be in the Ftype1/2_para        # 2 or 3 or 4 when 4, iflag_grid must be 3
@@ -232,8 +244,8 @@ ClusterNum=[3,2]
 
 #******** for fit.input *******************************
 
-fortranFitAtomRepulsingEnergies=[0.000 for i in range(len(atomType))]            #fortran fitting时对每种原子设置的排斥能量的大小，此值必须设置，无default值！(list_like)
-fortranFitAtomRadii=[2.83 for i in range(len(atomType))]                        #fortran fitting时对每种原子设置的半径大小，此值必须设置，无default值！(list_like)
+fortranFitAtomRepulsingEnergies=[0.000,0.000]            #fortran fitting时对每种原子设置的排斥能量的大小，此值必须设置，无default值！(list_like)
+fortranFitAtomRadii=[2.83]                        #fortran fitting时对每种原子设置的半径大小，此值必须设置，无default值！(list_like)
 fortranFitWeightOfEnergy=0.8                    #fortran fitting时最后fit时各个原子能量所占的权重(linear和grr公用参数)  default:0.9
 fortranFitWeightOfEtot=0.0                      #fortran fitting时最后fit时Image总能量所占的权重(linear和grr公用参数)  default:0.0
 fortranFitWeightOfForce=0.2                     #fortran fitting时最后fit时各个原子所受力所占的权重(linear和grr公用参数)  default:0.1
@@ -275,8 +287,8 @@ isMdProfile=False
 #-------------------------------------------------------
 #********************* NN_related ***************
 
-feature_dtype = 'float64'   # 'float32'
-training_dtype = 'float64'  # 'float32'
+feature_dtype = 'float64'
+training_dtype = 'float64'
 inference_dtype = 'float64'
 
 # device related
@@ -291,10 +303,10 @@ tf_dtype = 'float64' # dtype of tensorflow trainning, 'float32' faster than 'flo
 activation_func='softplus'     # could choose 'softplus' and 'elup1' now
 ntypes=len(atomType)
 nLayers = 3
-nNodes = np.array([[15 for i in range(len(atomType))],[15 for i in range(len(atomType))],[1 for i in range(len(atomType))]])
+nNodes = np.array([[15,15],[15,15],[1,1]])
 #nLayers=3
 #nNodes = np.array([[120,120],[120,120],[120,120],[1,1]])
-b_init=np.array([1.0 for i in atomType])      # energy of one atom, for different types, just a rough value
+b_init=np.array([166.3969])      # energy of one atom, for different types, just a rough value
 DCNLayers = 5
 
 #================================================================================
@@ -305,7 +317,7 @@ flag_plt = False
 train_stage = 2      # only 1 or 2, 1 is begining training from energy and then force+energy, 2 is directly training from force+energy
 train_verb = 0       
 learning_rate= 1e-3
-
+batch_size = 1
 #rtLossE      = 0.6     # weight for energy, NN fitting 各个原子能量所占的权重
 #rtLossF      = 0.2     # weight for force, NN fitting 各个原子所受力所占的权重
 #rtLossEtot   = 0.2
@@ -353,6 +365,9 @@ if fitModelDir is None:
     fitModelDir=os.path.join(fortranFitSourceDir,'fread_dfeat')
 else:
     fitModelDir=os.path.abspath(fitModelDir)
+
+print(fortranFitSourceDir)
+
 linModelCalcInfoPath=os.path.join(fitModelDir,'linear_feat_calc_info.txt')
 linFitInputBakPath=os.path.join(fitModelDir,'linear_fit_input.txt')
 
@@ -386,4 +401,4 @@ f_Finn_model   = d_nnFi+'Fi_final.ckpt'
 f_data_scaler = d_nnFi+'data_scaler.npy'
 f_Wij_np  = d_nnFi+'Wij.npy'
 
-#f_wij_txt = os.path.join(fitModelDir, "Wij.txt") 
+#f_wij_txt = os.path.join(fitModelDir, "Wij.txt")

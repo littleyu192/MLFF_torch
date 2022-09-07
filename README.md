@@ -43,20 +43,33 @@ with dorcker:
 
 ### Usage example 
 ```sh
-	# generate features
+	# NN and NNKF generate features
 	cd the/path/to/data    # in parameter.py, make sure isCalcFeat=True && isFitVdw=False
 	ulimit -Ss unlimited
-	python the/path/to/MLFF_torch/src/bin/mlff.py
+    # cu_parameters_nnkf_template.py is a template of Cu system, nnkf method
+	cp the/path/to/MLFF_torch/cu_parameters_nnkf_template.py parameters.py
+    python the/path/to/MLFF_torch/src/bin/mlff.py
 	python the/path/to/MLFF_torch/src/bin/seper.py  # in parameters.py, test_ratio = 0.2 for default
 	python the/path/to/MLFF_torch/src/bin/gen_data.py
-	# model train, mannul in MLFF_torch/parameters_template.py
-	# if you want use deepmd model in training, make sure dR_neigh=True && use_Ftype =[1]
-	cp parameters_template.py parameters.py
+    # training, make sure in parameters.py use_GKalman = 1 
+	python the/path/to/MLFF_torch/src/train.py -s nnkf_record
+	# if you want use NN without kalman filter, switch use_GKalman = 0 in parameters.py 
+	python the/path/to/MLFF_torch/src/train.py -s nn_record
+	
+	# DP and DPKF generate features
+	cd the/path/to/data    # in parameter.py, make sure isCalcFeat=True && isFitVdw=False
+	ulimit -Ss unlimited
+    # cu_parameters_dpkf_template.py is a template of Cu system, dpkf method
+	cp the/path/to/MLFF_torch/cu_parameters_dpkf_template.py parameters.py
+    python the/path/to/MLFF_torch/src/bin/mlff.py
+	python the/path/to/MLFF_torch/src/bin/seper.py  # in parameters.py, test_ratio = 0.2 for default
+	python the/path/to/MLFF_torch/src/bin/gen_dpdata.py
+    # if you want use deepmd model in training, make sure dR_neigh=True && use_Ftype =[1]
 	# if u have muti-MOVEMENT file in PWdata directory, in parameters.py, make sure batch_size = 1
-	python the/path/to/MLFF_torch/src/train.py --deepmd=True -n DeepMD_cfg_dp -s record
-	# if you want use MLP by kalmane filter, make sure is_scale=True, batch_size=1
-	cp parameters_template.py parameters.py
-	python the/path/to/MLFF_torch/src/train.py -s record 
+	python the/path/to/MLFF_torch/src/train.py --dp=True -n DeepMD_cfg_dp_kf --nselect=48 --blocksize=10240 --groupsize=6 -s dpkf_record
+	# the recomended nselect is 24, 48, 72; the recommended blocksize is 5120, 10240; the recommended groupsize is 6, 12 
+    # if you want use DP without kalman filter, switch use_L1Kalman = 0 in cu_parameters_dpkf_template.py 
+	python the/path/to/MLFF_torch/src/train.py --dp=True -n DeepMD_cfg_dp -s dp_record
 	# model test
 ```
 
