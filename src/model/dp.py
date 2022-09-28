@@ -92,8 +92,9 @@ class DP(nn.Module):
         Ri_d = dfeat
         natoms = natoms_img[0, 1:]
         natoms_sum = Ri.shape[1]
+        batch_size = Ri.shape[0]
         # when batch_size > 1. don't support multi movement file
-        if pm.batch_size > 1 and torch.unique(natoms_img[:, 0]).shape[0] > 1:
+        if batch_size > 1 and torch.unique(natoms_img[:, 0]).shape[0] > 1:
             raise ValueError("batchsize > 1, use one movement")
         atom_sum = 0
 
@@ -101,7 +102,7 @@ class DP(nn.Module):
             for ntype_1 in range(self.ntypes):
                 S_Rij = Ri[:, atom_sum:atom_sum+natoms[ntype], ntype_1*pm.maxNeighborNum:(ntype_1+1)*pm.maxNeighborNum, 0].unsqueeze(-1)
                 embedding_index = ntype * self.ntypes + ntype_1
-                G = self.embeding_net[embedding_index](S_Rij)
+                G = self.embeding_net[embedding_index](S_Rij) 
                 tmp_a = Ri[:, atom_sum:atom_sum+natoms[ntype], ntype_1*pm.maxNeighborNum:(ntype_1+1)*pm.maxNeighborNum].transpose(-2, -1)
                 tmp_b = torch.matmul(tmp_a, G)
                 
@@ -112,7 +113,7 @@ class DP(nn.Module):
             xyz_scater_a = xyz_scater_a * 4.0 / (pm.maxNeighborNum * self.ntypes * 4)
             xyz_scater_b = xyz_scater_a[:, :, :, :16]
             DR_ntype = torch.matmul(xyz_scater_a.transpose(-2, -1), xyz_scater_b)
-            DR_ntype = DR_ntype.reshape(pm.batch_size, natoms[ntype], -1)
+            DR_ntype = DR_ntype.reshape(batch_size, natoms[ntype], -1)
             if ntype == 0:
                 DR = DR_ntype
             else:
@@ -125,9 +126,9 @@ class DP(nn.Module):
                 Ei = torch.concat((Ei, Ei_ntype), dim=1)
             atom_sum = atom_sum + natoms[ntype]
         self.Ei = Ei
-        Etot = torch.sum(self.Ei, 1)
+        Etot = torch.sum(self.Ei, 1)   
         # Egroup = self.get_egroup(Ei, Egroup_weight, divider)
-        F = torch.zeros((pm.batch_size, atom_sum, 3), device=self.device)
+        F = torch.zeros((batch_size, atom_sum, 3), device=self.device)
         if is_calc_f == False:
             return Etot, Ei, F
         # start_autograd = time.time()
@@ -137,8 +138,8 @@ class DP(nn.Module):
         dE = torch.autograd.grad(Ei, Ri, grad_outputs=mask, retain_graph=True, create_graph=True)
         dE = torch.stack(list(dE), dim=0).squeeze(0)  #[:,:,:,:-1] #[2,108,100,4]-->[2,108,100,3]
 
-        Ri_d = Ri_d.reshape(pm.batch_size, natoms_sum, -1, 3)
-        dE = dE.reshape(pm.batch_size, natoms_sum, 1, -1)
+        Ri_d = Ri_d.reshape(batch_size, natoms_sum, -1, 3)
+        dE = dE.reshape(batch_size, natoms_sum, 1, -1)
 
         # start_force = time.time()
         # print("autograd time:", start_force - start_autograd, 's')
@@ -147,6 +148,6 @@ class DP(nn.Module):
         
         list_neigh = (list_neigh - 1).type(torch.int)
         F = CalculateForce.apply(list_neigh, dE, Ri_d, F)
-        
+
         return Etot, Ei, F
 
