@@ -53,7 +53,8 @@ use_LKalman = 0
 use_SKalman = 0 
 use_L1Kalman = 1
 use_L2Kalman = 0
-
+Rc = 6.0  # default setting
+Rm = 5.8  # Rmin value for DP and DPKF, if test1.py etot results is not smooth enough, choose small Rm
 
 is_scale = False
 itype_Ei_mean=[166.46]
