@@ -19,7 +19,7 @@ from loss.AutomaticWeightedLoss import AutomaticWeightedLoss
 from model.MLFF_v1 import MLFF
 from model.MLFF import MLFFNet
 
-from optimizer.kalmanfilter import GKalmanFilter, LKalmanFilter, SKalmanFilter, L1KalmanFilter, L2KalmanFilter
+from optimizer.kalmanfilter import GKalmanFilter, LKalmanFilter, SKalmanFilter, L1KalmanFilter
 
 from model.dp import DP
 import torch.utils.data as Data
@@ -98,11 +98,13 @@ opt_LR_T_max = None
 opt_autograd = True
 opt_dp = False
 
-# layerwised Kalman Filter options
+# Kalman Filter options
 opt_nselect = 24
 opt_groupsize= 6
-opt_blocksize = 5120
+opt_blocksize = 10240
 opt_fprefactor = 2
+opt_lambda = 0.98
+opt_nue = 0.99870
 
 
 opts,args = getopt.getopt(sys.argv[1:],
@@ -114,7 +116,9 @@ opts,args = getopt.getopt(sys.argv[1:],
      'milestones=','patience=','cooldown=','eps=','total_steps=',
      'max_lr=','min_lr=','T_max=',
      'wandb','wandb_entity=','wandb_project=',
-     'auto_grad=', 'dmirror=', 'dp=', 'nselect=', 'groupsize=', 'blocksize=', 'fprefactor='])
+     'auto_grad=', 'dmirror=', 'dp=', 
+     'nselect=', 'groupsize=', 'blocksize=', 'fprefactor=',
+     'kf_lambda=', 'kf_nue='])
 
 for opt_name,opt_value in opts:
     if opt_name in ('-h','--help'):
@@ -191,8 +195,10 @@ for opt_name,opt_value in opts:
         print("Kalman Filter parameters:")
         print("     --nselect                   :  sample force number(default:24)")
         print("     --groupsize                 :  the number of atoms for one iteration by force(default:6)")
-        print("     --blocksize                 :  max weights number for KF update(default:5120)")
+        print("     --blocksize                 :  max weights number for KF update(default:10240)")
         print("     --fprefactor                :  LKF force prefactor(default:2)")
+        print("     --kf_lambda                 :  Kalman lambda(default:0.98)")
+        print("     --kf_nue                    :  Kalman nue(default:0.9987)")
         print("")
         exit()
     elif opt_name in ('-c','--cpu'):
@@ -308,6 +314,11 @@ for opt_name,opt_value in opts:
         opt_blocksize = eval(opt_value)
     elif opt_name in ('--fprefactor='):
         opt_fprefactor = eval(opt_value)
+    elif opt_name in ('--kf_lambda='):
+        opt_lambda = eval(opt_value)
+    elif opt_name in ('--kf_nue='):
+        opt_nue = eval(opt_value)
+
 
 # setup logging module
 logging.addLevelName(logging_level_DUMP, 'DUMP')
@@ -888,16 +899,13 @@ else:
 # ==========================part3:模型training==========================
 
 if pm.use_GKalman == True:
-    Gkalman = GKalmanFilter(model, kalman_lambda=0.98, kalman_nue=0.99870, device=device)
+    Gkalman = GKalmanFilter(model, kalman_lambda=opt_lambda, kalman_nue=opt_nue, device=device)
 if pm.use_LKalman == True:
-    Lkalman = LKalmanFilter(model, kalman_lambda=0.98, kalman_nue=0.99870, device=device, nselect=opt_nselect, groupsize=opt_groupsize, blocksize=opt_blocksize, fprefactor=opt_fprefactor)
+    Lkalman = LKalmanFilter(model, kalman_lambda=opt_lambda, kalman_nue=opt_nue, device=device, nselect=opt_nselect, groupsize=opt_groupsize, blocksize=opt_blocksize, fprefactor=opt_fprefactor)
 if pm.use_L1Kalman == True:
-    L1kalman = L1KalmanFilter(model, kalman_lambda=0.98, kalman_nue=0.99870, device=device, nselect=opt_nselect, groupsize=opt_groupsize, blocksize=opt_blocksize, fprefactor=opt_fprefactor)
-if pm.use_L2Kalman == True:
-    L2kalman = L2KalmanFilter(model, kalman_lambda=0.98, kalman_nue=0.99870, device=device, nselect=opt_nselect, groupsize=opt_groupsize, blocksize=opt_blocksize, fprefactor=opt_fprefactor)
-
+    L1kalman = L1KalmanFilter(model, kalman_lambda=opt_lambda, kalman_nue=opt_nue, device=device, nselect=opt_nselect, groupsize=opt_groupsize, blocksize=opt_blocksize, fprefactor=opt_fprefactor)
 if pm.use_SKalman == True:
-    Skalman = SKalmanFilter(model, kalman_lambda=0.98, kalman_nue=0.99870, device=device)
+    Skalman = SKalmanFilter(model, kalman_lambda=opt_lambda, kalman_nue=opt_nue, device=device)
 
 
 
@@ -947,12 +955,6 @@ for epoch in range(start_epoch, n_epoch + 1):
             time_start = time.time()
             batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
                 train_kalman(sample_batches, model, L1kalman, nn.MSELoss(), last_epoch, real_lr)
-            time_end = time.time()
-        elif pm.use_L2Kalman == True:
-            real_lr = 0.001
-            time_start = time.time()
-            batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
-                train_kalman(sample_batches, model, L2kalman, nn.MSELoss(), last_epoch, real_lr)
             time_end = time.time()
         elif pm.use_SKalman == True:
             real_lr = 0.001

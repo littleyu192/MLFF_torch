@@ -17,6 +17,7 @@ demo/cuo1000/*
 demo/cuo1000/PWdata/
 # !demo/cuo1000/PWdata/MOVEMENT
 
+/src/md
 /dataset
 !/dataset/SiC/PWdata/MOVEMENT
 !/dataset/surface_Li/PWdata/MOVEMENT
@@ -54,6 +55,7 @@ src/bin/*
 *.py[cod]
 *__pycache__/
 *pytest_cache/
+*.egg
 
 ##
 # for running intermediate directories

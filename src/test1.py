@@ -38,7 +38,7 @@ sys.path.append(codepath+'/..')
 from data_loader_2type import MovementDataset, get_torch_data
 from scalers import DataScalers
 from utils import get_weight_grad
-from torch.utils.tensorboard import SummaryWriter
+#from torch.utils.tensorboard import SummaryWriter
 # from tensorboardX import SummaryWriter
 import time
 import getopt
@@ -382,7 +382,7 @@ if (opt_tensorboard_dir != ''):
         wandb_run = wandb.init(entity=opt_wandb_entity, project=opt_wandb_project, reinit=True)
         wandb_run.name = getpass.getuser()+'-'+opt_session_name+'-'+opt_run_id
         wandb_run.save()
-    writer = SummaryWriter(opt_tensorboard_dir)
+    #writer = SummaryWriter(opt_tensorboard_dir)
 else:
     writer = None
 
@@ -406,17 +406,18 @@ def test(sample_batches, model, criterion):
     if (opt_dtype == 'float64'):
         Ei_label = Variable(sample_batches['output_energy'][:,:,:].double().to(device))
         Force_label = Variable(sample_batches['output_force'][:,:,:].double().to(device))   #[40,108,3]
-        Egroup_label = Variable(sample_batches['input_egroup'].double().to(device))
-        input_data = Variable(sample_batches['input_feat'].double().to(device), requires_grad=True)
-        dfeat = Variable(sample_batches['input_dfeat'].double().to(device))  #[40,108,100,42,3]
-        egroup_weight = Variable(sample_batches['input_egroup_weight'].double().to(device))
-        divider = Variable(sample_batches['input_divider'].double().to(device))
         # Ep_label = Variable(sample_batches['output_ep'][:,:,:].double().to(device))
         if pm.dR_neigh:
             dR = Variable(sample_batches['input_dR'].double().to(device), requires_grad=True)
             dR_neigh_list = Variable(sample_batches['input_dR_neigh_list'].to(device))
             Ri = Variable(sample_batches['input_Ri'].double().to(device), requires_grad=True)
             Ri_d = Variable(sample_batches['input_Ri_d'].to(device))
+        else:
+            Egroup_label = Variable(sample_batches['input_egroup'].double().to(device))
+            input_data = Variable(sample_batches['input_feat'].double().to(device), requires_grad=True)
+            dfeat = Variable(sample_batches['input_dfeat'].double().to(device))  #[40,108,100,42,3]
+            egroup_weight = Variable(sample_batches['input_egroup_weight'].double().to(device))
+            divider = Variable(sample_batches['input_divider'].double().to(device))
     elif (opt_dtype == 'float32'):
         Ei_label = Variable(sample_batches['output_energy'][:,:,:].float().to(device))
         Force_label = Variable(sample_batches['output_force'][:,:,:].float().to(device))   #[40,108,3]
@@ -436,6 +437,7 @@ def test(sample_batches, model, criterion):
         raise RuntimeError("train(): unsupported opt_dtype %s" %opt_dtype)
 
     neighbor = Variable(sample_batches['input_nblist'].int().to(device))  # [40,108,100]
+    # non_zero_neighbor = torch.count_nonzero(neighbor, dim=2)
     natoms_img = Variable(sample_batches['natoms_img'].int().to(device))  # [40,108,100]
 
     error=0
@@ -449,7 +451,7 @@ def test(sample_batches, model, criterion):
 
     model.eval()
     if opt_dp:
-        Etot_predict, Ei_predict, Force_predict = model(Ri, Ri_d, dR_neigh_list, natoms_img, egroup_weight, divider)
+        Etot_predict, Ei_predict, Force_predict = model(Ri, Ri_d, dR_neigh_list, natoms_img, None, None)
     else:
         Etot_predict, Ei_predict, Force_predict = model(input_data, dfeat, neighbor, natoms_img, egroup_weight, divider)
 
@@ -478,7 +480,7 @@ def test(sample_batches, model, criterion):
     
     error = float(loss_F.item()) + float(loss_Etot.item())
 
-    f_err_log =  opt_session_dir + 'iter_loss_test.dat'
+    f_err_log =  opt_session_dir + 'test.dat'
     if not os.path.exists(f_err_log):
         fid_err_log = open(f_err_log, 'w')
         fid_err_log.write('Etot_predict\t Force_predict_x\t Force_predict_y\t Force_predict_z\n')
@@ -522,7 +524,7 @@ info("Training: batch_size = %d" %batch_size)
 # ==========================part1:数据读取==========================
 batch_size = 1
 test_data_path=pm.test_data_path
-torch_test_data = get_torch_data(test_data_path)
+torch_test_data = get_torch_data(test_data_path, False)
 
 if pm.is_scale:
     scaler=load('scaler.pkl')
@@ -533,18 +535,21 @@ if pm.is_scale:
     dfeat_tmp = dfeat_tmp.transpose(0, 1, 3, 2)
     torch_test_data.dfeat = dfeat_tmp
 
+#dir = r"/data/data/husiyu/software/MLFFdataset/CuO20_raodong/"
+dir = r"/data/data/husiyu/software/MLFFdataset/Zr200/"
 loader_test = Data.DataLoader(torch_test_data, batch_size=batch_size, shuffle=False)
 if opt_dp:  # 此处应读training中保存的stat 
-    davg = np.load("davg.npy")
-    dstd = np.load("dstd.npy")
-    ener_shift = np.load("ener_shift.npy")
+    davg = np.load(dir + "train_data/davg.npy")
+    dstd = np.load(dir + "/train_data/dstd.npy")
+    ener_shift = np.load(dir + "train_data/ener_shift.npy")
     stat = [davg, dstd, ener_shift]
 
 # ==========================part2:load模型==========================
 
-#path = r"record/model/dp_latest.pt"
-#path = r"record/model/kfdp_latest.pt"
-path = r"record/model/latest.pt"
+#path = dir + "wlj/model/better.pt"  # cu
+path = dir + "gxz/model/better.pt"  # cu
+
+
 
 if opt_dp:
     model = DP(opt_net_cfg, opt_act, device, stat, opt_magic)
@@ -563,7 +568,7 @@ test_loss_F = 0.
 
 for i_batch, sample_batches in enumerate(loader_test):
     natoms_sum = sample_batches['natoms_img'][0, 0].item()
-    nr_batch_sample = sample_batches['input_feat'].shape[0]
+    nr_batch_sample = sample_batches['output_energy'].shape[0]
     dft_etot_raw, dft_ei_raw, dft_force_raw,test_error_iter, batch_loss_Etot, batch_loss_Ei, batch_loss_F = test(sample_batches, model, nn.MSELoss())
     # n_iter = (epoch - 1) * len(loader_valid) + i_batch + 1
     test_loss += test_error_iter * nr_batch_sample
@@ -571,7 +576,6 @@ for i_batch, sample_batches in enumerate(loader_test):
     test_loss_Ei += batch_loss_Ei.item() * nr_batch_sample
     test_loss_F += batch_loss_F.item() * nr_batch_sample
     nr_total_sample += nr_batch_sample
-    
 
 # epoch loss
 test_loss /= nr_total_sample
@@ -591,9 +595,10 @@ info("test_loss = %.16f (test_RMSE_Etot = %.16f, test_RMSE_Ei = %.16f, test_RMSE
 """
 
 #********* plot etot ***********
-
 dft_total_energy = np.array(dft_Etot)
 nn_total_energy = np.array(dp_Etot)
+# import ipdb;ipdb.set_trace()
+
 
 
 e_tot_min = min(min(dft_total_energy), min(nn_total_energy))
@@ -603,19 +608,49 @@ lim_tot_max = e_tot_max + (e_tot_max - e_tot_min) * 0.1
 
 e_tot_rms = test_RMSE_Etot 
 
+plt.figure(figsize=(8,8))
+plt.rcParams['savefig.dpi']=300
+plt.rcParams['figure.dpi']=300
+
 #plt.clf()
 #plt.subplot(1,2,1)
-plt.title('total energy')
-plt.scatter(dft_total_energy, nn_total_energy, s=0.1)
-plt.plot((lim_tot_min, lim_tot_max), (lim_tot_min, lim_tot_max), ls='--', color='red')
+#plt.title('NaCl Energy')
+plt.scatter(dft_total_energy, nn_total_energy, s=10, color='maroon')
+plt.plot((lim_tot_min, lim_tot_max), (lim_tot_min, lim_tot_max), ls='--', color='blue',linewidth=2)
 plt.xlim(lim_tot_min, lim_tot_max)
 plt.ylim(lim_tot_min, lim_tot_max)
-plt.text(e_tot_min, e_tot_max,'Etot, rmse: %.3E' %(e_tot_rms))
-plt.text(e_tot_min, e_tot_max - (e_tot_max - e_tot_min)*0.1,'Etot/Natom, rmse: %.3E' %(e_tot_rms/num_atoms))
-plt.xlabel('DFT energy (eV)')
-plt.ylabel('MLFF energy (eV)')
-plt.savefig("etot.png",format = "png")
+#plt.rc('font',family='Times New Roman')
+#plt.text(e_tot_min, e_tot_max, "Cu", fontsize=25, fontweight='medium', fontdict={'family':'Times New Roman'})
 
+#plt.text(e_tot_min, e_tot_max,'Energy(eV): %.3E' %(e_tot_rms), fontsize=20)
+#plt.text(e_tot_min, e_tot_max - (e_tot_max - e_tot_min)*0.1,'Energy/Natoms(eV): %.3E' %(e_tot_rms/num_atoms), fontsize=20)
+plt.xlabel('DFT Energy')
+plt.ylabel('DPKF Energy')
+# plt.savefig("li_zwt_etot_3.png",format = "png")
+
+#********* plot force **********
+
+f_dft_plot = np.array(dft_Force)
+f_nn_plot = np.array(dp_Force)
+
+fmax = max(f_dft_plot.max(), f_nn_plot.max())
+fmin = min(f_dft_plot.min(), f_nn_plot.min())
+lim_f_min = fmin - (fmax-fmin)*0.1
+lim_f_max = fmax + (fmax-fmin)*0.1
+
+f_rms = test_RMSE_F
+
+#plt.title('NaCl Force')
+plt.xlim(lim_f_min, lim_f_max)
+plt.ylim(lim_f_min, lim_f_max)
+#plt.text(fmin, fmax, "Cu", fontsize=25, fontweight='medium', fontdict={'family':'Times New Roman'})
+
+#plt.text(fmin, fmax,'Force(eV/A): %.3E' %(f_rms),fontsize=20)
+plt.plot((lim_f_min, lim_f_max), (lim_f_min, lim_f_max), ls='--', color='blue', linewidth=2)
+plt.scatter(f_dft_plot, f_nn_plot, s=10, color='green')
+plt.ylabel('DPKF Force')
+plt.xlabel('DFT Force')
+plt.savefig('li_zwt_force.png', format='png')
 #*********plot e_i ************
 
 
@@ -631,34 +666,11 @@ lim_max = e_max + (e_max - e_min) * 0.1
 e_atomic_rms = test_RMSE_Ei
 
 plt.title('atomic energy')
-plt.scatter(dft_atomic_energy, nn_atomic_energy, s=0.1)
-plt.plot((lim_min, lim_max), (lim_min, lim_max), ls='--', color='red')
+plt.scatter(dft_atomic_energy, nn_atomic_energy, s=0.5)
+plt.plot((lim_min, lim_max), (lim_min, lim_max), ls='--', color='red',linewidth=5)
 plt.xlim(lim_min, lim_max)
 plt.ylim(lim_min, lim_max)
 plt.xlabel('DFT energy (eV)')
 plt.ylabel('MLFF energy (eV)')
 plt.text(lim_min, lim_max-(lim_max-lim_min)*0.1,'Ei, rmse: %.3E' % (e_atomic_rms))
-    # save and show
 plt.savefig('atomic_energy.png', format='png')
-
-#********* plot force **********
-
-f_dft_plot = np.array(dft_Force)
-f_nn_plot = np.array(dp_Force)
-
-fmax = max(f_dft_plot.max(), f_nn_plot.max())
-fmin = min(f_dft_plot.min(), f_nn_plot.min())
-lim_f_min = fmin - (fmax-fmin)*0.1
-lim_f_max = fmax + (fmax-fmin)*0.1
-
-f_rms = test_RMSE_F
-
-plt.title('force')
-plt.xlim(lim_f_min, lim_f_max)
-plt.ylim(lim_f_min, lim_f_max)
-plt.text(fmin, fmax,'Force, rmse: %.3E' %(f_rms))
-plt.plot((lim_f_min, lim_f_max), (lim_f_min, lim_f_max), ls='--', color='red')
-plt.scatter(f_dft_plot, f_nn_plot, s=0.1)
-plt.ylabel('MLFF Force')
-plt.xlabel('DFT Force')
-plt.savefig('force.png', format='png')

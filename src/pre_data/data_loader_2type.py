@@ -33,6 +33,8 @@ class MovementDataset(Dataset):
         self.nblist = np.load(nblist_path)
         self.ind_img = np.load(ind_img_path)
         self.itype = np.load(itype_path)
+        self.Rc = pm.Rc  # default 6.0
+        self.Rm = pm.Rm  # default 5.8
 
         if pm.dR_neigh == False:
             self.feat = np.load(feat_path)
@@ -58,17 +60,20 @@ class MovementDataset(Dataset):
             if (not os.path.exists(Ri_path)) or (not os.path.exists(Ri_d_path)):
                 self.prepare(Ri_path, Ri_d_path)
 
+            base_dir = os.getcwd()
             if is_train:
                 np.save(stat_path+"/davg.npy", self.davg)
                 np.save(stat_path+"/dstd.npy", self.dstd)
                 np.save(stat_path+"/ener_shift", self.ener_shift)
             else:
+                if not os.path.exists(base_dir+'/train_data/final_train'):  # python ***/test1.py is needed 
+                    os.mkdir(base_dir + '/train_data/final_train')
                 if os.path.exists(stat_path+'/davg.npy') and os.path.exists(stat_path+'/dstd.npy'):
                     self.davg = np.load(stat_path+"/davg.npy")
                     self.dstd = np.load(stat_path+"/dstd.npy")
                     self.ener_shift = np.load(stat_path+"/ener_shift.npy")
                 else:
-                    raise RuntimeError("davg.npy and dstd.npy not found")
+                    raise RuntimeError("davg.npy, dstd.npy and ener_shift.npy not found, copy *.npy from you training base dir/train_data")
                     
                 
 
@@ -219,18 +224,18 @@ class MovementDataset(Dataset):
         res = torch.zeros_like(x)
 
         # x < rcut_min vv = 1
-        mask_min = x < 5.8   #set rcut=25, 10  min=0,max=30
+        mask_min = x < self.Rm   #set rcut=25, 10  min=0,max=30
         mask_1 = mask & mask_min  #[2,108,100]
         vv[mask_1] = 1
         dvv[mask_1] = 0
 
         # rcut_min< x < rcut_max
-        mask_max = x < 6.0
+        mask_max = x < self.Rc
         mask_2 = ~mask_min & mask_max & mask
         # uu = (xx - rmin) / (rmax - rmin) ;
-        uu[mask_2] = (x[mask_2] - 5.8)/(6.0 -5.8)
+        uu[mask_2] = (x[mask_2] - self.Rm)/(self.Rc - self.Rm)
         vv[mask_2] = uu[mask_2] * uu[mask_2] * uu[mask_2] * (-6 * uu[mask_2] * uu[mask_2] + 15 * uu[mask_2] - 10) + 1
-        du = 1.0 / ( 6.0 - 5.8)
+        du = 1.0 / ( self.Rc - self.Rm)
         # dd = ( 3 * uu*uu * (-6 * uu*uu + 15 * uu - 10) + uu*uu*uu * (-12 * uu + 15) ) * du;
         dvv[mask_2] = (3 * uu[mask_2] * uu[mask_2] * (-6 * uu[mask_2] * uu[mask_2] + 15 * uu[mask_2] -10) + uu[mask_2] * uu[mask_2] * uu[mask_2] * (-12 * uu[mask_2] + 15)) * du
  
