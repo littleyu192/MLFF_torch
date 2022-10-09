@@ -20,6 +20,8 @@ from model.MLFF_v1 import MLFF
 from model.MLFF import MLFFNet
 
 from optimizer.kalmanfilter import GKalmanFilter, LKalmanFilter, SKalmanFilter, L1KalmanFilter
+from optimizer.KF import KFOptimizer
+from optimizer.KFWrapper import KFOptimizerWrapper
 
 from model.dp import DP
 import torch.utils.data as Data
@@ -542,10 +544,6 @@ def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
     loss_Egroup = 0
     
 
-    # if loss_Etot.item() > 1e5:
-    #     print("a debug")
-    #     return torch.zeros(1), torch.zeros(1), torch.zeros(1), torch.zeros(1)
-    
     start_lr = opt_lr
     w_f = 1
     w_e = 1
@@ -566,6 +564,95 @@ def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
     # import ipdb; ipdb.set_trace()
 
     optimizer.step()
+    info("loss = %.16f (loss_etot = %.16f, loss_force = %.16f, RMSE_etot = %.16f, RMSE_force = %.16f)"\
+     %(loss, loss_Etot, loss_F, loss_Etot ** 0.5, loss_F ** 0.5))
+    
+    return loss, loss_Etot, loss_Ei, loss_F
+
+def train_KF(sample_batches, KFOptWrapper: KFOptimizerWrapper, criterion, last_epoch):
+    if (opt_dtype == 'float64'):
+        Ei_label = Variable(sample_batches['output_energy'][:,:,:].double().to(device))
+        Force_label = Variable(sample_batches['output_force'][:,:,:].double().to(device))   #[40,108,3]
+        if pm.dR_neigh:
+            dR = Variable(sample_batches['input_dR'].double().to(device), requires_grad=True)
+            dR_neigh_list = Variable(sample_batches['input_dR_neigh_list'].to(device))
+            Ri = Variable(sample_batches['input_Ri'].double().to(device), requires_grad=True)
+            Ri_d = Variable(sample_batches['input_Ri_d'].to(device))
+        else:
+            Egroup_label = Variable(sample_batches['input_egroup'].double().to(device))
+            input_data = Variable(sample_batches['input_feat'].double().to(device), requires_grad=True)
+            dfeat = Variable(sample_batches['input_dfeat'].double().to(device))  #[40,108,100,42,3]
+            egroup_weight = Variable(sample_batches['input_egroup_weight'].double().to(device))
+            divider = Variable(sample_batches['input_divider'].double().to(device))
+
+    elif (opt_dtype == 'float32'):
+        Ei_label = Variable(sample_batches['output_energy'][:,:,:].float().to(device))
+        Force_label = Variable(sample_batches['output_force'][:,:,:].float().to(device))   #[40,108,3]
+        if pm.dR_neigh:
+            dR = Variable(sample_batches['input_dR'].float().to(device), requires_grad=True)
+            dR_neigh_list = Variable(sample_batches['input_dR_neigh_list'].to(device))
+            Ri = Variable(sample_batches['input_Ri'].double().to(device), requires_grad=True)
+            Ri_d = Variable(sample_batches['input_Ri_d'].to(device))
+        else:
+            Egroup_label = Variable(sample_batches['input_egroup'].float().to(device))
+            input_data = Variable(sample_batches['input_feat'].float().to(device), requires_grad=True)
+            dfeat = Variable(sample_batches['input_dfeat'].float().to(device))  #[40,108,100,42,3]
+            egroup_weight = Variable(sample_batches['input_egroup_weight'].float().to(device))
+            divider = Variable(sample_batches['input_divider'].float().to(device))
+
+    else:
+        error("train(): unsupported opt_dtype %s" %opt_dtype)
+        raise RuntimeError("train(): unsupported opt_dtype %s" %opt_dtype)
+
+
+    Etot_label = torch.sum(Ei_label, dim=1)
+    neighbor = Variable(sample_batches['input_nblist'].int().to(device))  # [40,108,100]
+    natoms_img = Variable(sample_batches['natoms_img'].int().to(device))
+    # dumping what you want here
+   
+    dump("neighbor.shape = %s" %(neighbor.shape,))
+    dump("dump neighbor ------------------->")
+    dump(neighbor)
+
+    model = KFOptWrapper.model
+    model.train()
+    
+    if opt_dp:
+        Etot_predict, Ei_predict, Force_predict = model(Ri, Ri_d, dR_neigh_list, natoms_img, None, None)
+    else:
+        Etot_predict, Ei_predict, Force_predict = model(input_data, dfeat, neighbor, natoms_img, egroup_weight, divider)
+    
+    dump("etot predict =============================================>")
+    dump(Etot_predict)
+    dump("etot label ===============================================>")
+    dump(Etot_label)
+    dump("force predict ============================================>")
+    dump(Force_predict)
+    dump("force label ==============================================>")
+    dump(Force_label)
+    if (last_epoch):
+        summary("etot predict =============================================>")
+        summary(Etot_predict)
+        summary("etot label ===============================================>")
+        summary(Etot_label)
+        summary("force predict ============================================>")
+        summary(Force_predict)
+        summary("force label ==============================================>")
+        summary(Force_label)
+    
+    loss_F = criterion(Force_predict, Force_label)
+    loss_Etot = criterion(Etot_predict, Etot_label)
+    loss_Ei = criterion(Ei_predict, Ei_label)
+    loss = loss_F + loss_Etot
+
+    if opt_dp:
+        kalman_inputs = [Ri, Ri_d, dR_neigh_list, natoms_img, None, None]
+    else:
+        kalman_inputs = [input_data, dfeat, neighbor, natoms_img, egroup_weight, divider]
+
+    KFOptWrapper.update_energy(kalman_inputs, Etot_label)
+    KFOptWrapper.update_force(kalman_inputs, Force_label)
+
     info("loss = %.16f (loss_etot = %.16f, loss_force = %.16f, RMSE_etot = %.16f, RMSE_force = %.16f)"\
      %(loss, loss_Etot, loss_F, loss_Etot ** 0.5, loss_F ** 0.5))
     
@@ -838,7 +925,7 @@ if (opt_recover_mode == True):
     if (opt_session_name == ''):
         raise RuntimeError("you must run follow-mode from an existing session")
     opt_latest_file = opt_model_dir+'latest.pt'
-    checkpoint = torch.load(opt_latest_file,map_location=device)
+    checkpoint = torch.load(opt_latest_file, map_location=device)
     model.load_state_dict(checkpoint['model'])
     start_epoch = checkpoint['epoch'] + 1
 
@@ -846,7 +933,10 @@ if (opt_recover_mode == True):
 #    model = nn.DataParallel(model)
 
 model_parameters = model.parameters()
-if (opt_optimizer == 'SGD'):
+
+if (opt_optimizer == 'LKF'):
+    optimizer = KFOptimizer(model_parameters, opt_lambda, opt_nue, opt_blocksize, device)
+elif (opt_optimizer == 'SGD'):
     optimizer = optim.SGD(model_parameters, lr=LR_base, momentum=momentum, weight_decay=REGULAR_wd)
 elif (opt_optimizer == 'ASGD'):
     optimizer = optim.ASGD(model_parameters, lr=LR_base, weight_decay=REGULAR_wd)
@@ -938,17 +1028,17 @@ for epoch in range(start_epoch, n_epoch + 1):
         
         natoms_sum = sample_batches['natoms_img'][0, 0].item()
         
-        if pm.use_GKalman == True:
+        if opt_optimizer == 'LKF':
+            time_start = time.time()
+            KFOptWrapper = KFOptimizerWrapper(model, optimizer, opt_nselect, opt_groupsize)
+            batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
+                train_KF(sample_batches, KFOptWrapper, nn.MSELoss(), last_epoch)
+            time_end = time.time()
+        elif pm.use_GKalman == True:
             real_lr = 0.001
             time_start = time.time()
             batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
                 train_kalman(sample_batches, model, Gkalman, nn.MSELoss(), last_epoch, real_lr)
-            time_end = time.time()
-        elif pm.use_LKalman == True:
-            real_lr = 0.001
-            time_start = time.time()
-            batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
-                train_kalman(sample_batches, model, Lkalman, nn.MSELoss(), last_epoch, real_lr)
             time_end = time.time()
         elif pm.use_L1Kalman == True:
             real_lr = 0.001
