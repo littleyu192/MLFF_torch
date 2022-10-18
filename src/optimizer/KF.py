@@ -7,7 +7,7 @@ import ipdb
 
 
 class KFOptimizer(Optimizer):
-    def __init__(self, params, kalman_lambda, kalman_nue, block_size, device):
+    def __init__(self, params, kalman_lambda=0.1, kalman_nue=0.9, block_size=5120, device=torch.device('cuda')):
         super(KFOptimizer, self).__init__(params, {"lr": 0.1})
         self.kalman_lambda = kalman_lambda
         self.kalman_nue = kalman_nue
@@ -116,7 +116,10 @@ class KFOptimizer(Optimizer):
                         i += 1
                     param.data = tmp_weight.reshape(param.data.T.shape).T
 
-    def step(self, grad_prefactor, error):
+    def set_grad_prefactor(self, grad_prefactor):
+        self.grad_prefactor = grad_prefactor
+
+    def step(self, error):
 
         weights = []
         H = []
@@ -128,12 +131,12 @@ class KFOptimizer(Optimizer):
             for param in params:
                 if param.ndim > 1:
                     tmp = param.data.T.reshape(param.data.nelement(), 1)
-                    tmp_grad = (param.grad / grad_prefactor).T.reshape(
+                    tmp_grad = (param.grad / self.grad_prefactor).T.reshape(
                         param.grad.nelement(), 1
                     )
                 else:
                     tmp = param.data.reshape(param.data.nelement(), 1)
-                    tmp_grad = (param.grad / grad_prefactor).reshape(
+                    tmp_grad = (param.grad / self.grad_prefactor).reshape(
                         param.grad.nelement(), 1
                     )
 

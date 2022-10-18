@@ -31,6 +31,7 @@ class KFOptimizerWrapper:
             is_calc_f=False,
         )
         natoms_sum = inputs[3][0, 0]
+        self.optimizer.set_grad_prefactor(natoms_sum)
 
         self.optimizer.zero_grad()
 
@@ -45,7 +46,7 @@ class KFOptimizerWrapper:
         Etot_predict[mask] = -update_prefactor * Etot_predict[mask]
 
         Etot_predict.mean().backward()
-        self.optimizer.step(natoms_sum, error)
+        self.optimizer.step(error)
         time_end = time.time()
         print("Wrapper: Layerwised KF update Energy time:", time_end - time_start, "s")
 
@@ -54,6 +55,8 @@ class KFOptimizerWrapper:
     ) -> None:
         time_start = time.time()
         natoms_sum = inputs[3][0, 0]
+        self.optimizer.set_grad_prefactor(natoms_sum * self.atoms_per_group * 3)
+        
         index = self.__sample(self.atoms_selected, self.atoms_per_group, natoms_sum)
 
         for i in range(index.shape[0]):
@@ -70,7 +73,7 @@ class KFOptimizerWrapper:
             tmp_force_predict = force_predict[:, index[i]] * update_prefactor
             tmp_force_predict[mask] = -update_prefactor * tmp_force_predict[mask]
             tmp_force_predict.sum().backward()
-            self.optimizer.step(self.atoms_per_group * 3 * natoms_sum, error)
+            self.optimizer.step(error)
 
         time_end = time.time()
         print("Wrapper: Layerwised KF update Force time:", time_end - time_start, "s")
