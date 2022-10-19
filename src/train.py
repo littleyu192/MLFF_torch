@@ -16,11 +16,11 @@ import torch.optim as optim
 from torch.nn.parameter import Parameter
 from torch.utils.data import Dataset, DataLoader
 from loss.AutomaticWeightedLoss import AutomaticWeightedLoss
-from model.MLFF_v1 import MLFF
 from model.MLFF import MLFFNet
 
 from optimizer.kalmanfilter import GKalmanFilter, LKalmanFilter, SKalmanFilter, L1KalmanFilter
-from optimizer.KF import KFOptimizer
+from optimizer.LKF import LKFOptimizer
+from optimizer.GKF import GKFOptimizer
 from optimizer.KFWrapper import KFOptimizerWrapper
 import horovod.torch as hvd
 
@@ -59,7 +59,7 @@ opt_recover_mode = False
 opt_net_cfg = 'default'
 # opt_act = 'tanh'
 opt_act = 'sigmoid'
-opt_optimizer = 'ADAM'
+opt_optimizer = 'ADAM'   # 'LKF'; 'GKF'
 opt_momentum = float(0)
 opt_regular_wd = float(0)
 opt_scheduler = 'NONE'
@@ -69,7 +69,7 @@ opt_gamma = float(0.99)
 opt_step = 100
 opt_batch_size = pm.batch_size
 opt_dtype = pm.training_dtype
-opt_rseed = 2021
+opt_rseed = 2022
 # session and related options
 opt_session_name = ''
 opt_session_dir = ''
@@ -101,7 +101,7 @@ opt_LR_T_max = None
 opt_autograd = True
 opt_dp = False
 
-# Kalman Filter options
+# Kalman Filter default parameters setting
 opt_nselect = 24
 opt_groupsize= 6
 opt_blocksize = 10240
@@ -185,7 +185,7 @@ for opt_name,opt_value in opts:
         print("                                    using --dmirror or --auto_grad")
         print("                                    default: --auto_grad")
         print("")
-        print("     --dp                    :  use dp method(emdedding net + fitting net)")
+        print("     --dp                       :  use dp method(emdedding net + fitting net)")
         print("                                    using --dp=True enable dp method")
         print("                                    adding -n DeepMD_cfg (see cu/parameters.py)")
         print("                                    defalt: --dp=False (see line 90)")
@@ -203,6 +203,10 @@ for opt_name,opt_value in opts:
         print("     --kf_lambda                 :  Kalman lambda(default:0.98)")
         print("     --kf_nue                    :  Kalman nue(default:0.9987)")
         print("")
+        print("Horovod pytorch setting:")
+        print("     --hvd                       :  use hvd to parallel")
+        print("                                    default --hvd=False")
+        print("                                    install hvd and using --hvd=True enable multi-gpu training")
         exit()
     elif opt_name in ('-c','--cpu'):
         opt_force_cpu = True
@@ -576,7 +580,7 @@ def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
     
     return loss, loss_Etot, loss_Ei, loss_F
 
-def train_KF(sample_batches, KFOptWrapper: KFOptimizerWrapper, criterion, last_epoch):
+def train_KF(sample_batches, KFOptWrapper: KFOptimizerWrapper, criterion, last_epoch):    #  KFOptWrapper : KFOptimizerWrapper
     if (opt_dtype == 'float64'):
         Ei_label = Variable(sample_batches['output_energy'][:,:,:].double().to(device))
         Force_label = Variable(sample_batches['output_force'][:,:,:].double().to(device))   #[40,108,3]
@@ -941,8 +945,10 @@ if (opt_recover_mode == True):
 
 model_parameters = model.parameters()
 
-if (opt_optimizer == 'LKF'):
-    optimizer = KFOptimizer(model_parameters, opt_lambda, opt_nue, opt_blocksize, device)
+if (opt_optimizer == 'GKF'):
+    optimizer = GKFOptimizer(model_parameters, opt_lambda, opt_nue, device)
+elif (opt_optimizer == 'LKF'):
+    optimizer = LKFOptimizer(model_parameters, opt_lambda, opt_nue, opt_blocksize, device)
 elif (opt_optimizer == 'SGD'):
     optimizer = optim.SGD(model_parameters, lr=LR_base, momentum=momentum, weight_decay=REGULAR_wd)
 elif (opt_optimizer == 'ASGD'):
@@ -1042,6 +1048,12 @@ for epoch in range(start_epoch, n_epoch + 1):
         natoms_sum = sample_batches['natoms_img'][0, 0].item()
         
         if opt_optimizer == 'LKF':
+            time_start = time.time()
+            KFOptWrapper = KFOptimizerWrapper(model, optimizer, opt_nselect, opt_groupsize)
+            batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
+                train_KF(sample_batches, KFOptWrapper, nn.MSELoss(), last_epoch)
+            time_end = time.time()
+        elif opt_optimizer == 'GKF':
             time_start = time.time()
             KFOptWrapper = KFOptimizerWrapper(model, optimizer, opt_nselect, opt_groupsize)
             batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \

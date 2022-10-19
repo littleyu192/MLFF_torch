@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch.optim.optimizer import Optimizer
 import time
 import numpy as np
+import horovod as hvd
 
 class KFOptimizerWrapper:
     def __init__(
@@ -42,13 +43,15 @@ class KFOptimizerWrapper:
         error = error * update_prefactor
         error[mask] = -1 * error[mask]
         error = error.mean()
+        error = hvd.torch.allreduce(error)
+
         Etot_predict = update_prefactor * Etot_predict
         Etot_predict[mask] = -update_prefactor * Etot_predict[mask]
 
         Etot_predict.mean().backward()
         self.optimizer.step(error)
         time_end = time.time()
-        print("Wrapper: Layerwised KF update Energy time:", time_end - time_start, "s")
+        print("Wrapper: KF update Energy time:", time_end - time_start, "s")
 
     def update_force(
         self, inputs: list, Force_label: torch.Tensor, update_prefactor: float = 1
@@ -70,13 +73,14 @@ class KFOptimizerWrapper:
             mask = error_tmp < 0
             error_tmp[mask] = -1 * error_tmp[mask]
             error = error_tmp.mean() / natoms_sum
+            error = hvd.torch.allreduce(error)
             tmp_force_predict = force_predict[:, index[i]] * update_prefactor
             tmp_force_predict[mask] = -update_prefactor * tmp_force_predict[mask]
             tmp_force_predict.sum().backward()
             self.optimizer.step(error)
 
         time_end = time.time()
-        print("Wrapper: Layerwised KF update Force time:", time_end - time_start, "s")
+        print("Wrapper: KF update Force time:", time_end - time_start, "s")
 
     def __sample(
         self, atoms_selected: int, atoms_per_group: int, natoms: int

@@ -6,9 +6,9 @@ import numpy as np
 import ipdb
 
 
-class KFOptimizer(Optimizer):
+class LKFOptimizer(Optimizer):
     def __init__(self, params, kalman_lambda=0.1, kalman_nue=0.9, block_size=5120, device=torch.device('cuda')):
-        super(KFOptimizer, self).__init__(params, {"lr": 0.1})
+        super(LKFOptimizer, self).__init__(params, {"lr": 0.1})
         self.kalman_lambda = kalman_lambda
         self.kalman_nue = kalman_nue
         self.block_size = block_size

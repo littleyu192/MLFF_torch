@@ -167,9 +167,13 @@ class MLFFNet(nn.Module):
             self.models.append(FCNet(itype = i, Dropout=Dropout))   # Dropout=True
 
 
-    def forward(self, image, dfeat, neighbor, natoms_img, Egroup_weight, divider):
+    def forward(self, image, dfeat, neighbor, natoms_img, Egroup_weight, divider, is_calc_f=None):
         start = time.time()
         #image.requires_grad_(True)
+        batch_size = image.shape[0]
+        natom = image.shape[1]
+        neighbor_num=dfeat.shape[2]
+
         natoms_index = [0]
         temp = 0
         for i in natoms_img[0, 1:]:
@@ -193,7 +197,9 @@ class MLFFNet(nn.Module):
         input_grad_allatoms = dE
         cal_ei_de = time.time()
         Etot = Ei.sum(dim=1)
-
+        F = torch.zeros((batch_size, natom, 3), device=self.device)
+        if is_calc_f == False:
+            return Etot, Ei, F
         #dE = torch.autograd.grad(res0, in_feature, grad_outputs=mask, create_graph=True, retain_graph=True)
 
         test = Ei.sum()
@@ -201,11 +207,7 @@ class MLFFNet(nn.Module):
         #test_grad=image.grad
         mask = torch.ones_like(test)
         test_grad = torch.autograd.grad(test,image,grad_outputs=mask, create_graph=True,retain_graph=True)
-        test_grad = test_grad[0]
-           
-        batch_size = image.shape[0]
-        natom = image.shape[1]
-        neighbor_num=dfeat.shape[2]
+        test_grad = test_grad[0]   
         dim_feat=pm.nFeatures
         result_dEi_dFeat_fortran = torch.zeros((batch_size, natom + 1, dim_feat))
         result_dEi_dFeat_fortran[:, 1:, :]=test_grad
