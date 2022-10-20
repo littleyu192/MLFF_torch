@@ -54,7 +54,7 @@ model_names = sorted(
     if name.islower() and not name.startswith("__") and callable(models.__dict__[name])
 )
 
-parser = argparse.ArgumentParser(description="PyTorch ImageNet Training")
+parser = argparse.ArgumentParser(description="PyTorch MLFF Training")
 parser.add_argument(
     "--datatype", default="float64", type=str, help="Datatype default float64"
 )
@@ -67,7 +67,7 @@ parser.add_argument(
     help="number of data loading workers (default: 4)",
 )
 parser.add_argument(
-    "--epochs", default=90, type=int, metavar="N", help="number of total epochs to run"
+    "--epochs", default=30, type=int, metavar="N", help="number of total epochs to run"
 )
 parser.add_argument(
     "--start-epoch",
@@ -79,10 +79,10 @@ parser.add_argument(
 parser.add_argument(
     "-b",
     "--batch-size",
-    default=256,
+    default=16,
     type=int,
     metavar="N",
-    help="mini-batch size (default: 256), this is the total "
+    help="mini-batch size (default: 1), this is the total "
     "batch size of all GPUs on the current node when "
     "using Data Parallel or Distributed Data Parallel",
 )
@@ -121,8 +121,7 @@ parser.add_argument(
     help="resume the latest checkpoint",
 )
 parser.add_argument(
-    "-s"
-    "--store-path",
+    "-s" "--store-path",
     default="default",
     type=str,
     metavar="STOREPATH",
@@ -160,7 +159,7 @@ parser.add_argument(
 parser.add_argument("--magic", default=2022, type=int, help="Magic number. ")
 parser.add_argument("--gpu", default=None, type=int, help="GPU id to use.")
 parser.add_argument(
-    "--dp", default=True, type=bool, help="Weather to use DP, default true."
+    "--dp", default=True, type=bool, help="Weather to use DP, default True."
 )
 parser.add_argument(
     "--multiprocessing-distributed",
@@ -395,20 +394,50 @@ def main_worker(gpu, ngpus_per_node, args):
         valid(val_loader, model, criterion, device, args)
         return
 
+    if not args.multiprocessing_distributed or (
+        args.multiprocessing_distributed and args.rank % ngpus_per_node == 0
+    ):
+        train_log = os.path.join(args.store_path, "epoch_train.dat")
+        # train_log = args.store_path + "epoch_train.dat"
+        # import ipdb;ipdb.set_trace()
+        f_train_log = open(train_log, "w")
+        f_train_log.write("epoch\t loss\t RMSE_Etot\t RMSE_Ei\t RMSE_F\t time\n")
+
+        valid_log = os.path.join(args.store_path, "epoch_valid.dat")
+        f_valid_log = open(valid_log, "w")
+        f_valid_log.write("epoch\t loss\t RMSE_Etot\t RMSE_Ei\t RMSE_F\n")
+
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             train_sampler.set_epoch(epoch)
+
         # train for one epoch
-        train_LKF(train_loader, model, criterion, optimizer, epoch, device, args)
+        loss, loss_Etot, loss_Force, loss_Ei, epoch_time = train_LKF(
+            train_loader, model, criterion, optimizer, epoch, device, args
+        )
 
         # evaluate on validation set
-        loss, loss_Etot, loss_Force, loss_Ei = valid(
+        vld_loss, vld_loss_Etot, vld_loss_Force, vld_loss_Ei = valid(
             val_loader, model, criterion, device, args
         )
 
+        if not args.multiprocessing_distributed or (
+            args.multiprocessing_distributed and args.rank % ngpus_per_node == 0
+        ):
+            f_train_log = open(train_log, "a")
+            f_train_log.write(
+                "%d %e %e %e %e %s\n"
+                % (epoch, loss, loss_Etot, loss_Ei, loss_Force, epoch_time)
+            )
+            f_valid_log = open(valid_log, "a")
+            f_valid_log.write(
+                "%d %e %e %e %e\n"
+                % (epoch, vld_loss, vld_loss_Etot, vld_loss_Ei, vld_loss_Force)
+            )
+
         # scheduler.step()
 
-        # remember best acc@1 and save checkpoint
+        # remember best loss and save checkpoint
         is_best = loss < best_loss
         best_loss = min(loss, best_loss)
 
@@ -425,7 +454,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 },
                 is_best,
                 "checkpoint" + str(epoch) + ".pth.tar",
-                args.store_path
+                args.store_path,
             )
 
 
@@ -608,9 +637,9 @@ def train_LKF(train_loader, model, criterion, optimizer, epoch, device, config):
         batch_size = Ri.shape[0]
         # measure accuracy and record loss
         losses.update(loss_val.item(), batch_size)
-        loss_Etot.update(loss_Etot_val, batch_size)
-        loss_Ei.update(loss_Ei_val, batch_size)
-        loss_Force.update(loss_F_val, batch_size)
+        loss_Etot.update(loss_Etot_val.item(), batch_size)
+        loss_Ei.update(loss_Ei_val.item(), batch_size)
+        loss_Force.update(loss_F_val.item(), batch_size)
 
         # measure elapsed time
         batch_time.update(time.time() - end)
@@ -620,6 +649,7 @@ def train_LKF(train_loader, model, criterion, optimizer, epoch, device, config):
             progress.display(i + 1)
 
     progress.display_summary(["Training Set:"])
+    return losses.avg, loss_Etot.root, loss_Force.root, loss_Ei.root, batch_time.sum
 
 
 def valid(val_loader, model, criterion, device, args):
@@ -726,9 +756,9 @@ def valid(val_loader, model, criterion, device, args):
             # measure accuracy and record loss
             batch_size = Ri.shape[0]
             losses.update(loss_val.item(), batch_size)
-            loss_Etot.update(loss_Etot_val, batch_size)
-            loss_Ei.update(loss_Ei_val, batch_size)
-            loss_Force.update(loss_F_val, batch_size)
+            loss_Etot.update(loss_Etot_val.item(), batch_size)
+            loss_Ei.update(loss_Ei_val.item(), batch_size)
+            loss_Force.update(loss_F_val.item(), batch_size)
             # measure elapsed time
             batch_time.update(time.time() - end)
             end = time.time()
