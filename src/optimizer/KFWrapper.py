@@ -13,11 +13,13 @@ class KFOptimizerWrapper:
         optimizer: Optimizer,
         atoms_selected: int,
         atoms_per_group: int,
+        use_horovod: bool = False,
     ) -> None:
         self.model = model
         self.optimizer = optimizer
         self.atoms_selected = atoms_selected  # 24
         self.atoms_per_group = atoms_per_group  # 6
+        self.use_horovod = use_horovod
 
     def update_energy(
         self, inputs: list, Etot_label: torch.Tensor, update_prefactor: float = 1
@@ -44,7 +46,9 @@ class KFOptimizerWrapper:
         error = error * update_prefactor
         error[mask] = -1 * error[mask]
         error = error.mean()
-        error = hvd.torch.allreduce(error)
+
+        if self.use_horovod:
+            error = hvd.torch.allreduce(error)
 
         Etot_predict = update_prefactor * Etot_predict
         Etot_predict[mask] = -update_prefactor * Etot_predict[mask]
@@ -75,7 +79,10 @@ class KFOptimizerWrapper:
             mask = error_tmp < 0
             error_tmp[mask] = -1 * error_tmp[mask]
             error = error_tmp.mean() / natoms_sum
-            error = hvd.torch.allreduce(error)
+
+            if self.use_horovod:
+                error = hvd.torch.allreduce(error)
+
             tmp_force_predict = force_predict[:, index[i]] * update_prefactor
             tmp_force_predict[mask] = -update_prefactor * tmp_force_predict[mask]
             tmp_force_predict.sum().backward()

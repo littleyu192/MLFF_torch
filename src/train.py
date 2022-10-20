@@ -2,31 +2,27 @@
 # -*- coding: utf-8 -*-
 from statistics import mode
 from turtle import Turtle
-import torch
 import os,sys
-import random
 import time
 import numpy as np
-import torch.autograd as autograd
-import matplotlib.pyplot as plt
+
+import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.nn.modules import loss
 import torch.optim as optim
-from torch.nn.parameter import Parameter
-from torch.utils.data import Dataset, DataLoader
-from loss.AutomaticWeightedLoss import AutomaticWeightedLoss
+import torch.utils.data as Data
+from torch.autograd import Variable
+
+
+from model.dp import DP
 from model.MLFF import MLFFNet
 
 from optimizer.kalmanfilter import GKalmanFilter, LKalmanFilter, SKalmanFilter, L1KalmanFilter
 from optimizer.LKF import LKFOptimizer
 from optimizer.GKF import GKFOptimizer
 from optimizer.KFWrapper import KFOptimizerWrapper
-import horovod.torch as hvd
 
-from model.dp import DP
-import torch.utils.data as Data
-from torch.autograd import Variable
+
 import math
 sys.path.append(os.getcwd())
 import parameters as pm 
@@ -108,6 +104,7 @@ opt_blocksize = 10240
 opt_fprefactor = 2
 opt_lambda = 0.98
 opt_nue = 0.99870
+opt_horovod = False
 
 
 opts,args = getopt.getopt(sys.argv[1:],
@@ -121,7 +118,7 @@ opts,args = getopt.getopt(sys.argv[1:],
      'wandb','wandb_entity=','wandb_project=',
      'auto_grad=', 'dmirror=', 'dp=', 
      'nselect=', 'groupsize=', 'blocksize=', 'fprefactor=',
-     'kf_lambda=', 'kf_nue='])
+     'kf_lambda=', 'kf_nue=', 'hvd'])
 
 for opt_name,opt_value in opts:
     if opt_name in ('-h','--help'):
@@ -205,8 +202,8 @@ for opt_name,opt_value in opts:
         print("")
         print("Horovod pytorch setting:")
         print("     --hvd                       :  use hvd to parallel")
-        print("                                    default --hvd=False")
-        print("                                    install hvd and using --hvd=True enable multi-gpu training")
+        print("                                    default is False")
+        print("                                    install horovod and using --hvd option enable multi-gpu training")
         exit()
     elif opt_name in ('-c','--cpu'):
         opt_force_cpu = True
@@ -325,6 +322,9 @@ for opt_name,opt_value in opts:
         opt_lambda = eval(opt_value)
     elif opt_name in ('--kf_nue='):
         opt_nue = eval(opt_value)
+    elif opt_name in ('--hvd'):
+        opt_horovod = True
+        import horovod.torch as hvd
 
 
 # setup logging module
@@ -414,11 +414,12 @@ if (opt_tensorboard_dir != ''):
 else:
     writer = None
 
-# Initialize Horovod
-hvd.init()
+if opt_horovod:
+    # Initialize Horovod
+    hvd.init()
 
-# Pin GPU to be used to process local rank (one GPU per process)
-torch.cuda.set_device(hvd.local_rank())
+    # Pin GPU to be used to process local rank (one GPU per process)
+    torch.cuda.set_device(hvd.local_rank())
 
 
 def get_loss_func(start_lr, real_lr, has_fi, lossFi, has_etot, loss_Etot, has_egroup, loss_Egroup, has_ei, loss_Ei, natoms_sum):
@@ -889,11 +890,15 @@ if pm.is_scale:
     dfeat_tmp = dfeat_tmp.transpose(0, 1, 3, 2)
     torch_valid_data.dfeat = dfeat_tmp
 
-train_sampler = torch.utils.data.distributed.DistributedSampler(torch_train_data, num_replicas=hvd.size(), rank=hvd.rank())
-loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=False, sampler=train_sampler)
+if opt_horovod:
+    train_sampler = torch.utils.data.distributed.DistributedSampler(torch_train_data, num_replicas=hvd.size(), rank=hvd.rank())
+    loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=False, sampler=train_sampler)
 
-vaild_sampler = torch.utils.data.distributed.DistributedSampler(torch_train_data, num_replicas=hvd.size(), rank=hvd.rank())
-loader_valid = Data.DataLoader(torch_valid_data, batch_size=batch_size, shuffle=False)
+    vaild_sampler = torch.utils.data.distributed.DistributedSampler(torch_train_data, num_replicas=hvd.size(), rank=hvd.rank())
+    loader_valid = Data.DataLoader(torch_valid_data, batch_size=batch_size, shuffle=False)
+else:
+    loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=True)
+    loader_valid = Data.DataLoader(torch_valid_data, batch_size=batch_size, shuffle=True)
 # if opt_dp:
 #     davg = np.load("./davg.npy")
 #     dstd = np.load("./dstd.npy")
@@ -973,11 +978,12 @@ else:
     error("unsupported optimizer: %s" %opt_optimizer)
     raise RuntimeError("unsupported optimizer: %s" %opt_optimizer)
 
+if opt_horovod:
 # Add Horovod Distributed Optimizer
-optimizer = hvd.DistributedOptimizer(optimizer, named_parameters=model.named_parameters())
+    optimizer = hvd.DistributedOptimizer(optimizer, named_parameters=model.named_parameters())
 
-# Broadcast parameters from rank 0 to all other processes.
-hvd.broadcast_parameters(model.state_dict(), root_rank=0)
+    # Broadcast parameters from rank 0 to all other processes.
+    hvd.broadcast_parameters(model.state_dict(), root_rank=0)
 # if (opt_recover_mode == True):
     # opt_latest_file = opt_model_dir+'latest.pt'
     # checkpoint = torch.load(opt_latest_file,map_location=device)
@@ -1049,13 +1055,13 @@ for epoch in range(start_epoch, n_epoch + 1):
         
         if opt_optimizer == 'LKF':
             time_start = time.time()
-            KFOptWrapper = KFOptimizerWrapper(model, optimizer, opt_nselect, opt_groupsize)
+            KFOptWrapper = KFOptimizerWrapper(model, optimizer, opt_nselect, opt_groupsize, opt_horovod)
             batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
                 train_KF(sample_batches, KFOptWrapper, nn.MSELoss(), last_epoch)
             time_end = time.time()
         elif opt_optimizer == 'GKF':
             time_start = time.time()
-            KFOptWrapper = KFOptimizerWrapper(model, optimizer, opt_nselect, opt_groupsize)
+            KFOptWrapper = KFOptimizerWrapper(model, optimizer, opt_nselect, opt_groupsize, opt_horovod)
             batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
                 train_KF(sample_batches, KFOptWrapper, nn.MSELoss(), last_epoch)
             time_end = time.time()
