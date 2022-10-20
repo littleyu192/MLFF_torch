@@ -57,11 +57,11 @@ class GKFOptimizer(Optimizer):
             params = param_group["params"]
             for param in params:
                 if i == 0:
-                    H = (param.grad).T.reshape(param.grad.nelement(), 1)  #(param.grad / natoms_sum)?
+                    H = (param.grad / self.grad_prefactor).T.reshape(param.grad.nelement(), 1)  #(param.grad / natoms_sum)?
                     weights = param.data.T.reshape(param.data.nelement(), 1)
                 else:
                     H = torch.cat(
-                        (H, (param.grad).T.reshape(param.grad.nelement(), 1))
+                        (H, (param.grad / self.grad_prefactor).T.reshape(param.grad.nelement(), 1))
                     )
                     weights = torch.cat(
                         (weights, param.data.T.reshape(param.data.nelement(), 1))

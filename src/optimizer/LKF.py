@@ -1,13 +1,18 @@
 import torch
-import torch.nn as nn
 from torch.optim.optimizer import Optimizer
 import math
-import numpy as np
 import ipdb
 
 
 class LKFOptimizer(Optimizer):
-    def __init__(self, params, kalman_lambda=0.1, kalman_nue=0.9, block_size=5120, device=torch.device('cuda')):
+    def __init__(
+        self,
+        params,
+        kalman_lambda=0.1,
+        kalman_nue=0.9,
+        block_size=5120,
+        device=torch.device("cuda"),
+    ):
         super(LKFOptimizer, self).__init__(params, {"lr": 0.1})
         self.kalman_lambda = kalman_lambda
         self.kalman_nue = kalman_nue

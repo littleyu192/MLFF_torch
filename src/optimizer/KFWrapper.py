@@ -5,6 +5,7 @@ import time
 import numpy as np
 import horovod as hvd
 
+
 class KFOptimizerWrapper:
     def __init__(
         self,
@@ -58,8 +59,9 @@ class KFOptimizerWrapper:
     ) -> None:
         time_start = time.time()
         natoms_sum = inputs[3][0, 0]
+
         self.optimizer.set_grad_prefactor(natoms_sum * self.atoms_per_group * 3)
-        
+
         index = self.__sample(self.atoms_selected, self.atoms_per_group, natoms_sum)
 
         for i in range(index.shape[0]):
