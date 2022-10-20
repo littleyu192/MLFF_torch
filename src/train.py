@@ -1055,13 +1055,13 @@ for epoch in range(start_epoch, n_epoch + 1):
         
         if opt_optimizer == 'LKF':
             time_start = time.time()
-            KFOptWrapper = KFOptimizerWrapper(model, optimizer, opt_nselect, opt_groupsize, opt_horovod)
+            KFOptWrapper = KFOptimizerWrapper(model, optimizer, opt_nselect, opt_groupsize, opt_horovod, 'horovod')
             batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
                 train_KF(sample_batches, KFOptWrapper, nn.MSELoss(), last_epoch)
             time_end = time.time()
         elif opt_optimizer == 'GKF':
             time_start = time.time()
-            KFOptWrapper = KFOptimizerWrapper(model, optimizer, opt_nselect, opt_groupsize, opt_horovod)
+            KFOptWrapper = KFOptimizerWrapper(model, optimizer, opt_nselect, opt_groupsize, opt_horovod, 'horovod')
             batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
                 train_KF(sample_batches, KFOptWrapper, nn.MSELoss(), last_epoch)
             time_end = time.time()

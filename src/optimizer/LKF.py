@@ -136,14 +136,20 @@ class LKFOptimizer(Optimizer):
             for param in params:
                 if param.ndim > 1:
                     tmp = param.data.T.reshape(param.data.nelement(), 1)
-                    tmp_grad = (param.grad / self.grad_prefactor).T.reshape(
-                        param.grad.nelement(), 1
-                    )
+                    if param.grad is None:
+                        tmp_grad = torch.zeros_like(tmp)
+                    else:
+                        tmp_grad = (param.grad / self.grad_prefactor).T.reshape(
+                            param.grad.nelement(), 1
+                        )
                 else:
                     tmp = param.data.reshape(param.data.nelement(), 1)
-                    tmp_grad = (param.grad / self.grad_prefactor).reshape(
-                        param.grad.nelement(), 1
-                    )
+                    if param.grad is None:
+                        tmp_grad = torch.zeros_like(tmp)
+                    else:
+                        tmp_grad = (param.grad / self.grad_prefactor).reshape(
+                            param.grad.nelement(), 1
+                        )
 
                 tmp = self.__split_weights(tmp)
                 tmp_grad = self.__split_weights(tmp_grad)
