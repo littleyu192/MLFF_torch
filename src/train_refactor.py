@@ -1,5 +1,4 @@
 import argparse
-from fileinput import filename
 import os
 import random
 import shutil
@@ -45,8 +44,7 @@ import parameters as pm
 codepath = os.path.abspath(sys.path[0])
 sys.path.append(codepath + "/pre_data")
 sys.path.append(codepath + "/..")
-from data_loader_2type import MovementDataset, get_torch_data
-from scalers import DataScalers
+from data_loader_2type import get_torch_data
 
 model_names = sorted(
     name
@@ -188,7 +186,6 @@ parser.add_argument(
     "--groupsize", default=6, type=int, help="KFOptimizer parameter: Groupsize."
 )
 
-best_acc1 = 0
 best_loss = 1e10
 
 
@@ -243,7 +240,6 @@ def main():
 
 
 def main_worker(gpu, ngpus_per_node, args):
-    global best_acc1
     global best_loss
     args.gpu = gpu
 
@@ -446,7 +442,7 @@ def main_worker(gpu, ngpus_per_node, args):
         ):
             save_checkpoint(
                 {
-                    "epoch": epoch + 1,
+                    "epoch": epoch,
                     "state_dict": model.state_dict(),
                     "best_loss": best_loss,
                     "optimizer": optimizer.state_dict(),

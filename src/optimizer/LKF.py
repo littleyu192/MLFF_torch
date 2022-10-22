@@ -102,7 +102,9 @@ class LKFOptimizer(Optimizer):
                 weight_tmp = weights[i][param_sum : param_sum + param_num]
                 if param_num < self.block_size:
                     if param.ndim > 1:
-                        param.data = weight_tmp.reshape(param.data.T.shape).T
+                        param.data = weight_tmp.reshape(
+                            param.data.T.shape
+                        ).T.contiguous()
                     else:
                         param.data = weight_tmp.reshape(param.data.shape)
 
@@ -119,7 +121,7 @@ class LKFOptimizer(Optimizer):
                         else:
                             tmp_weight = torch.concat([tmp_weight, weights[i]], dim=0)
                         i += 1
-                    param.data = tmp_weight.reshape(param.data.T.shape).T
+                    param.data = tmp_weight.reshape(param.data.T.shape).T.contiguous()
 
     def set_grad_prefactor(self, grad_prefactor):
         self.grad_prefactor = grad_prefactor
@@ -135,20 +137,23 @@ class LKFOptimizer(Optimizer):
             params = param_group["params"]
             for param in params:
                 if param.ndim > 1:
-                    tmp = param.data.T.reshape(param.data.nelement(), 1)
+                    tmp = param.data.T.contiguous().reshape(param.data.nelement(), 1)
                     if param.grad is None:
                         tmp_grad = torch.zeros_like(tmp)
                     else:
-                        tmp_grad = (param.grad / self.grad_prefactor).T.reshape(
-                            param.grad.nelement(), 1
+                        tmp_grad = (
+                            (param.grad / self.grad_prefactor)
+                            .T.contiguous()
+                            .reshape(param.grad.nelement(), 1)
                         )
                 else:
                     tmp = param.data.reshape(param.data.nelement(), 1)
                     if param.grad is None:
                         tmp_grad = torch.zeros_like(tmp)
                     else:
-                        tmp_grad = (param.grad / self.grad_prefactor).reshape(
-                            param.grad.nelement(), 1
+                        tmp_grad = (
+                            (param.grad / self.grad_prefactor)
+                            .reshape(param.grad.nelement(), 1)
                         )
 
                 tmp = self.__split_weights(tmp)
