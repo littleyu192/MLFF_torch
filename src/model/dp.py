@@ -1,7 +1,3 @@
-from sys import path
-from builtins import print
-from re import S
-import numpy as np
 import torch
 from torch import embedding
 import torch.nn as nn
@@ -9,9 +5,6 @@ import torch.nn.functional as F
 from torch.nn import init
 from torch.autograd import Variable
 import sys, os
-import datetime
-import time
-import math
 sys.path.append(os.getcwd())
 import parameters as pm    
 # import prepare as pp

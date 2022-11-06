@@ -2,27 +2,31 @@
 # -*- coding: utf-8 -*-
 from statistics import mode
 from turtle import Turtle
+import torch
 import os,sys
+import random
 import time
 import numpy as np
-
-import torch
+import torch.autograd as autograd
+import matplotlib.pyplot as plt
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.nn.modules import loss
 import torch.optim as optim
-import torch.utils.data as Data
-from torch.autograd import Variable
-
-
-from model.dp import DP
+from torch.nn.parameter import Parameter
+from torch.utils.data import Dataset, DataLoader
+from loss.AutomaticWeightedLoss import AutomaticWeightedLoss
+from model.MLFF_v1 import MLFF
 from model.MLFF import MLFFNet
 
 from optimizer.kalmanfilter import GKalmanFilter, LKalmanFilter, SKalmanFilter, L1KalmanFilter
-from optimizer.LKF import LKFOptimizer
-from optimizer.GKF import GKFOptimizer
+from optimizer.KF import KFOptimizer
 from optimizer.KFWrapper import KFOptimizerWrapper
+import horovod.torch as hvd
 
-
+from model.dp import DP
+import torch.utils.data as Data
+from torch.autograd import Variable
 import math
 sys.path.append(os.getcwd())
 import parameters as pm 
@@ -55,7 +59,7 @@ opt_recover_mode = False
 opt_net_cfg = 'default'
 # opt_act = 'tanh'
 opt_act = 'sigmoid'
-opt_optimizer = 'ADAM'   # 'LKF'; 'GKF'
+opt_optimizer = 'ADAM'
 opt_momentum = float(0)
 opt_regular_wd = float(0)
 opt_scheduler = 'NONE'
@@ -65,7 +69,7 @@ opt_gamma = float(0.99)
 opt_step = 100
 opt_batch_size = pm.batch_size
 opt_dtype = pm.training_dtype
-opt_rseed = 2022
+opt_rseed = 2021
 # session and related options
 opt_session_name = ''
 opt_session_dir = ''
@@ -97,14 +101,13 @@ opt_LR_T_max = None
 opt_autograd = True
 opt_dp = False
 
-# Kalman Filter default parameters setting
+# Kalman Filter options
 opt_nselect = 24
 opt_groupsize= 6
 opt_blocksize = 10240
 opt_fprefactor = 2
 opt_lambda = 0.98
 opt_nue = 0.99870
-opt_horovod = False
 
 
 opts,args = getopt.getopt(sys.argv[1:],
@@ -118,7 +121,7 @@ opts,args = getopt.getopt(sys.argv[1:],
      'wandb','wandb_entity=','wandb_project=',
      'auto_grad=', 'dmirror=', 'dp=', 
      'nselect=', 'groupsize=', 'blocksize=', 'fprefactor=',
-     'kf_lambda=', 'kf_nue=', 'hvd'])
+     'kf_lambda=', 'kf_nue='])
 
 for opt_name,opt_value in opts:
     if opt_name in ('-h','--help'):
@@ -182,7 +185,7 @@ for opt_name,opt_value in opts:
         print("                                    using --dmirror or --auto_grad")
         print("                                    default: --auto_grad")
         print("")
-        print("     --dp                       :  use dp method(emdedding net + fitting net)")
+        print("     --dp                    :  use dp method(emdedding net + fitting net)")
         print("                                    using --dp=True enable dp method")
         print("                                    adding -n DeepMD_cfg (see cu/parameters.py)")
         print("                                    defalt: --dp=False (see line 90)")
@@ -200,10 +203,6 @@ for opt_name,opt_value in opts:
         print("     --kf_lambda                 :  Kalman lambda(default:0.98)")
         print("     --kf_nue                    :  Kalman nue(default:0.9987)")
         print("")
-        print("Horovod pytorch setting:")
-        print("     --hvd                       :  use hvd to parallel")
-        print("                                    default is False")
-        print("                                    install horovod and using --hvd option enable multi-gpu training")
         exit()
     elif opt_name in ('-c','--cpu'):
         opt_force_cpu = True
@@ -322,9 +321,6 @@ for opt_name,opt_value in opts:
         opt_lambda = eval(opt_value)
     elif opt_name in ('--kf_nue='):
         opt_nue = eval(opt_value)
-    elif opt_name in ('--hvd'):
-        opt_horovod = True
-        import horovod.torch as hvd
 
 
 # setup logging module
@@ -414,12 +410,11 @@ if (opt_tensorboard_dir != ''):
 else:
     writer = None
 
-if opt_horovod:
-    # Initialize Horovod
-    hvd.init()
+# Initialize Horovod
+hvd.init()
 
-    # Pin GPU to be used to process local rank (one GPU per process)
-    torch.cuda.set_device(hvd.local_rank())
+# Pin GPU to be used to process local rank (one GPU per process)
+torch.cuda.set_device(hvd.local_rank())
 
 
 def get_loss_func(start_lr, real_lr, has_fi, lossFi, has_etot, loss_Etot, has_egroup, loss_Egroup, has_ei, loss_Ei, natoms_sum):
@@ -581,7 +576,7 @@ def train(sample_batches, model, optimizer, criterion, last_epoch, real_lr):
     
     return loss, loss_Etot, loss_Ei, loss_F
 
-def train_KF(sample_batches, KFOptWrapper: KFOptimizerWrapper, criterion, last_epoch):    #  KFOptWrapper : KFOptimizerWrapper
+def train_KF(sample_batches, KFOptWrapper: KFOptimizerWrapper, criterion, last_epoch):
     if (opt_dtype == 'float64'):
         Ei_label = Variable(sample_batches['output_energy'][:,:,:].double().to(device))
         Force_label = Variable(sample_batches['output_force'][:,:,:].double().to(device))   #[40,108,3]
@@ -890,15 +885,11 @@ if pm.is_scale:
     dfeat_tmp = dfeat_tmp.transpose(0, 1, 3, 2)
     torch_valid_data.dfeat = dfeat_tmp
 
-if opt_horovod:
-    train_sampler = torch.utils.data.distributed.DistributedSampler(torch_train_data, num_replicas=hvd.size(), rank=hvd.rank())
-    loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=False, sampler=train_sampler)
+train_sampler = torch.utils.data.distributed.DistributedSampler(torch_train_data, num_replicas=hvd.size(), rank=hvd.rank())
+loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=False, sampler=train_sampler)
 
-    vaild_sampler = torch.utils.data.distributed.DistributedSampler(torch_train_data, num_replicas=hvd.size(), rank=hvd.rank())
-    loader_valid = Data.DataLoader(torch_valid_data, batch_size=batch_size, shuffle=False)
-else:
-    loader_train = Data.DataLoader(torch_train_data, batch_size=batch_size, shuffle=True)
-    loader_valid = Data.DataLoader(torch_valid_data, batch_size=batch_size, shuffle=True)
+vaild_sampler = torch.utils.data.distributed.DistributedSampler(torch_train_data, num_replicas=hvd.size(), rank=hvd.rank())
+loader_valid = Data.DataLoader(torch_valid_data, batch_size=batch_size, shuffle=False)
 # if opt_dp:
 #     davg = np.load("./davg.npy")
 #     dstd = np.load("./dstd.npy")
@@ -950,10 +941,8 @@ if (opt_recover_mode == True):
 
 model_parameters = model.parameters()
 
-if (opt_optimizer == 'GKF'):
-    optimizer = GKFOptimizer(model_parameters, opt_lambda, opt_nue, device)
-elif (opt_optimizer == 'LKF'):
-    optimizer = LKFOptimizer(model_parameters, opt_lambda, opt_nue, opt_blocksize, device)
+if (opt_optimizer == 'LKF'):
+    optimizer = KFOptimizer(model_parameters, opt_lambda, opt_nue, opt_blocksize, device)
 elif (opt_optimizer == 'SGD'):
     optimizer = optim.SGD(model_parameters, lr=LR_base, momentum=momentum, weight_decay=REGULAR_wd)
 elif (opt_optimizer == 'ASGD'):
@@ -978,12 +967,11 @@ else:
     error("unsupported optimizer: %s" %opt_optimizer)
     raise RuntimeError("unsupported optimizer: %s" %opt_optimizer)
 
-if opt_horovod:
 # Add Horovod Distributed Optimizer
-    optimizer = hvd.DistributedOptimizer(optimizer, named_parameters=model.named_parameters())
+optimizer = hvd.DistributedOptimizer(optimizer, named_parameters=model.named_parameters())
 
-    # Broadcast parameters from rank 0 to all other processes.
-    hvd.broadcast_parameters(model.state_dict(), root_rank=0)
+# Broadcast parameters from rank 0 to all other processes.
+hvd.broadcast_parameters(model.state_dict(), root_rank=0)
 # if (opt_recover_mode == True):
     # opt_latest_file = opt_model_dir+'latest.pt'
     # checkpoint = torch.load(opt_latest_file,map_location=device)
@@ -1055,13 +1043,7 @@ for epoch in range(start_epoch, n_epoch + 1):
         
         if opt_optimizer == 'LKF':
             time_start = time.time()
-            KFOptWrapper = KFOptimizerWrapper(model, optimizer, opt_nselect, opt_groupsize, opt_horovod, 'horovod')
-            batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
-                train_KF(sample_batches, KFOptWrapper, nn.MSELoss(), last_epoch)
-            time_end = time.time()
-        elif opt_optimizer == 'GKF':
-            time_start = time.time()
-            KFOptWrapper = KFOptimizerWrapper(model, optimizer, opt_nselect, opt_groupsize, opt_horovod, 'horovod')
+            KFOptWrapper = KFOptimizerWrapper(model, optimizer, opt_nselect, opt_groupsize)
             batch_loss, batch_loss_Etot, batch_loss_Ei, batch_loss_F = \
                 train_KF(sample_batches, KFOptWrapper, nn.MSELoss(), last_epoch)
             time_end = time.time()

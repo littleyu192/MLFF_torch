@@ -11,21 +11,6 @@ import sys, os
 sys.path.append(os.getcwd())
 import parameters as pm    
 import time
-# import numba
-# from numba import jit
-# import prepare as pp
-# pp.readFeatnum()
-if pm.torch_dtype == 'float32':
-    torch_dtype = torch.float32
-    print('info: torch.dtype = torch.float32 in Pytorch training.')
-else:
-    torch_dtype = torch.float64
-    torch.set_default_dtype(torch.float64)
-    print('info: torch.dtype = torch.float64 in Pytorch training. (it may be slower)')
-
-torch.manual_seed(2021)
-torch.cuda.manual_seed(2021)
-np.random.seed(2021)
 
 ################################################################
 # fully connection nn
@@ -81,11 +66,6 @@ dACTIVE = dtanh
 #     res[mask] = 0.01
 #     return res
 # dACTIVE = dLeakyReLU
-
-
-
-#device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-device = torch.device('cpu')
 
 
 class FCNet(nn.Module):
@@ -158,18 +138,23 @@ class FCNet(nn.Module):
 
 
 class MLFFNet(nn.Module):
-    def __init__(self, device, atomType = pm.atomType, Dropout = False):  #atomType=[8,32]
+    def __init__(self, device, training_type = torch.float64, atomType = pm.atomType, Dropout = False):  #atomType=[8,32]
         super(MLFFNet,self).__init__()
         self.atomType = atomType
         self.models = nn.ModuleList()
         self.device = device
+        self.training_type = training_type
         for i in range(len(self.atomType)):  #i=[0,1]
-            self.models.append(FCNet(itype = i, Dropout=Dropout))   # Dropout=True
+            self.models.append(FCNet(itype = i, Dropout=Dropout).to(self.training_type))   # Dropout=True
 
 
-    def forward(self, image, dfeat, neighbor, natoms_img, Egroup_weight, divider):
+    def forward(self, image, dfeat, neighbor, natoms_img, Egroup_weight, divider, is_calc_f=None):
         start = time.time()
         #image.requires_grad_(True)
+        batch_size = image.shape[0]
+        natom = image.shape[1]
+        neighbor_num=dfeat.shape[2]
+
         natoms_index = [0]
         temp = 0
         for i in natoms_img[0, 1:]:
@@ -193,21 +178,19 @@ class MLFFNet(nn.Module):
         input_grad_allatoms = dE
         cal_ei_de = time.time()
         Etot = Ei.sum(dim=1)
-
+        F = torch.zeros((batch_size, natom, 3), device=self.device)
+        if is_calc_f == False:
+            return Etot, Ei, F
         #dE = torch.autograd.grad(res0, in_feature, grad_outputs=mask, create_graph=True, retain_graph=True)
 
         test = Ei.sum()
         #test.backward(retain_graph=True)
         #test_grad=image.grad
         mask = torch.ones_like(test)
-        test_grad = torch.autograd.grad(test,image,grad_outputs=mask, create_graph=True,retain_graph=True)
-        test_grad = test_grad[0]
-           
-        batch_size = image.shape[0]
-        natom = image.shape[1]
-        neighbor_num=dfeat.shape[2]
+        test_grad = torch.autograd.grad(test,image,grad_outputs=mask, create_graph=True, retain_graph=True)
+        test_grad = test_grad[0]   
         dim_feat=pm.nFeatures
-        result_dEi_dFeat_fortran = torch.zeros((batch_size, natom + 1, dim_feat))
+        result_dEi_dFeat_fortran = torch.zeros((batch_size, natom + 1, dim_feat)).to(self.training_type)
         result_dEi_dFeat_fortran[:, 1:, :]=test_grad
         n_a_idx_fortran = neighbor.reshape(batch_size * natom * neighbor_num)
         n_a_ofs_fortran_b = torch.arange(0, batch_size * (natom+1), (natom+1))\
@@ -253,7 +236,7 @@ class MLFFNet(nn.Module):
                 L.append(ACTIVE(torch.matmul(L[ilayer-1], W[ilayer]) + B[ilayer]))
             ilayer += 1
             W.append(model_weight['output.weight'].transpose(0, 1))            
-            B.append(model_weight['output.bias'])            
+            B.append(model_weight['output.bias'])         
             res = W[ilayer].transpose(0, 1)
             ilayer -= 1
             while ilayer >= 0:
