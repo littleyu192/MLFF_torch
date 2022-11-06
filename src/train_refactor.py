@@ -5,14 +5,14 @@ import shutil
 import time
 import warnings
 from enum import Enum
-
+import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
 import torch.multiprocessing as mp
 import torch.nn as nn
 import torch.nn.parallel
-import torch.optim
+import torch.optim as optim
 import torch.utils.data
 import torch.utils.data.distributed
 import torchvision.datasets as datasets
@@ -54,7 +54,10 @@ model_names = sorted(
 
 parser = argparse.ArgumentParser(description="PyTorch MLFF Training")
 parser.add_argument(
-    "--datatype", default="float64", type=str, help="Datatype default float64"
+    "--datatype",
+    default="float64",
+    type=str,
+    help="Datatype and Modeltype default float64",
 )
 parser.add_argument(
     "-j",
@@ -69,7 +72,7 @@ parser.add_argument(
 )
 parser.add_argument(
     "--start-epoch",
-    default=0,
+    default=1,
     type=int,
     metavar="N",
     help="manual epoch number (useful on restarts)",
@@ -87,7 +90,7 @@ parser.add_argument(
 parser.add_argument(
     "--lr",
     "--learning-rate",
-    default=0.1,
+    default=0.001,
     type=float,
     metavar="LR",
     help="initial learning rate",
@@ -157,7 +160,7 @@ parser.add_argument(
 parser.add_argument("--magic", default=2022, type=int, help="Magic number. ")
 parser.add_argument("--gpu", default=None, type=int, help="GPU id to use.")
 parser.add_argument(
-    "--dp", default=True, type=bool, help="Weather to use DP, default True."
+    "--dp", dest="dp", action="store_true", help="Weather to use DP, default False."
 )
 parser.add_argument(
     "--multiprocessing-distributed",
@@ -168,8 +171,13 @@ parser.add_argument(
     "multi node data parallel training",
 )
 # parser.add_argument("--dummy", action="store_true", help="use fake data to benchmark")
-parser.add_argument("--net-cfg", default="DeepMD_cfg_dp_kf", type=str, help="Net Arch")
+parser.add_argument(
+    "-n", "--net-cfg", default="DeepMD_cfg_dp_kf", type=str, help="Net Arch"
+)
 parser.add_argument("--act", default="sigmoid", type=str, help="activation kind")
+parser.add_argument(
+    "--opt", default="ADAM", type=str, help="optimizer type: LKF, GKF, ADAM, SGD"
+)
 parser.add_argument(
     "--Lambda", default=0.98, type=float, help="KFOptimizer parameter: Lambda."
 )
@@ -275,13 +283,20 @@ def main_worker(gpu, ngpus_per_node, args):
 
     valid_data_path = pm.test_data_path
     val_dataset = get_torch_data(valid_data_path, False)
+
+    if args.datatype == "float32":
+        training_type = torch.float32  # training type is weights type
+    else:
+        training_type = torch.float64
+
     # create model
     if args.dp:
         davg, dstd, ener_shift = train_dataset.get_stat(image_num=10)
         stat = [davg, dstd, ener_shift]
         model = DP(args.net_cfg, args.act, device, stat, args.magic)
+        model = model.to(training_type)
     else:
-        model = MLFFNet(device)
+        model = MLFFNet(device, training_type)
 
     if not torch.cuda.is_available() and not torch.backends.mps.is_available():
         print("using CPU, this will be slow")
@@ -313,23 +328,35 @@ def main_worker(gpu, ngpus_per_node, args):
         device = torch.device("mps")
         model = model.to(device)
     else:
-        model = torch.nn.DataParallel(model).cuda()
+        model = model.cuda()
 
     # define loss function (criterion), optimizer, and learning rate scheduler
     criterion = nn.MSELoss().to(device)
 
-    # TODO: set optimizer
-
-    # optimizer = torch.optim.SGD(
-    #     model.parameters(),
-    #     args.lr,
-    #     momentum=args.momentum,
-    #     weight_decay=args.weight_decay,
-    # )
-    optimizer = LKFOptimizer(
-        model.parameters(), args.Lambda, args.nue, args.blocksize, device
-    )
-
+    if args.opt == "LKF":
+        optimizer = LKFOptimizer(
+            model.parameters(),
+            args.Lambda,
+            args.nue,
+            args.blocksize,
+            device,
+            training_type,
+        )
+    elif args.opt == "GKF":
+        optimizer = GKFOptimizer(
+            model.parameters(), args.Lambda, args.nue, device, training_type
+        )
+    elif args.opt == "ADAM":
+        optimizer = optim.Adam(model.parameters(), args.lr)
+    elif args.opt == "SGD":
+        optimizer = optim.SGD(
+            model.parameters(),
+            args.lr,
+            momentum=args.momentum,
+            weight_decay=args.weight_decay,
+        )
+    else:
+        print("Unsupported optimizer!")
     # """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
     # scheduler = StepLR(optimizer, step_size=30, gamma=0.1)
 
@@ -394,24 +421,30 @@ def main_worker(gpu, ngpus_per_node, args):
         args.multiprocessing_distributed and args.rank % ngpus_per_node == 0
     ):
         train_log = os.path.join(args.store_path, "epoch_train.dat")
-        # train_log = args.store_path + "epoch_train.dat"
-        # import ipdb;ipdb.set_trace()
+
         f_train_log = open(train_log, "w")
-        f_train_log.write("epoch\t loss\t RMSE_Etot\t RMSE_Ei\t RMSE_F\t time\n")
+        f_train_log.write(
+            "epoch\t loss\t RMSE_Etot\t RMSE_Ei\t RMSE_F\t real_lr\t time\n"
+        )
 
         valid_log = os.path.join(args.store_path, "epoch_valid.dat")
         f_valid_log = open(valid_log, "w")
         f_valid_log.write("epoch\t loss\t RMSE_Etot\t RMSE_Ei\t RMSE_F\n")
 
-    for epoch in range(args.start_epoch, args.epochs):
+    for epoch in range(args.start_epoch, args.epochs + 1):
         if args.distributed:
             train_sampler.set_epoch(epoch)
 
         # train for one epoch
-        loss, loss_Etot, loss_Force, loss_Ei, epoch_time = train_LKF(
-            train_loader, model, criterion, optimizer, epoch, device, args
-        )
-
+        if args.opt == "LKF" or args.opt == "GKF":
+            real_lr = args.lr
+            loss, loss_Etot, loss_Force, loss_Ei, epoch_time = train_KF(
+                train_loader, model, criterion, optimizer, epoch, device, args
+            )
+        else:
+            loss, loss_Etot, loss_Force, loss_Ei, epoch_time, real_lr = train(
+                train_loader, model, criterion, optimizer, epoch, args.lr, device, args
+            )
         # evaluate on validation set
         vld_loss, vld_loss_Etot, vld_loss_Force, vld_loss_Ei = valid(
             val_loader, model, criterion, device, args
@@ -422,8 +455,8 @@ def main_worker(gpu, ngpus_per_node, args):
         ):
             f_train_log = open(train_log, "a")
             f_train_log.write(
-                "%d %e %e %e %e %s\n"
-                % (epoch, loss, loss_Etot, loss_Ei, loss_Force, epoch_time)
+                "%d %e %e %e %e %e %s\n"
+                % (epoch, loss, loss_Etot, loss_Ei, loss_Force, real_lr, epoch_time)
             )
             f_valid_log = open(valid_log, "a")
             f_valid_log.write(
@@ -434,7 +467,7 @@ def main_worker(gpu, ngpus_per_node, args):
         # scheduler.step()
 
         # remember best loss and save checkpoint
-        is_best = loss < best_loss
+        is_best = vld_loss < best_loss
         best_loss = min(loss, best_loss)
 
         if not args.multiprocessing_distributed or (
@@ -453,58 +486,179 @@ def main_worker(gpu, ngpus_per_node, args):
                 args.store_path,
             )
 
-
-# def train(train_loader, model, criterion, optimizer, epoch, device, args):
-#     batch_time = AverageMeter("Time", ":6.3f")
-#     data_time = AverageMeter("Data", ":6.3f")
-#     losses = AverageMeter("Loss", ":.4e")
-#     losses = AverageMeter("Etot", ":.4e")
-#     losses = AverageMeter("Force", ":.4e")
-#     losses = AverageMeter("Ei", ":.4e")
-#     top1 = AverageMeter("Acc@1", ":6.2f")
-#     top5 = AverageMeter("Acc@5", ":6.2f")
-#     progress = ProgressMeter(
-#         len(train_loader),
-#         [batch_time, data_time, losses, top1, top5],
-#         prefix="Epoch: [{}]".format(epoch),
-#     )
-
-#     # switch to train mode
-#     model.train()
-
-#     end = time.time()
-#     for i, (images, target) in enumerate(train_loader):
-#         # measure data loading time
-#         data_time.update(time.time() - end)
-
-#         # move data to the same device as model
-#         images = images.to(device, non_blocking=True)
-#         target = target.to(device, non_blocking=True)
-
-#         # compute output
-#         output = model(images)
-#         loss = criterion(output, target)
-
-#         # measure accuracy and record loss
-#         acc1, acc5 = accuracy(output, target, topk=(1, 5))
-#         losses.update(loss.item(), images.size(0))
-#         top1.update(acc1[0], images.size(0))
-#         top5.update(acc5[0], images.size(0))
-
-#         # compute gradient and do SGD step
-#         optimizer.zero_grad()
-#         loss.backward()
-#         optimizer.step()
-
-#         # measure elapsed time
-#         batch_time.update(time.time() - end)
-#         end = time.time()
-
-#         if i % args.print_freq == 0:
-#             progress.display(i + 1)
+    if args.distributed:
+        dist.destroy_process_group()
 
 
-def train_LKF(train_loader, model, criterion, optimizer, epoch, device, config):
+def __adjust_lr(iter, start_lr, stop_lr=3.51e-8):
+    stop_step = 1000000
+    decay_step = 5000
+    decay_rate = np.exp(
+        np.log(stop_lr / start_lr) / (stop_step / decay_step)
+    )  # 0.9500064099092085
+    real_lr = start_lr * np.power(decay_rate, (iter // decay_step))
+    return real_lr
+
+
+def train(train_loader, model, criterion, optimizer, epoch, start_lr, device, config):
+    batch_time = AverageMeter("Time", ":6.3f")
+    data_time = AverageMeter("Data", ":6.3f")
+    losses = AverageMeter("Loss", ":.4e", Summary.AVERAGE)
+    loss_Etot = AverageMeter("Etot", ":.4e", Summary.ROOT)
+    loss_Force = AverageMeter("Force", ":.4e", Summary.ROOT)
+    loss_Ei = AverageMeter("Ei", ":.4e", Summary.ROOT)
+    progress = ProgressMeter(
+        len(train_loader),
+        [batch_time, data_time, losses, loss_Etot, loss_Force, loss_Ei],
+        prefix="Epoch: [{}]".format(epoch),
+    )
+
+    # switch to train mode
+    model.train()
+
+    end = time.time()
+    for i, sample_batches in enumerate(train_loader):
+        # measure data loading time
+        data_time.update(time.time() - end)
+
+        nr_batch_sample = sample_batches["output_energy"].shape[0]
+        global_step = (epoch - 1) * len(train_loader) + i * nr_batch_sample
+        real_lr = __adjust_lr(global_step, start_lr)
+
+        if config.datatype == "float64":
+            Ei_label = Variable(
+                sample_batches["output_energy"][:, :, :].double().to(device)
+            )
+            Force_label = Variable(
+                sample_batches["output_force"][:, :, :].double().to(device)
+            )  # [40,108,3]
+            if pm.dR_neigh:
+                dR = Variable(
+                    sample_batches["input_dR"].double().to(device), requires_grad=True
+                )
+                dR_neigh_list = Variable(
+                    sample_batches["input_dR_neigh_list"].to(device)
+                )
+                Ri = Variable(
+                    sample_batches["input_Ri"].double().to(device), requires_grad=True
+                )
+                Ri_d = Variable(sample_batches["input_Ri_d"].to(device))
+            else:
+                Egroup_label = Variable(
+                    sample_batches["input_egroup"].double().to(device)
+                )
+                input_data = Variable(
+                    sample_batches["input_feat"].double().to(device), requires_grad=True
+                )
+                dfeat = Variable(
+                    sample_batches["input_dfeat"].double().to(device)
+                )  # [40,108,100,42,3]
+                egroup_weight = Variable(
+                    sample_batches["input_egroup_weight"].double().to(device)
+                )
+                divider = Variable(sample_batches["input_divider"].double().to(device))
+
+        elif config.datatype == "float32":
+            Ei_label = Variable(
+                sample_batches["output_energy"][:, :, :].float().to(device)
+            )
+            Force_label = Variable(
+                sample_batches["output_force"][:, :, :].float().to(device)
+            )  # [40,108,3]
+            if pm.dR_neigh:
+                dR = Variable(
+                    sample_batches["input_dR"].float().to(device), requires_grad=True
+                )
+                dR_neigh_list = Variable(
+                    sample_batches["input_dR_neigh_list"].to(device)
+                )
+                Ri = Variable(
+                    sample_batches["input_Ri"].float().to(device), requires_grad=True
+                )
+                Ri_d = Variable(sample_batches["input_Ri_d"].float().to(device))
+            else:
+                Egroup_label = Variable(
+                    sample_batches["input_egroup"].float().to(device)
+                )
+                input_data = Variable(
+                    sample_batches["input_feat"].float().to(device), requires_grad=True
+                )
+                dfeat = Variable(
+                    sample_batches["input_dfeat"].float().to(device)
+                )  # [40,108,100,42,3]
+                egroup_weight = Variable(
+                    sample_batches["input_egroup_weight"].float().to(device)
+                )
+                divider = Variable(sample_batches["input_divider"].float().to(device))
+
+        Etot_label = torch.sum(Ei_label, dim=1)
+        neighbor = Variable(
+            sample_batches["input_nblist"].int().to(device)
+        )  # [40,108,100]
+        natoms_img = Variable(sample_batches["natoms_img"].int().to(device))
+
+        if config.dp:
+            batch_size = Ri.shape[0]
+            Etot_predict, Ei_predict, Force_predict = model(
+                Ri, Ri_d, dR_neigh_list, natoms_img, None, None
+            )
+        else:
+            batch_size = input_data.shape[0]
+            Etot_predict, Ei_predict, Force_predict = model(
+                input_data, dfeat, neighbor, natoms_img, egroup_weight, divider
+            )
+
+        optimizer.zero_grad()
+
+        loss_F_val = criterion(Force_predict, Force_label)
+        loss_Etot_val = criterion(Etot_predict, Etot_label)
+        # loss_Ei_val = criterion(Ei_predict, Ei_label)
+        loss_Ei_val, loss_Egroup_val = 0, 0
+        loss_val = loss_F_val + loss_Etot_val
+
+        w_f, w_e, w_eg, w_ei = 1, 1, 0, 0
+        loss, _, _ = dp_loss(
+            0.001,
+            real_lr,
+            w_f,
+            loss_F_val,
+            w_e,
+            loss_Etot_val,
+            w_eg,
+            loss_Egroup_val,
+            w_ei,
+            loss_Ei_val,
+            natoms_img[0, 0].item(),
+        )
+
+        loss.backward()
+        optimizer.step()
+
+        # measure accuracy and record loss
+        losses.update(loss_val.item(), batch_size)
+        loss_Etot.update(loss_Etot_val.item(), batch_size)
+        # loss_Ei.update(loss_Ei_val.item(), batch_size)
+        loss_Force.update(loss_F_val.item(), batch_size)
+
+        # measure elapsed time
+        batch_time.update(time.time() - end)
+        end = time.time()
+
+        if i % config.print_freq == 0:
+            progress.display(i + 1)
+
+    progress.display_summary(["Training Set:"])
+    return (
+        losses.avg,
+        loss_Etot.root,
+        loss_Force.root,
+        loss_Ei.root,
+        batch_time.sum,
+        real_lr,
+    )
+
+
+def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
     batch_time = AverageMeter("Time", ":6.3f")
     data_time = AverageMeter("Data", ":6.3f")
     losses = AverageMeter("Loss", ":.4e", Summary.AVERAGE)
@@ -577,9 +731,9 @@ def train_LKF(train_loader, model, criterion, optimizer, epoch, device, config):
                     sample_batches["input_dR_neigh_list"].to(device)
                 )
                 Ri = Variable(
-                    sample_batches["input_Ri"].double().to(device), requires_grad=True
+                    sample_batches["input_Ri"].float().to(device), requires_grad=True
                 )
-                Ri_d = Variable(sample_batches["input_Ri_d"].to(device))
+                Ri_d = Variable(sample_batches["input_Ri_d"].float().to(device))
             else:
                 Egroup_label = Variable(
                     sample_batches["input_egroup"].float().to(device)
@@ -616,8 +770,10 @@ def train_LKF(train_loader, model, criterion, optimizer, epoch, device, config):
         loss_val = loss_F_val + loss_Etot_val
 
         if config.dp:
+            batch_size = Ri.shape[0]
             kalman_inputs = [Ri, Ri_d, dR_neigh_list, natoms_img, None, None]
         else:
+            batch_size = input.shape[0]
             kalman_inputs = [
                 input_data,
                 dfeat,
@@ -630,7 +786,6 @@ def train_LKF(train_loader, model, criterion, optimizer, epoch, device, config):
         KFOptWrapper.update_energy(kalman_inputs, Etot_label)
         KFOptWrapper.update_force(kalman_inputs, Force_label)
 
-        batch_size = Ri.shape[0]
         # measure accuracy and record loss
         losses.update(loss_val.item(), batch_size)
         loss_Etot.update(loss_Etot_val.item(), batch_size)
@@ -707,10 +862,10 @@ def valid(val_loader, model, criterion, device, args):
                         sample_batches["input_dR_neigh_list"].to(device)
                     )
                     Ri = Variable(
-                        sample_batches["input_Ri"].double().to(device),
+                        sample_batches["input_Ri"].float().to(device),
                         requires_grad=True,
                     )
-                    Ri_d = Variable(sample_batches["input_Ri_d"].to(device))
+                    Ri_d = Variable(sample_batches["input_Ri_d"].float().to(device))
                 else:
                     Egroup_label = Variable(
                         sample_batches["input_egroup"].float().to(device)
@@ -736,10 +891,12 @@ def valid(val_loader, model, criterion, device, args):
             natoms_img = Variable(sample_batches["natoms_img"].int().to(device))
 
             if args.dp:
+                batch_size = Ri.shape[0]
                 Etot_predict, Ei_predict, Force_predict = model(
                     Ri, Ri_d, dR_neigh_list, natoms_img, None, None
                 )
             else:
+                batch_size = input_data.shape[0]
                 Etot_predict, Ei_predict, Force_predict = model(
                     input_data, dfeat, neighbor, natoms_img, egroup_weight, divider
                 )
@@ -750,7 +907,6 @@ def valid(val_loader, model, criterion, device, args):
             loss_val = loss_F_val + loss_Etot_val
 
             # measure accuracy and record loss
-            batch_size = Ri.shape[0]
             losses.update(loss_val.item(), batch_size)
             loss_Etot.update(loss_Etot_val.item(), batch_size)
             loss_Ei.update(loss_Ei_val.item(), batch_size)
@@ -806,6 +962,47 @@ def valid(val_loader, model, criterion, device, args):
     progress.display_summary(["Test Set:"])
 
     return losses.avg, loss_Etot.root, loss_Force.root, loss_Ei.root
+
+
+def dp_loss(
+    start_lr,
+    real_lr,
+    has_fi,
+    lossFi,
+    has_etot,
+    loss_Etot,
+    has_egroup,
+    loss_Egroup,
+    has_ei,
+    loss_Ei,
+    natoms_sum,
+):
+    start_pref_egroup, limit_pref_egroup = 0.02, 1.0
+    start_pref_F, limit_pref_F = 1000, 1.0
+    start_pref_etot, limit_pref_etot = 0.02, 1.0
+    start_pref_ei, limit_pref_ei = 0.02, 1.0
+    pref_fi = has_fi * (
+        limit_pref_F + (start_pref_F - limit_pref_F) * real_lr / start_lr
+    )
+    pref_etot = has_etot * (
+        limit_pref_etot + (start_pref_etot - limit_pref_etot) * real_lr / start_lr
+    )
+    pref_egroup = has_egroup * (
+        limit_pref_egroup + (start_pref_egroup - limit_pref_egroup) * real_lr / start_lr
+    )
+    pref_ei = has_ei * (
+        limit_pref_ei + (start_pref_ei - limit_pref_ei) * real_lr / start_lr
+    )
+    l2_loss = 0
+    if has_fi:
+        l2_loss += pref_fi * lossFi
+    if has_etot:
+        l2_loss += 1.0 / natoms_sum * pref_etot * loss_Etot
+    if has_egroup:
+        l2_loss += pref_egroup * loss_Egroup
+    if has_ei:
+        l2_loss += pref_ei * loss_Ei
+    return l2_loss, pref_fi, pref_etot
 
 
 def save_checkpoint(state, is_best, filename, prefix):

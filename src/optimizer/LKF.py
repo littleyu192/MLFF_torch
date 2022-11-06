@@ -1,23 +1,24 @@
 import torch
 from torch.optim.optimizer import Optimizer
 import math
-import ipdb
 
 
 class LKFOptimizer(Optimizer):
     def __init__(
         self,
         params,
-        kalman_lambda=0.1,
-        kalman_nue=0.9,
+        kalman_lambda=0.98,
+        kalman_nue=0.9987,
         block_size=5120,
         device=torch.device("cuda"),
+        data_type=torch.float64,
     ):
         super(LKFOptimizer, self).__init__(params, {"lr": 0.1})
         self.kalman_lambda = kalman_lambda
         self.kalman_nue = kalman_nue
         self.block_size = block_size
         self.device = device
+        self.data_type = data_type
         self.__init_P()
 
     def __init_P(self):
@@ -44,15 +45,27 @@ class LKFOptimizer(Optimizer):
                 block_num = math.ceil(param_num / self.block_size)
                 for i in range(block_num):
                     if i != block_num - 1:
-                        self.P.append(torch.eye(self.block_size).to(self.device))
+                        self.P.append(
+                            torch.eye(
+                                self.block_size,
+                                dtype=self.data_type,
+                                device=self.device,
+                            )
+                        )
                         param_packed_index.append(self.block_size)
                     else:
                         self.P.append(
-                            torch.eye(param_num - self.block_size * i).to(self.device)
+                            torch.eye(
+                                param_num - self.block_size * i,
+                                dtype=self.data_type,
+                                device=self.device,
+                            )
                         )
                         param_packed_index.append(param_num - self.block_size * i)
             else:
-                self.P.append(torch.eye(param_num).to(self.device))
+                self.P.append(
+                    torch.eye(param_num, dtype=self.data_type, device=self.device)
+                )
                 param_packed_index.append(param_num)
 
         self.weights_num = len(self.P)
@@ -151,9 +164,8 @@ class LKFOptimizer(Optimizer):
                     if param.grad is None:
                         tmp_grad = torch.zeros_like(tmp)
                     else:
-                        tmp_grad = (
-                            (param.grad / self.grad_prefactor)
-                            .reshape(param.grad.nelement(), 1)
+                        tmp_grad = (param.grad / self.grad_prefactor).reshape(
+                            param.grad.nelement(), 1
                         )
 
                 tmp = self.__split_weights(tmp)
