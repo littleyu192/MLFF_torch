@@ -19,7 +19,7 @@ is_nn_do_profile = False
 
 prefix = r'./'
 trainSetDir = r'./PWdata'
-codedir=r'/data/data/husiyu/software/MLFF_torch_intel_v1'
+codedir=r'/data/data/husiyu/software/MLFF_torch'
 fortranFitSourceDir=codedir+'/src/pre_data/fit/'
 fitModelDir = r'./fread_dfeat'
 train_data_path = r'./train_data/final_train'
@@ -48,12 +48,6 @@ Ftype_name={1:'gen_2b_feature', 2:'gen_3b_feature',
 use_Ftype=[1, 2]
 nFeatures=42
 dR_neigh = 0
-use_GKalman = 1
-use_LKalman = 0
-use_SKalman = 0 
-use_L1Kalman = 0
-use_L2Kalman = 0
-
 
 is_scale = False
 itype_Ei_mean=[166.46]
