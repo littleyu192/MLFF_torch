@@ -298,7 +298,7 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
             batch_size = Ri.shape[0]
             kalman_inputs = [Ri, Ri_d, dR_neigh_list, natoms_img, None, None]
         else:
-            batch_size = input.shape[0]
+            batch_size = input_data.shape[0]
             kalman_inputs = [
                 input_data,
                 dfeat,
