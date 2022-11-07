@@ -1,18 +1,32 @@
 # MLFF
 
-> MLFF is a machine learning(ML) based method of force fields (FF) for molecular dynamics simulations, which is written in Python/Fortran.  This project uses 8 different types of features (typically translational, rotation, and permutation invariant), aims at retaining the accuracy of ab initio density functional theory (DFT) . 
->
->  More specifically, Type1: 2B features(use piecewise cosine basis functions); Type2: 3B features(three sub-types, just like in 2b); Type3: 2B Gaussian (use Gaussian function multiplying a mask function to make it smooth); Type4: 3Bcos(based on the idea of bond angles); Type5: Multiple Tensor Potential(uses the amplitude of charge, dipole, quadrapole, etc); Type6: SNAP (spectral neighbor analysis potential); Type7: deepMD1; Type8: deepMD2.
+MLFF is a machine learning(ML) based method of force fields (FF) for molecular dynamics simulations, which is written in Python/Fortran.
+1. This project contains 6 different types of features. More specifically, Type1: [2B features](https://journals.aps.org/prb/abstract/10.1103/PhysRevB.99.064103) use piecewise cosine basis functions; Type2: [3B features](https://journals.aps.org/prb/abstract/10.1103/PhysRevB.99.064103) three sub-types, just like in 2b; Type3: [2B Gaussian](https://journals.aps.org/prl/abstract/10.1103/PhysRevLett.98.146401) use Gaussian function multiplying a mask function to make it smooth; Type4: [3Bcos](https://journals.aps.org/prl/abstract/10.1103/PhysRevLett.98.146401) based on the idea of bond angles; Type5: [Multiple Tensor Potential](https://iopscience.iop.org/journal/2632-2153) uses the amplitude of charge, dipole, quadrapole, etc; Type6: [SNAP](https://journals.aps.org/prb/abstract/10.1103/PhysRevB.87.184115) [spectral neighbor analysis potential](https://www.sciencedirect.com/science/article/pii/S0021999114008353); The features have the following properties: translational, rotation, and permutation invariant.
 
-## New updating
-- in cu_parameters_dpkf_template.py: add Rc=6.0, Rm=5.8, and can be assigned if Rc-Rm is too small
-- test1.py can be used when use the full testing set(change default test_ratio=0.2 to 1 in parameters.py)
-- support larger minibatch in NN,NNKF,DP,DPKF training.(change default batch_size=1 to 4(or larger) in parameters.py) 
+2. This project contains two kinds of optimizer, [ADAM](https://dblp.org/rec/journals/corr/KingmaB14.html) and [EKF](https://onlinelibrary.wiley.com/doi/book/10.1002/0471221546). 
+
+We implemented GKF based MLP(users can choose the above features), [Adam based DeePMD](https://proceedings.neurips.cc/paper/2018/hash/e2ad76f2326fbc6b56a45a56c59fafdb-Abstract.html) and LKF based DeePMD. 
 
 
-## Getting Started
 
-### Prerequisites  and  Installation
+## Table of Contents
+
+- [New!!!](#New!!!)
+- [Installation](#Installation)
+- [Quick start](#Quickstart)
+- [Usage](#usage)
+	- [MLP](#MLP)
+	- [DP](#DP)
+	- [DPKF](#DPKF)
+- [Contributing](#Contributing)
+- [License](#license)
+
+## New!!!
+- framework refactor
+- support distributed training
+
+
+## Installation
 
 export MKLROOT=/the/path/to/mkl
 
@@ -23,7 +37,6 @@ with conda:
 	conda activate *name*
 	conda install astunparse numpy ninja pyyaml mkl mkl-include setuptools cmake cffi typing_extensions future six requests dataclasses
 	conda install -c pytorch magma-cuda110  # use the magma-cuda* that matches your CUDA version
-
 	git clone --recursive https://github.com/pytorch/pytorch
 	cd pytorch
 	# if you are updating an existing checkout
@@ -31,15 +44,6 @@ with conda:
 	git submodule update --init --recursive --jobs 0
 	export CMAKE_PREFIX_PATH=${CONDA_PREFIX:-"$(dirname $(which conda))/../"}
 	python setup.py install
-
-	# compiler
-	cd /the/path/the/MLFF_torch/src
-	./build.sh
-    export PATH=the/path/to/MLFF_torch/src/bin:$PATH
-	cd op && python setup.py install
-    conda deactivate *name*
-    
-    
 ```
 
 ```sh
@@ -47,57 +51,173 @@ with dorcker:
 
 ```
 
-### Usage example 
 ```sh
-	# NN and NNKF generate features
+	# compile
+	cd /the/path/the/MLFF_torch/src
+	./build.sh
+	export PATH=the/path/to/MLFF_torch/src/bin:$PATH
+	cd op && python setup.py install
+	conda deactivate *name*
+```
+
+## Quick start
+1. **template** cu_parameters_dpkf_template.py, cu_parameters_nnkf_template.py
+2. in src/pre_data, **data processing** e.g., feature generating
+3. in src/loss, **customized loss function**, e.g., dpmd loss calculation
+4. in src/model, **MODEL!!!**, e.g., MLFF, dp
+5. in src/optimizer, **OPTIMIZER!!!**, e.g., LKF, GKF
+6. in src/op, **calculate force**, the customized c++ operartor
+7. in src/trainer.py, the defined train, train_kf, valid functions
+8. in src/train_hvd.py, the horovod version of distributed training version
+9. in src/main.py, the training process must be called python file
+
+
+## Usage
+
+### MLP(NNKF)
+> generate features
+```sh
 	cd the/path/to/data    # in parameter.py, make sure isCalcFeat=True && isFitVdw=False
 	ulimit -Ss unlimited
 	# cu_parameters_nnkf_template.py is a template of Cu system, nnkf method
 	cp the/path/to/MLFF_torch/cu_parameters_nnkf_template.py parameters.py
-	python the/path/to/MLFF_torch/src/bin/mlff.py
-	python the/path/to/MLFF_torch/src/bin/seper.py  # in parameters.py, test_ratio = 0.2 for default
-	python the/path/to/MLFF_torch/src/bin/gen_data.py
-	# training, make sure in parameters.py use_GKalman = 1 
-	python the/path/to/MLFF_torch/src/train.py -s nnkf_record
-	# if you want use NN without kalman filter, switch use_GKalman = 0 in parameters.py 
-	python the/path/to/MLFF_torch/src/train.py -s nn_record
-	****
-	# DP and DPKF generate features
-	cd the/path/to/data    # in parameter.py, make sure isCalcFeat=True && isFitVdw=False
-	ulimit -Ss unlimited
-	# cu_parameters_dpkf_template.py is a template of Cu system, dpkf method
-	cp the/path/to/MLFF_torch/cu_parameters_dpkf_template.py parameters.py
-	python the/path/to/MLFF_torch/src/bin/mlff.py
-	python the/path/to/MLFF_torch/src/bin/seper.py  # in parameters.py, test_ratio = 0.2 for default
-	python the/path/to/MLFF_torch/src/bin/gen_dpdata.py
-	# if you want use deepmd model in training, make sure dR_neigh=True && use_Ftype =[1]
-	# if u have muti-MOVEMENT file in PWdata directory, in parameters.py, make sure batch_size = 1
-	python the/path/to/MLFF_torch/src/train.py --dp=True -n DeepMD_cfg_dp_kf --nselect=48 --blocksize=10240 --groupsize=6 -s dpkf_record
-	# the recomended nselect is 24, 48, 72; the recommended blocksize is 5120, 10240; the recommended groupsize is 6, 12
-	# if you want use DP without kalman filter, switch use_L1Kalman = 0 in cu_parameters_dpkf_template.py 
-	python the/path/to/MLFF_torch/src/train.py --dp=True -n DeepMD_cfg_dp -s dp_record
-	****
-	# model test in python
-	cd the/path/to/test/set    # in parameter.py, make sure isCalcFeat=True && isFitVdw=False
-	# cu_parameters_dpkf_template.py is a template of Cu system, dpkf method
-	cp the/path/to/MLFF_torch/cu_parameters_dpkf_template.py parameters.py
-	vim parameters.py && change test_ratio = 1
-	python the/path/to/MLFF_torch/src/bin/mlff.py
-	python the/path/to/MLFF_torch/src/bin/seper.py  # in parameters.py, test_ratio = 1 use all the testing set
-	python the/path/to/MLFF_torch/src/bin/gen_dpdata.py
-	# testing process use the same statistical data in training process
-	cp the/path/to/train/set/train_data/davg.npy train_data
-	cp the/path/to/train/set/train_data/dstd.npy train_data
-	cp the/path/to/train/set/train_data/ener_shift.npy train_data
-	# copy the dpkf model u wanna use in testing
-	cp the/path/to/train/set/dpkf_record .
-	python the/path/to/MLFF_torch/src/test1.py --dp=True -n DeepMD_cfg_dp_kf -s dpkf_record
-	# copy the dp model u wanna use in testing
-	cp the/path/to/train/set/dp_record .
-	python the/path/to/MLFF_torch/src/test1.py --dp=True -n DeepMD_cfg_dp -s dp_record
+	python the/path/to/MLFF_torch/src/pre_data/mlff.py
+	python the/path/to/MLFF_torch/src/pre_data/seper.py  # in parameters.py, test_ratio = 0.2 for default
+	python the/path/to/MLFF_torch/src/pre_data/gen_data.py 
+```
+> model training
+1. Train in one GPU
+```sh
+	python the/path/to/MLFF_torch/src/main.py --gpu 0 -b 1 --opt GKF --epochs 30 -s GKFrecord
+	# --gpu 0(0 is the idx of GPU)
+	# -b 1(the batch size is set 1 for training)
+	# --opt GKF(use the default optimizer if using MLP net)
+	# -s GKFrecord(assign the directory of stored model and log file)
 ```
 
-### Code contribution guidance
+2. Train in multi GPUs(One node)
+```sh
+	python the/path/to/MLFF_torch/src/main.py --dist-url 'tcp://127.0.0.1:1235' --dist-backend 'nccl' --multiprocessing-distributed --world-size 1 --rank 0 -b 4 --opt GKF --epochs 30 -s GKF_4gpus
+	# do not need to assigh GPU 
+	# -b 4(the batch size should set an integer multiple of the used GPUs, e.g.,4, 8, 12)
+	# --opt GKF(use the default optimizer if using MLP net)
+	# -s GKFrecord(assign the directory of stored model and log file)
+```
+
+3. Train in multi GPUs(Multi nodes)
+```sh
+	# in the root node:
+	python the/path/to/MLFF_torch/src/main.py --dist-url 'tcp://127.0.0.1:1235' --dist-backend 'nccl' --multiprocessing-distributed --world-size 2 --rank 0 -b 8 --opt GKF --epochs 30 -s GKF_8gpus
+	# in the child nodes:
+	python the/path/to/MLFF_torch/src/main.py --dist-url 'tcp://$root_node_IP$:1235' --dist-backend 'nccl' --multiprocessing-distributed --world-size 2 --rank 1 -b 8 --opt GKF --epochs 30 -s GKF_8gpus
+	# do not need to assigh GPU 
+	# -b 8(the batch size should set an integer multiple of the used GPUs, e.g.,8, 16, etc)
+	# --opt GKF(use the default optimizer if using MLP net)
+	# -s GKFrecord(assign the directory of stored model and log file)
+```
+
+### DP
+> generate features
+```sh
+	cd the/path/to/data    # in parameter.py, make sure isCalcFeat=True && isFitVdw=False
+	ulimit -Ss unlimited
+	# cu_parameters_dpkf_template.py is a template of Cu system, dp method
+	cp the/path/to/MLFF_torch/cu_parameters_dpkf_template.py parameters.py
+	python the/path/to/MLFF_torch/src/pre_data/mlff.py
+	python the/path/to/MLFF_torch/src/pre_data/seper.py  # in parameters.py, test_ratio = 0.2 for default
+	python the/path/to/MLFF_torch/src/pre_data/gen_dpdata.py 
+```
+> model training
+1. Train in one GPU
+```sh
+	python the/path/to/MLFF_torch/src/main.py --dp --gpu 0 -b 1 --opt ADAM --epochs 1000 -s dprecord
+	# add --dp to set dp training
+	# --gpu 0(0 is the idx of GPU)
+	# -b 1(the batch size is set 1 for training)
+	# --opt ADAM(use the default optimizer if using DP net)
+	# -s dprecord(assign the directory of stored model and log file)
+```
+
+2. Train in multi GPUs(One node)
+```sh
+	python the/path/to/MLFF_torch/src/main.py --dp --dist-url 'tcp://127.0.0.1:1235' --dist-backend 'nccl' --multiprocessing-distributed --world-size 1 --rank 0 -b 4 --opt ADAM --epochs 1000 -s dp_4gpus
+	# add --dp to set dp training
+	# do not need to assigh GPU 
+	# -b 4(the batch size should set an integer multiple of the used GPUs, e.g.,4, 8, 12)
+	# --opt ADAM(use the default optimizer if using DP net)
+	# -s dp_4gpus(assign the directory of stored model and log file)
+```
+
+3. Train in multi GPUs(Multi nodes)
+```sh
+	# in the root node:
+	python the/path/to/MLFF_torch/src/main.py --dp --dist-url 'tcp://127.0.0.1:1235' --dist-backend 'nccl' --multiprocessing-distributed --world-size 2 --rank 0 -b 8 --opt ADAM --epochs 1000 -s dp_8gpus
+	# in the child nodes:
+	python the/path/to//MLFF_torch/src/main.py --dp --dist-url 'tcp://$root_node_IP$:1235' --dist-backend 'nccl' --multiprocessing-distributed --world-size 2 --rank 1 -b 8 --opt ADAM --epochs 1000 -s dp_8gpus
+	# add --dp to set dp training
+	# do not need to assigh GPU 
+	# -b 8(the batch size should set an integer multiple of the used GPUs, e.g.,8, 16, etc)
+	# --opt ADAM(use the default optimizer if using DP net)
+	# -s dp_8gpus(assign the directory of stored model and log file)
+```
+
+
+### DPKF
+> generate features
+```sh
+	cd the/path/to/data    # in parameter.py, make sure isCalcFeat=True && isFitVdw=False
+	ulimit -Ss unlimited
+	# cu_parameters_dpkf_template.py is a template of Cu system, dp method
+	cp the/path/to/MLFF_torch/cu_parameters_dpkf_template.py parameters.py
+	python the/path/to/MLFF_torch/src/pre_data/mlff.py
+	python the/path/to/MLFF_torch/src/pre_data/seper.py  # in parameters.py, test_ratio = 0.2 for default
+	python the/path/to/MLFF_torch/src/pre_data/gen_dpdata.py 
+```
+> model training
+1. Train in one GPU
+```sh
+	python the/path/to/MLFF_torch/src/main.py --dp --gpu 0 -b 1 --opt LKF --epochs 30 -s dpkfrecord
+	# add --dp to set dp training
+	# --gpu 0(0 is the idx of GPU)
+	# -b 1(the batch size is set 1 for training)
+	# --opt LKF(use the default optimizer if using DPKF)
+	# -s dprecord(assign the directory of stored model and log file)
+```
+
+2. Train in multi GPUs(One node)
+```sh
+	python the/path/to/MLFF_torch/src/main.py --dp --dist-url 'tcp://127.0.0.1:1235' --dist-backend 'nccl' --multiprocessing-distributed --world-size 1 --rank 0 -b 4 --opt LKF --epochs 50 -s dpkf_4gpus
+	# add --dp to set dp training
+	# do not need to assigh GPU 
+	# -b 4(the batch size should set an integer multiple of the used GPUs, e.g.,4, 8, 12)
+	# --opt LKF(use the default optimizer if using DPKF net)
+	# -s dpkf_4gpus(assign the directory of stored model and log file)
+```
+
+3. Train in multi GPUs(Multi nodes)
+```sh
+	# in the root node:
+	python the/path/to/MLFF_torch/src/main.py --dp --dist-url 'tcp://127.0.0.1:1235' --dist-backend 'nccl' --multiprocessing-distributed --world-size 2 --rank 0 -b 8 --opt LKF --epochs 100 -s dpkf_8gpus
+	# in the child nodes:
+	python the/path/to/MLFF_torch/src/main.py --dp --dist-url 'tcp://$root_node_IP$:1235' --dist-backend 'nccl' --multiprocessing-distributed --world-size 2 --rank 1 -b 8 --opt LKF --epochs 100 -s dpkf_8gpus
+	# add --dp to set dp training
+	# do not need to assigh GPU 
+	# -b 8(the batch size should set an integer multiple of the used GPUs, e.g.,8, 16, etc)
+	# --opt LKF(use the default optimizer if using DPKF net)
+	# -s dpkf_8gpus(assign the directory of stored model and log file)
+```
+
+> model validation
+```sh
+	python the/path/to/MLFF_torch/src/main.py --dp --opt LKF -b 1 -s dpkfrecord -r -e
+
+	python the/path/to/MLFF_torch/src/main.py --dp --opt LKF --dist-url 'tcp://127.0.0.1:1235' --dist-backend 'nccl' --multiprocessing-distributed --world-size 1 --rank 0 -b 32 -s dpkf_4gpus -r -e
+	# -s follows the directory of model you wanna evaluate
+	# -r means recover
+	# -e means evaluate
+```
+
+## Contributing
 ```sh
 	git checkout master
 	git pull origin master
@@ -112,6 +232,11 @@ with dorcker:
 	# in github, click pull request
 ```
 
-## License 
+## License
 
 If you use this code in any future publications, please cite this:
+
+
+
+**If you have any questions, contact husiyu20b@ict.ac.cn**
+

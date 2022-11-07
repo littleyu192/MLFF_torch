@@ -19,7 +19,7 @@ is_nn_do_profile = False
 
 prefix = r'./'
 trainSetDir = r'./PWdata'
-codedir=r'/data/data/husiyu/software/MLFF_torch_intel_v1'
+codedir=r'/data/data/husiyu/software/MLFF_torch'
 fortranFitSourceDir=codedir+'/src/pre_data/fit/'
 fitModelDir = r'./fread_dfeat'
 train_data_path = r'./train_data/final_train'
@@ -48,16 +48,10 @@ Ftype_name={1:'gen_2b_feature', 2:'gen_3b_feature',
 use_Ftype=[1]
 nFeatures=24
 dR_neigh = 1
-use_GKalman = 0
-use_LKalman = 0
-use_SKalman = 0 
-use_L1Kalman = 1
-use_L2Kalman = 0
 Rc = 6.0  # default setting
 Rm = 5.8  # Rmin value for DP and DPKF, if test1.py etot results is not smooth enough, choose small Rm
 
 is_scale = False
-itype_Ei_mean=[166.46]
 use_storage_scaler = False
 storage_scaler = False
 
