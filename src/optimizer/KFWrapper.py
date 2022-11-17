@@ -3,7 +3,6 @@ import torch.nn as nn
 from torch.optim.optimizer import Optimizer
 import time
 import numpy as np
-import horovod as hvd
 import torch.distributed as dist
 
 
@@ -51,6 +50,7 @@ class KFOptimizerWrapper:
 
         if self.is_distributed:
             if self.distributed_backend == "horovod":
+                import horovod as hvd
                 error = hvd.torch.allreduce(error)
             elif self.distributed_backend == "torch":
                 dist.all_reduce(error)
@@ -84,6 +84,7 @@ class KFOptimizerWrapper:
 
             if self.is_distributed:
                 if self.distributed_backend == "horovod":
+                    import horovod as hvd
                     error = hvd.torch.allreduce(error)
                 elif self.distributed_backend == "torch":
                     dist.all_reduce(error)
