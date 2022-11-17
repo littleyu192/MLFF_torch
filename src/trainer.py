@@ -50,6 +50,9 @@ def train(train_loader, model, criterion, optimizer, epoch, start_lr, device, co
         global_step = (epoch - 1) * len(train_loader) + i * nr_batch_sample
         real_lr = adjust_lr(global_step, start_lr)
 
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = real_lr * (nr_batch_sample ** 0.5)
+        
         if config.datatype == "float64":
             Ei_label = Variable(
                 sample_batches["output_energy"][:, :, :].double().to(device)
@@ -309,7 +312,7 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
             ]
 
         KFOptWrapper.update_energy(kalman_inputs, Etot_label)
-        KFOptWrapper.update_force(kalman_inputs, Force_label)
+        KFOptWrapper.update_force(kalman_inputs, Force_label, 2)
 
         # measure accuracy and record loss
         losses.update(loss_val.item(), batch_size)
@@ -323,6 +326,13 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
 
         if i % config.print_freq == 0:
             progress.display(i + 1)
+    
+    if config.distributed:
+        losses.all_reduce()
+        loss_Etot.all_reduce()
+        loss_Force.all_reduce()
+        loss_Ei.all_reduce()
+        batch_time.all_reduce()
 
     progress.display_summary(["Training Set:"])
     return losses.avg, loss_Etot.root, loss_Force.root, loss_Ei.root, batch_time.sum
