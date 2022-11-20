@@ -14,15 +14,8 @@ from loss.dploss import dp_loss, adjust_lr
 
 from optimizer.KFWrapper import KFOptimizerWrapper
 
-import sys
-
-sys.path.append(os.getcwd())
 import parameters as pm
 
-codepath = os.path.abspath(sys.path[0])
-sys.path.append(codepath + "/pre_data")
-sys.path.append(codepath + "/..")
-from data_loader_2type import get_torch_data
 
 
 def train(train_loader, model, criterion, optimizer, epoch, start_lr, device, config):

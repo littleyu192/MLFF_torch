@@ -1,6 +1,7 @@
 import argparse
 import os
 import random
+import signal
 import torch
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
@@ -167,6 +168,14 @@ parser.add_argument(
 best_loss = 1e10
 
 
+def destory_process(signum, frame):
+    signame = signal.Signals(signum).name
+    print(
+        f"Signal handler called with signal {signame} ({signum}): destory dist process"
+    )
+    dist.destroy_process_group()
+
+
 def main():
     args = parser.parse_args()
 
@@ -233,6 +242,8 @@ def main_worker(gpu, ngpus_per_node, args):
             world_size=args.world_size,
             rank=args.rank,
         )
+        signal.signal(signal.SIGINT, destory_process)
+
     if torch.cuda.is_available():
         if args.gpu:
             device = torch.device("cuda:{}".format(args.gpu))
@@ -305,8 +316,6 @@ def main_worker(gpu, ngpus_per_node, args):
             args.Lambda,
             args.nue,
             args.blocksize,
-            device,
-            training_type,
         )
     elif args.opt == "GKF":
         optimizer = GKFOptimizer(
