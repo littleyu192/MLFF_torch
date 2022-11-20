@@ -1,7 +1,7 @@
 import argparse
 import os
 import random
-import warnings
+import signal
 import torch
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
@@ -11,23 +11,17 @@ import torch.nn.parallel
 import torch.optim as optim
 import torch.utils.data
 import torch.utils.data.distributed
+import warnings
 
 from model.dp import DP
 from model.MLFF import MLFFNet
-
-from optimizer.LKF import LKFOptimizer
 from optimizer.GKF import GKFOptimizer
-
+from optimizer.LKF import LKFOptimizer
+from pre_data.data_loader_2type import get_torch_data
 from trainer import *
-import sys
 
-sys.path.append(os.getcwd())
 import parameters as pm
 
-codepath = os.path.abspath(sys.path[0])
-sys.path.append(codepath + "/pre_data")
-sys.path.append(codepath + "/..")
-from data_loader_2type import get_torch_data
 
 parser = argparse.ArgumentParser(description="PyTorch MLFF Training")
 parser.add_argument(
@@ -174,6 +168,14 @@ parser.add_argument(
 best_loss = 1e10
 
 
+def destory_process(signum, frame):
+    signame = signal.Signals(signum).name
+    print(
+        f"Signal handler called with signal {signame} ({signum}): destory dist process"
+    )
+    dist.destroy_process_group()
+
+
 def main():
     args = parser.parse_args()
 
@@ -240,6 +242,8 @@ def main_worker(gpu, ngpus_per_node, args):
             world_size=args.world_size,
             rank=args.rank,
         )
+        signal.signal(signal.SIGINT, destory_process)
+
     if torch.cuda.is_available():
         if args.gpu:
             device = torch.device("cuda:{}".format(args.gpu))
@@ -312,8 +316,6 @@ def main_worker(gpu, ngpus_per_node, args):
             args.Lambda,
             args.nue,
             args.blocksize,
-            device,
-            training_type,
         )
     elif args.opt == "GKF":
         optimizer = GKFOptimizer(
