@@ -1,7 +1,6 @@
 import argparse
 import os
 import random
-import warnings
 import torch
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
@@ -11,23 +10,17 @@ import torch.nn.parallel
 import torch.optim as optim
 import torch.utils.data
 import torch.utils.data.distributed
+import warnings
 
 from model.dp import DP
 from model.MLFF import MLFFNet
-
-from optimizer.LKF import LKFOptimizer
 from optimizer.GKF import GKFOptimizer
-
+from optimizer.LKF import LKFOptimizer
+from pre_data.data_loader_2type import get_torch_data
 from trainer import *
-import sys
 
-sys.path.append(os.getcwd())
 import parameters as pm
 
-codepath = os.path.abspath(sys.path[0])
-sys.path.append(codepath + "/pre_data")
-sys.path.append(codepath + "/..")
-from data_loader_2type import get_torch_data
 
 parser = argparse.ArgumentParser(description="PyTorch MLFF Training")
 parser.add_argument(

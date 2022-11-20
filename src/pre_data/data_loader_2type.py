@@ -1,16 +1,8 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-import os
-import sys
-import re
-import pandas as pd
 import numpy as np
-from torch.utils.data import Dataset, DataLoader
+import os
+from torch.utils.data import Dataset
 import torch
-codepath = os.path.abspath(sys.path[0])
-sys.path.append(codepath+'/../lib')
-sys.path.append(os.getcwd())
-import prepare as pp
+
 import parameters as pm
 
 
