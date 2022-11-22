@@ -264,7 +264,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
     # create model
     if args.dp:
-        davg, dstd, ener_shift = train_dataset.get_stat(image_num=10)
+        davg, dstd, ener_shift = train_dataset.get_stat()
         stat = [davg, dstd, ener_shift]
         model = DP(args.net_cfg, args.act, device, stat, args.magic)
         model = model.to(training_type)
@@ -455,7 +455,7 @@ def main_worker(gpu, ngpus_per_node, args):
                     # "scheduler": scheduler.state_dict(),
                 },
                 is_best,
-                "checkpoint" + str(epoch) + ".pth.tar",
+                "checkpoint.pth.tar",
                 args.store_path,
             )
 
