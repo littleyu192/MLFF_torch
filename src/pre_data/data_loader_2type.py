@@ -397,7 +397,7 @@ class MovementDataset(Dataset):
         ener_shift, _, _, _ = np.linalg.lstsq([natoms_per_type], [energy_avg], rcond=rcond)
         self.ener_shift = ener_shift.tolist()
 
-    def get_stat(self, image_num=20, rcond=1e-3):
+    def get_stat(self, image_num=10, rcond=1e-3):
         # image_num = batch_size * batch_stat_num
         self.__compute_stat(image_num)
         self.__compute_stat_output(image_num, rcond)
