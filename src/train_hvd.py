@@ -953,7 +953,7 @@ model_parameters = model.parameters()
 if (opt_optimizer == 'GKF'):
     optimizer = GKFOptimizer(model_parameters, opt_lambda, opt_nue, device)
 elif (opt_optimizer == 'LKF'):
-    optimizer = LKFOptimizer(model_parameters, opt_lambda, opt_nue, opt_blocksize, device)
+    optimizer = LKFOptimizer(model_parameters, opt_lambda, opt_nue, opt_blocksize)
 elif (opt_optimizer == 'SGD'):
     optimizer = optim.SGD(model_parameters, lr=LR_base, momentum=momentum, weight_decay=REGULAR_wd)
 elif (opt_optimizer == 'ASGD'):
