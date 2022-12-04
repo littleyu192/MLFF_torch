@@ -10,20 +10,20 @@ make -C pre_data/fortran_code  # spack load gcc@7.5.0
 #make libiotk.a
 #cd ../..
 #make -C QCAD/fortran_code
-cd bin
-ln -s ../pre_data/mlff.py .
-ln -s ../pre_data/seper.py .
-ln -s ../pre_data/gen_data.py .
-ln -s ../pre_data/data_loader_2type.py .
-ln -s ../train.py .
-ln -s ../test.py .
-ln -s ../predict.py . 
+#cd bin
+#ln -s ../pre_data/mlff.py .
+#ln -s ../pre_data/seper.py .
+#ln -s ../pre_data/gen_data.py .
+#ln -s ../pre_data/data_loader_2type.py .
+#ln -s ../train.py .
+#ln -s ../test.py .
+#ln -s ../predict.py . 
 
-chmod +x ./mlff.py
-chmod +x ./seper.py
-chmod +x ./gen_data.py
-chmod +x ./data_loader_2type.py
-chmod +x ./train.py
-chmod +x ./test.py
-chmod +x ./predict.py
+#chmod +x ./mlff.py
+#chmod +x ./seper.py
+#chmod +x ./gen_data.py
+#chmod +x ./data_loader_2type.py
+#chmod +x ./train.py
+#chmod +x ./test.py
+#chmod +x ./predict.py
 cd ..            # back to src dir

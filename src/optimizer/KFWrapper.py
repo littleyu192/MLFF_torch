@@ -26,6 +26,7 @@ class KFOptimizerWrapper:
     def update_energy(
         self, inputs: list, Etot_label: torch.Tensor, update_prefactor: float = 1
     ) -> None:
+        time_start = time.time()
         Etot_predict, _, _ = self.model(
             inputs[0],
             inputs[1],
@@ -61,10 +62,13 @@ class KFOptimizerWrapper:
 
         Etot_predict.mean().backward()
         self.optimizer.step(error)
+        time_end = time.time()
+        print("KF update Energy time:", time_end - time_start, "s")
 
     def update_force(
         self, inputs: list, Force_label: torch.Tensor, update_prefactor: float = 1
     ) -> None:
+        time_start = time.time()
         natoms_sum = inputs[3][0, 0]
 
         self.optimizer.set_grad_prefactor(natoms_sum * self.atoms_per_group * 3)
@@ -97,6 +101,8 @@ class KFOptimizerWrapper:
             (tmp_force_predict.sum() + Etot_predict.sum() * 0).backward()
 
             self.optimizer.step(error)
+        time_end = time.time()
+        print("KF update Energy time:", time_end - time_start, "s")
 
     def __sample(
         self, atoms_selected: int, atoms_per_group: int, natoms: int
