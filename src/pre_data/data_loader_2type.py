@@ -57,9 +57,7 @@ class MovementDataset(Dataset):
             #     self.prepare(Ri_path, Ri_d_path)
             # if True:
             self.get_stat()
-            if (not os.path.exists(Ri_path)) or (not os.path.exists(Ri_d_path)):
-                self.prepare(Ri_path, Ri_d_path)
-
+            
             base_dir = os.getcwd()
             if is_train:
                 np.save(stat_path+"/davg.npy", self.davg)
@@ -74,7 +72,8 @@ class MovementDataset(Dataset):
                     self.ener_shift = np.load(stat_path+"/ener_shift.npy")
                 else:
                     raise RuntimeError("davg.npy, dstd.npy and ener_shift.npy not found, copy *.npy from you training base dir/train_data")
-                    
+            if (not os.path.exists(Ri_path)) or (not os.path.exists(Ri_d_path)):
+                self.prepare(Ri_path, Ri_d_path)        
                 
 
             self.Ri_all = np.load(Ri_path) #(12, 108, 100, 4)
