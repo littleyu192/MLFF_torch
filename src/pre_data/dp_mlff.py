@@ -531,9 +531,7 @@ def sepper_data(config):
             "Ri": Ri[image_index[start_index] : image_index[end_index]],
             "Ri_d": Ri_d[image_index[start_index] : image_index[end_index]],
             "Force": Force[image_index[start_index] : image_index[end_index]],
-            "ImageAtomNum": atom_num_per_image[
-                image_index[start_index] : image_index[end_index]
-            ],
+            "ImageAtomNum": atom_num_per_image[start_index:end_index],
         }
 
         save_path = os.path.join(
@@ -564,9 +562,7 @@ def sepper_data(config):
             "Ri": Ri[image_index[start_index] : image_index[end_index]],
             "Ri_d": Ri_d[image_index[start_index] : image_index[end_index]],
             "Force": Force[image_index[start_index] : image_index[end_index]],
-            "ImageAtomNum": atom_num_per_image[
-                image_index[start_index] : image_index[end_index]
-            ],
+            "ImageAtomNum": atom_num_per_image[start_index:end_index],
         }
 
         save_path = os.path.join(
