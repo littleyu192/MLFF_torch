@@ -1,0 +1,52 @@
+
+# dR feature input config
+Rc_M: 6.0
+maxNeighborNum: 100
+atomType:
+  -
+    type: 29
+    Rc: 6.0
+    Rm: 5.8
+    iflag_grid: 3
+    fact_base: 0.2
+    dR1: 0.5
+  -
+    type: 8
+    Rc: 6.0
+    Rm: 5.8
+    iflag_grid: 3
+    fact_base: 0.2
+    dR1: 0.5
+
+E_tolerance: 999.0
+
+# Train data dir
+trainSetDir: "./PWdata"
+dRFeatureInputDir: "./input"
+dRFeatureOutputDir: "./output"
+trainDataPath: "./train"
+validDataPath: "./valid"
+ratio: 0.8
+datasetImageNum: 1000
+
+
+training_type: "float64"
+
+net_cfg:
+  embedding_net:
+    network_size: 
+      - 25
+      - 25
+      - 25
+    bias: True
+    resnet_dt: False
+    activation: tanh
+  fitting_net:
+    network_size: 
+      - 50
+      - 50
+      - 50
+      - 1
+    bias: True
+    resnet_dt: False
+    activation: tanh

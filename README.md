@@ -11,19 +11,21 @@ We implemented GKF based MLP(users can choose the above features), [Adam based D
 
 ## Table of Contents
 
-- [New!!!](#New!!!)
+- [ChangeLog](#ChangeLog)
 - [Installation](#Installation)
 - [Quick start](#Quickstart)
 - [Usage](#usage)
 	- [MLP](#MLP)
 	- [DP](#DP)
 	- [DPKF](#DPKF)
-- [Contributing](#Contributing)
+- [ContributionGuidance](#ContributionGuidance)
 - [License](#license)
 
-## New!!!
-- framework refactor
-- support distributed training
+## ChangeLog
+- framework reorganiztion
+- support P matrix saving in checkpoint
+- support tens of thousands of images generating features (DP, DPKF)
+- splitting dataset in small sets
 
 
 ## Installation
@@ -48,6 +50,14 @@ with conda:
 
 ```sh
 with dorcker:
+
+```
+
+```sh
+horovod installation(optional):
+	conda activate *name*
+	# download NCCL  in https://developer.nvidia.com/nccl
+	HOROVOD_WITH_PYTORCH=1 HOROVOD_WITHOUT_TENSORFLOW=1 HOROVOD_WITHOUT_MXNET=1 HOROVOD_GPU_OPERATIONS=NCCL HOROVOD_NCCL_INCLUDE=/home/husiyu/tools/nccl_2.15/include HOROVOD_NCCL_LIB=/home/husiyu/tools/nccl_2.15/lib  pip install horovod
 
 ```
 
@@ -119,19 +129,17 @@ with dorcker:
 ### DP
 > generate features
 ```sh
-	cd the/path/to/data    # in parameter.py, make sure isCalcFeat=True && isFitVdw=False
+	cd the/path/to/data
 	ulimit -Ss unlimited
 	# cu_parameters_dpkf_template.py is a template of Cu system, dp method
-	cp the/path/to/MLFF_torch/cu_parameters_dpkf_template.py parameters.py
-	python the/path/to/MLFF_torch/src/pre_data/mlff.py
-	python the/path/to/MLFF_torch/src/pre_data/seper.py  # in parameters.py, test_ratio = 0.2 for default
-	python the/path/to/MLFF_torch/src/pre_data/gen_dpdata.py 
+	cp the/path/to/MLFF_torch/src/cu_config_template.yaml config.yaml
+	python the/path/to/MLFF_torch/src/pre_data/dp_mlff.py
 ```
 > model training
 1. Train in one GPU
 ```sh
-	python the/path/to/MLFF_torch/src/main.py --dp --gpu 0 -b 1 --opt ADAM --epochs 1000 -s dprecord
-	# add --dp to set dp training
+	python the/path/to/MLFF_torch/src/dp_main.py --gpu 0 -b 1 --opt ADAM --epochs 1000 -s dprecord
+	(or: CUDA_VISIBLE_DEVICES=0 python the/path/to/MLFF_torch/src/dp_train_hvd.py --opt ADAM --epochs 30 -s dprecord)
 	# --gpu 0(0 is the idx of GPU)
 	# -b 1(the batch size is set 1 for training)
 	# --opt ADAM(use the default optimizer if using DP net)
@@ -140,8 +148,8 @@ with dorcker:
 
 2. Train in multi GPUs(One node)
 ```sh
-	python the/path/to/MLFF_torch/src/main.py --dp --dist-url 'tcp://127.0.0.1:1235' --dist-backend 'nccl' --multiprocessing-distributed --world-size 1 --rank 0 -b 4 --opt ADAM --epochs 1000 -s dp_4gpus
-	# add --dp to set dp training
+	python the/path/to/MLFF_torch/src/dp_main.py --dist-url 'tcp://127.0.0.1:1235' --dist-backend 'nccl' --multiprocessing-distributed --world-size 1 --rank 0 -b 4 --opt ADAM --epochs 1000 -s dp_4gpus
+	(or:  horovodrun -np 4 python the/path/to/MLFF_torch/src/dp_train_hvd.py --opt ADAM -b 8 --epochs 200 --hvd -s dp_4gpus)
 	# do not need to assigh GPU 
 	# -b 4(the batch size should set an integer multiple of the used GPUs, e.g.,4, 8, 12)
 	# --opt ADAM(use the default optimizer if using DP net)
@@ -151,73 +159,32 @@ with dorcker:
 3. Train in multi GPUs(Multi nodes)
 ```sh
 	# in the root node:
-	python the/path/to/MLFF_torch/src/main.py --dp --dist-url 'tcp://127.0.0.1:1235' --dist-backend 'nccl' --multiprocessing-distributed --world-size 2 --rank 0 -b 8 --opt ADAM --epochs 1000 -s dp_8gpus
+	python the/path/to/MLFF_torch/src/dp_main.py --dist-url 'tcp://127.0.0.1:1235' --dist-backend 'nccl' --multiprocessing-distributed --world-size 2 --rank 0 -b 8 --opt ADAM --epochs 1000 -s dp_8gpus
 	# in the child nodes:
-	python the/path/to//MLFF_torch/src/main.py --dp --dist-url 'tcp://$root_node_IP$:1235' --dist-backend 'nccl' --multiprocessing-distributed --world-size 2 --rank 1 -b 8 --opt ADAM --epochs 1000 -s dp_8gpus
-	# add --dp to set dp training
+	python the/path/to//MLFF_torch/src/main.py --dist-url 'tcp://$root_node_IP$:1235' --dist-backend 'nccl' --multiprocessing-distributed --world-size 2 --rank 1 -b 8 --opt ADAM --epochs 1000 -s dp_8gpus
 	# do not need to assigh GPU 
 	# -b 8(the batch size should set an integer multiple of the used GPUs, e.g.,8, 16, etc)
 	# --opt ADAM(use the default optimizer if using DP net)
 	# -s dp_8gpus(assign the directory of stored model and log file)
+	(or: horovodrun -np 8 -H server1:2,server2:2 python the/path/to/MLFF_torch/src/dp_train_hvd.py --opt ADAM -b 8 --epochs 200 --hvd -s dp_8gpus)
 ```
 
 
 ### DPKF
-> generate features
-```sh
-	cd the/path/to/data    # in parameter.py, make sure isCalcFeat=True && isFitVdw=False
-	ulimit -Ss unlimited
-	# cu_parameters_dpkf_template.py is a template of Cu system, dp method
-	cp the/path/to/MLFF_torch/cu_parameters_dpkf_template.py parameters.py
-	python the/path/to/MLFF_torch/src/pre_data/mlff.py
-	python the/path/to/MLFF_torch/src/pre_data/seper.py  # in parameters.py, test_ratio = 0.2 for default
-	python the/path/to/MLFF_torch/src/pre_data/gen_dpdata.py 
-```
-> model training
-1. Train in one GPU
-```sh
-	python the/path/to/MLFF_torch/src/main.py --dp --gpu 0 -b 1 --opt LKF --epochs 30 -s dpkfrecord
-	# add --dp to set dp training
-	# --gpu 0(0 is the idx of GPU)
-	# -b 1(the batch size is set 1 for training)
-	# --opt LKF(use the default optimizer if using DPKF)
-	# -s dprecord(assign the directory of stored model and log file)
-```
-
-2. Train in multi GPUs(One node)
-```sh
-	python the/path/to/MLFF_torch/src/main.py --dp --dist-url 'tcp://127.0.0.1:1235' --dist-backend 'nccl' --multiprocessing-distributed --world-size 1 --rank 0 -b 4 --opt LKF --epochs 50 -s dpkf_4gpus
-	# add --dp to set dp training
-	# do not need to assigh GPU 
-	# -b 4(the batch size should set an integer multiple of the used GPUs, e.g.,4, 8, 12)
-	# --opt LKF(use the default optimizer if using DPKF net)
-	# -s dpkf_4gpus(assign the directory of stored model and log file)
-```
-
-3. Train in multi GPUs(Multi nodes)
-```sh
-	# in the root node:
-	python the/path/to/MLFF_torch/src/main.py --dp --dist-url 'tcp://127.0.0.1:1235' --dist-backend 'nccl' --multiprocessing-distributed --world-size 2 --rank 0 -b 8 --opt LKF --epochs 100 -s dpkf_8gpus
-	# in the child nodes:
-	python the/path/to/MLFF_torch/src/main.py --dp --dist-url 'tcp://$root_node_IP$:1235' --dist-backend 'nccl' --multiprocessing-distributed --world-size 2 --rank 1 -b 8 --opt LKF --epochs 100 -s dpkf_8gpus
-	# add --dp to set dp training
-	# do not need to assigh GPU 
-	# -b 8(the batch size should set an integer multiple of the used GPUs, e.g.,8, 16, etc)
-	# --opt LKF(use the default optimizer if using DPKF net)
-	# -s dpkf_8gpus(assign the directory of stored model and log file)
-```
+- generate features part: the same as DP
+- model training part: change --opt ADAM to --opt LKF
 
 > model validation
 ```sh
-	python the/path/to/MLFF_torch/src/main.py --dp --opt LKF -b 1 -s dpkfrecord -r -e
+	python the/path/to/MLFF_torch/src/dp_main.py --opt LKF -b 1 -s dpkfrecord -r -e
 
-	python the/path/to/MLFF_torch/src/main.py --dp --opt LKF --dist-url 'tcp://127.0.0.1:1235' --dist-backend 'nccl' --multiprocessing-distributed --world-size 1 --rank 0 -b 32 -s dpkf_4gpus -r -e
+	python the/path/to/MLFF_torch/src/dp_main.py --dp --opt LKF --dist-url 'tcp://127.0.0.1:1235' --dist-backend 'nccl' --multiprocessing-distributed --world-size 1 --rank 0 -b 32 -s dpkf_4gpus -r -e
 	# -s follows the directory of model you wanna evaluate
 	# -r means recover
 	# -e means evaluate
 ```
 
-## Contributing
+## ContributionGuidance
 ```sh
 	git checkout master
 	git pull origin master
