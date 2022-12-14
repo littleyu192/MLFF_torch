@@ -2,6 +2,7 @@ import numpy as np
 import os
 from torch.utils.data import Dataset
 import torch
+import yaml
 
 
 class MovementDataset(Dataset):
@@ -13,7 +14,7 @@ class MovementDataset(Dataset):
 
         self.dirs = []
         self.range_map = {}
-        self.cache_set_num = 2
+        self.cache_set_num = 10
         self.work_space = [None] * self.cache_set_num
         self.index = 0
 
@@ -27,7 +28,7 @@ class MovementDataset(Dataset):
         for i in range(self.cache_set_num):
             if i < len(self.dirs):
                 self.__load_data(self.dirs[i])
-        
+
         self.__compute_stat_output(10, 1e-3)
 
     def __get_img_num(self, path):
@@ -41,7 +42,7 @@ class MovementDataset(Dataset):
 
         data["start_index"] = int(path.split("/")[-1].split("_")[-2])
         data["end_index"] = int(path.split("/")[-1].split("_")[-1])
-        data["Force"] = np.load(os.path.join(path, "Force.npy"))
+        data["Force"] = -1* np.load(os.path.join(path, "Force.npy"))
         data["Ei"] = np.load(os.path.join(path, "Ei.npy"))
         data["ListNeighbor"] = np.load(os.path.join(path, "ListNeighbor.npy"))
         data["Ri"] = np.load(os.path.join(path, "Ri.npy"))
@@ -61,15 +62,21 @@ class MovementDataset(Dataset):
 
             dic = {
                 "Force": data["Force"][
-                    data["ImageIndex"][real_index] : data["ImageIndex"][real_index + 1]],
+                    data["ImageIndex"][real_index] : data["ImageIndex"][real_index + 1]
+                ],
                 "Ei": data["Ei"][
-                    data["ImageIndex"][real_index] : data["ImageIndex"][real_index + 1]],
+                    data["ImageIndex"][real_index] : data["ImageIndex"][real_index + 1]
+                ],
                 "ListNeighbor": data["ListNeighbor"][
-                    data["ImageIndex"][real_index] * self.config["maxNeighborNum"] : data["ImageIndex"][real_index + 1] * self.config["maxNeighborNum"]],
+                    data["ImageIndex"][real_index] : data["ImageIndex"][real_index + 1]
+                ],
                 "Ri": data["Ri"][
-                    data["ImageIndex"][real_index] * self.config["maxNeighborNum"] : data["ImageIndex"][real_index + 1] * self.config["maxNeighborNum"]],
+                    data["ImageIndex"][real_index] : data["ImageIndex"][real_index + 1]
+                ],
                 "Ri_d": data["Ri_d"][
-                    data["ImageIndex"][real_index] * self.config["maxNeighborNum"] : data["ImageIndex"][real_index + 1] * self.config["maxNeighborNum"]]
+                    data["ImageIndex"][real_index] : data["ImageIndex"][real_index + 1]
+                ],
+                "ImageAtomNum": data["ImageAtomNum"][real_index : real_index + 1]
             }
             return dic
 
@@ -85,7 +92,20 @@ class MovementDataset(Dataset):
             dic = {
                 "Force": data["Force"][
                     data["ImageIndex"][real_index] : data["ImageIndex"][real_index + 1]
-                ]
+                ],
+                "Ei": data["Ei"][
+                    data["ImageIndex"][real_index] : data["ImageIndex"][real_index + 1]
+                ],
+                "ListNeighbor": data["ListNeighbor"][
+                    data["ImageIndex"][real_index] : data["ImageIndex"][real_index + 1]
+                ],
+                "Ri": data["Ri"][
+                    data["ImageIndex"][real_index] : data["ImageIndex"][real_index + 1]
+                ],
+                "Ri_d": data["Ri_d"][
+                    data["ImageIndex"][real_index] : data["ImageIndex"][real_index + 1]
+                ],
+                "ImageAtomNum": data["ImageAtomNum"][real_index : real_index + 1]
             }
             return dic
 
@@ -105,8 +125,8 @@ class MovementDataset(Dataset):
         # only for one atom type
         if image_num > data["ImageAtomNum"].shape[0]:
             image_num = data["ImageAtomNum"].shape[0]
-        
-        energy = data['Ei'][data['ImageIndex'][0] : data['ImageIndex'][image_num]]
+
+        energy = data["Ei"][data["ImageIndex"][0] : data["ImageIndex"][image_num]]
         energy = np.reshape(energy, (-1, natoms_sum, 1))
         # natoms_sum = 0
         # for ntype in range(self.ntypes):
@@ -132,25 +152,31 @@ class MovementDataset(Dataset):
 
 def main():
 
-    # with open("config.yaml", "r") as yamlfile:
-    #     config = yaml.load(yamlfile, Loader=yaml.FullLoader)
+    with open("config.yaml", "r") as yamlfile:
+        config = yaml.load(yamlfile, Loader=yaml.FullLoader)
     #     print("Read Config successful")
-
-    dataset = MovementDataset("./train")
+    import ipdb; ipdb.set_trace()
+    dataset = MovementDataset(config, "./train")
 
     dataloader = torch.utils.data.DataLoader(
         dataset,
         batch_size=1,
-        shuffle=True,
+        shuffle=False,
         num_workers=4,
         pin_memory=True,
     )
 
     for i, sample_batches in enumerate(dataloader):
-        print(i, "===")
-    import ipdb
-
-    ipdb.set_trace()
+        
+        print(sample_batches["Force"].shape)
+        print(sample_batches["Ei"].shape)
+        print(sample_batches["ListNeighbor"].shape)
+        print(sample_batches["Ri"].shape)
+        print(sample_batches["Ri_d"].shape)
+        print(sample_batches["ImageAtomNum"].shape)
+        # print(sample_batches["ImageIndex"].shape)
+        import ipdb;ipdb.set_trace()
+        # print(sample_batches["ListNeighbor"].shape)
 
 
 if __name__ == "__main__":

@@ -86,13 +86,21 @@ def gen_train_data(config):
 
 def save_npy_files(data_path, data_set):
     print("Saving to ", data_path)
+    print("    AtomType.npy", data_set["AtomType"].shape)
     np.save(os.path.join(data_path, "AtomType.npy"), data_set["AtomType"])
+    print("    ImageDR.npy", data_set["ImageDR"].shape)
     np.save(os.path.join(data_path, "ImageDR.npy"), data_set["ImageDR"])
+    print("    ListNeighbor.npy", data_set["ListNeighbor"].shape)
     np.save(os.path.join(data_path, "ListNeighbor.npy"), data_set["ListNeighbor"])
+    print("    Ei.npy", data_set["Ei"].shape)
     np.save(os.path.join(data_path, "Ei.npy"), data_set["Ei"])
+    print("    Ri.npy", data_set["Ri"].shape)
     np.save(os.path.join(data_path, "Ri.npy"), data_set["Ri"])
+    print("    Ri_d.npy", data_set["Ri_d"].shape)
     np.save(os.path.join(data_path, "Ri_d.npy"), data_set["Ri_d"])
+    print("    Force.npy", data_set["Force"].shape)
     np.save(os.path.join(data_path, "Force.npy"), data_set["Force"])
+    print("    ImageAtomNum.npy", data_set["ImageAtomNum"].shape)
     np.save(os.path.join(data_path, "ImageAtomNum.npy"), data_set["ImageAtomNum"])
 
 
@@ -375,7 +383,7 @@ def compute_Ri(config, image_dR, list_neigh, natoms_img, ind_img, davg, dstd):
     seq_len = 0
     tmp_img = natoms_img[0]
     for i in range(image_num):
-        if (natoms_img[i] != tmp_img).sum() > 0 or seq_len >= 1000:
+        if (natoms_img[i] != tmp_img).sum() > 0 or seq_len >= 500:
             img_seq.append(i)
             seq_len = 1
             tmp_img = natoms_img[i]
@@ -394,13 +402,17 @@ def compute_Ri(config, image_dR, list_neigh, natoms_img, ind_img, davg, dstd):
 
         image_dR_i = image_dR[
             ind_img[start_index]
-            * config["maxNeighborNum"] : ind_img[end_index]
             * config["maxNeighborNum"]
+            * ntypes : ind_img[end_index]
+            * config["maxNeighborNum"]
+            * ntypes
         ]
         list_neigh_i = list_neigh[
             ind_img[start_index]
-            * config["maxNeighborNum"] : ind_img[end_index]
             * config["maxNeighborNum"]
+            * ntypes : ind_img[end_index]
+            * config["maxNeighborNum"]
+            * ntypes
         ]
 
         image_dR_i = np.reshape(
@@ -458,6 +470,7 @@ def sepper_data(config):
 
     max_neighbor_num = config["maxNeighborNum"]
     dataset_img_num = config["datasetImageNum"]
+    ntypes = len(config["atomType"])
 
     atom_type = np.loadtxt(os.path.join(trainset_dir, "AtomType.dat"), dtype=int)
     dR_neigh = np.loadtxt(os.path.join(trainset_dir, "dRneigh.dat"))
@@ -488,9 +501,9 @@ def sepper_data(config):
 
     davg, dstd = calc_stat(
         config,
-        image_dR[image_index[0] : image_index[10] * max_neighbor_num],
-        list_neigh[image_index[0] : image_index[10] * max_neighbor_num],
-        atom_num_per_image[image_index[0] : image_index[10]],
+        image_dR[0 : image_index[10] * max_neighbor_num * ntypes],
+        list_neigh[0 : image_index[10] * max_neighbor_num * ntypes],
+        atom_num_per_image[0:10],
     )
 
     Ri, Ri_d = compute_Ri(
@@ -512,6 +525,9 @@ def sepper_data(config):
 
     train_image_num = math.ceil(image_num * config["ratio"])
 
+    list_neigh = list_neigh.reshape(-1, max_neighbor_num * ntypes)
+    image_dR = image_dR.reshape(-1, max_neighbor_num * ntypes, 3)
+
     index = 0
     while index < train_image_num:
         start_index = index
@@ -521,11 +537,9 @@ def sepper_data(config):
 
         train_set = {
             "AtomType": atom_type[image_index[start_index] : image_index[end_index]],
-            "ImageDR": image_dR[
-                image_index[start_index] : image_index[end_index] * max_neighbor_num
-            ],
+            "ImageDR": image_dR[image_index[start_index] : image_index[end_index]],
             "ListNeighbor": list_neigh[
-                image_index[start_index] : image_index[end_index] * max_neighbor_num
+                image_index[start_index] : image_index[end_index]
             ],
             "Ei": Ei[image_index[start_index] : image_index[end_index]],
             "Ri": Ri[image_index[start_index] : image_index[end_index]],
@@ -552,11 +566,9 @@ def sepper_data(config):
 
         valid_set = {
             "AtomType": atom_type[image_index[start_index] : image_index[end_index]],
-            "ImageDR": image_dR[
-                image_index[start_index] : image_index[end_index] * max_neighbor_num
-            ],
+            "ImageDR": image_dR[image_index[start_index] : image_index[end_index]],
             "ListNeighbor": list_neigh[
-                image_index[start_index] : image_index[end_index] * max_neighbor_num
+                image_index[start_index] : image_index[end_index]
             ],
             "Ei": Ei[image_index[start_index] : image_index[end_index]],
             "Ri": Ri[image_index[start_index] : image_index[end_index]],
