@@ -16,7 +16,6 @@ from torch.autograd import Variable
 from model.dp_dp import DP
 # from model.MLFF import MLFFNet
 
-from optimizer.kalmanfilter import GKalmanFilter, LKalmanFilter, SKalmanFilter, L1KalmanFilter
 from optimizer.LKF import LKFOptimizer
 from optimizer.GKF import GKFOptimizer
 from optimizer.KFWrapper import KFOptimizerWrapper

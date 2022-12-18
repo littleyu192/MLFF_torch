@@ -6,7 +6,7 @@ from torch.nn import init
 from torch.autograd import Variable
 import sys, os
 sys.path.append(os.getcwd())
-import parameters as pm    
+# import parameters as pm    
 # import prepare as pp
 # pp.readFeatnum()
 from model.dp_embedding import EmbeddingNet, FittingNet
