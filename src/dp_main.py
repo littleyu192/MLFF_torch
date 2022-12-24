@@ -264,8 +264,8 @@ def main_worker(gpu, ngpus_per_node, args):
         training_type = torch.float64
 
     # Create dataset
-    train_dataset = MovementDataset(config, "./train")
-    valid_dataset = MovementDataset(config, "./valid")
+    train_dataset = MovementDataset("./train")
+    valid_dataset = MovementDataset("./valid")
 
     # create model
     davg, dstd, ener_shift = train_dataset.get_stat()
@@ -410,15 +410,18 @@ def main_worker(gpu, ngpus_per_node, args):
             train_sampler.set_epoch(epoch)
 
         # train for one epoch
+        time_start = time.time()
         if args.opt == "LKF" or args.opt == "GKF":
             real_lr = args.lr
-            loss, loss_Etot, loss_Force, loss_Ei, epoch_time = train_KF(
+            loss, loss_Etot, loss_Force, loss_Ei = train_KF(
                 train_loader, model, criterion, optimizer, epoch, device, args
             )
         else:
-            loss, loss_Etot, loss_Force, loss_Ei, epoch_time, real_lr = train(
+            loss, loss_Etot, loss_Force, loss_Ei, real_lr = train(
                 train_loader, model, criterion, optimizer, epoch, args.lr, device, args
             )
+        time_end = time.time()
+
         # evaluate on validation set
         vld_loss, vld_loss_Etot, vld_loss_Force, vld_loss_Ei = valid(
             val_loader, model, criterion, device, args
@@ -430,7 +433,7 @@ def main_worker(gpu, ngpus_per_node, args):
             f_train_log = open(train_log, "a")
             f_train_log.write(
                 "%d %e %e %e %e %e %s\n"
-                % (epoch, loss, loss_Etot, loss_Ei, loss_Force, real_lr, epoch_time)
+                % (epoch, loss, loss_Etot, loss_Ei, loss_Force, real_lr, time_end - time_start)
             )
             f_valid_log = open(valid_log, "a")
             f_valid_log.write(

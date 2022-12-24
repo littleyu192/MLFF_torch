@@ -10,7 +10,9 @@ make -C pre_data/fortran_code  # spack load gcc@7.5.0
 #make libiotk.a
 #cd ../..
 #make -C QCAD/fortran_code
-#cd bin
+cd bin
+ln -s ../clean_data.sh .
+chmod +x clean_data.sh
 #ln -s ../pre_data/mlff.py .
 #ln -s ../pre_data/seper.py .
 #ln -s ../pre_data/gen_data.py .

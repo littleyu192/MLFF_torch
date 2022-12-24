@@ -129,7 +129,6 @@ def train(train_loader, model, criterion, optimizer, epoch, start_lr, device, co
         loss_Etot.root,
         loss_Force.root,
         loss_Ei.root,
-        batch_time.sum,
         real_lr,
     )
 
@@ -231,8 +230,7 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
         batch_time.all_reduce()
 
     progress.display_summary(["Training Set:"])
-    return losses.avg, loss_Etot.root, loss_Force.root, loss_Ei.root, batch_time.sum
-
+    return losses.avg, loss_Etot.root, loss_Force.root, loss_Ei.root
 
 def valid(val_loader, model, criterion, device, args):
     def run_validate(loader, base_progress=0):

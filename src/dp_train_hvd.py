@@ -698,8 +698,8 @@ info("Scheduler: opt_LR_T_max = %s" %opt_LR_T_max)
 info("scheduler: opt_autograd = %s" %opt_autograd)
 
 # Create dataset
-train_dataset = MovementDataset(config, "./train")
-valid_dataset = MovementDataset(config, "./valid")
+train_dataset = MovementDataset("./train")
+valid_dataset = MovementDataset("./valid")
 
 # create model
 davg, dstd, ener_shift = train_dataset.get_stat()
