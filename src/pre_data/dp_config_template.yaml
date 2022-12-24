@@ -19,4 +19,24 @@ dRFeatureOutputDir: "./output"
 trainDataPath: "./train"
 validDataPath: "./valid"
 ratio: 0.8
-datasetImageNum: 1000
+
+training_type : "float64"
+
+net_cfg:
+  embedding_net:
+    network_size:
+      - 25
+      - 25
+      - 25
+    bias: True
+    resnet_dt: False
+    activation: tanh
+  fitting_net:
+    network_size:
+      - 50
+      - 50
+      - 50
+      - 1
+    bias: True
+    resnet_dt: False
+    activation: tanh

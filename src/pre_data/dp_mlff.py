@@ -58,7 +58,7 @@ def gen_train_data(config):
     dRFeatureInputDir = config["dRFeatureInputDir"]
     dRFeatureOutputDir = config["dRFeatureOutputDir"]
 
-    os.system("./clean_data.sh")
+    os.system("clean_data.sh")
 
     if not os.path.exists(dRFeatureInputDir):
         os.mkdir(dRFeatureInputDir)
@@ -469,7 +469,6 @@ def sepper_data(config):
     valid_data_path = config["validDataPath"]
 
     max_neighbor_num = config["maxNeighborNum"]
-    dataset_img_num = config["datasetImageNum"]
     ntypes = len(config["atomType"])
 
     atom_type = np.loadtxt(os.path.join(trainset_dir, "AtomType.dat"), dtype=int)
@@ -528,10 +527,12 @@ def sepper_data(config):
     list_neigh = list_neigh.reshape(-1, max_neighbor_num * ntypes)
     image_dR = image_dR.reshape(-1, max_neighbor_num * ntypes, 3)
 
+    width = len(str(train_image_num))
+
     index = 0
     while index < train_image_num:
         start_index = index
-        end_index = index + dataset_img_num
+        end_index = index + 1
 
         end_index = min(end_index, train_image_num)
 
@@ -549,7 +550,7 @@ def sepper_data(config):
         }
 
         save_path = os.path.join(
-            train_data_path, "set_" + str(start_index) + "_" + str(end_index)
+            train_data_path, "image_" + str(start_index).zfill(width)
         )
 
         if not os.path.exists(save_path):
@@ -558,9 +559,11 @@ def sepper_data(config):
 
         index = end_index
 
+    width = len(str(image_num - train_image_num))
+
     while index < image_num:
         start_index = index
-        end_index = index + dataset_img_num
+        end_index = index + 1
 
         end_index = min(end_index, image_num)
 
@@ -578,11 +581,7 @@ def sepper_data(config):
         }
 
         save_path = os.path.join(
-            valid_data_path,
-            "set_"
-            + str(start_index - train_image_num)
-            + "_"
-            + str(end_index - train_image_num),
+            valid_data_path, "image_" + str(start_index - train_image_num).zfill(width)
         )
 
         if not os.path.exists(save_path):
