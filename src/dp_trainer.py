@@ -3,18 +3,14 @@ import shutil
 import time
 from enum import Enum
 import torch
-import torch.distributed as dist
-import torch.nn.parallel
-import torch.utils.data
-import torch.utils.data.distributed
 from torch.utils.data import Subset
 from torch.autograd import Variable
 
 from loss.dploss import dp_loss, adjust_lr
 
 from optimizer.KFWrapper import KFOptimizerWrapper
+import horovod.torch as hvd
 
-# import parameters as pm
 
 def train(train_loader, model, criterion, optimizer, epoch, start_lr, device, config):
     batch_time = AverageMeter("Time", ":6.3f")
@@ -42,42 +38,29 @@ def train(train_loader, model, criterion, optimizer, epoch, start_lr, device, co
         real_lr = adjust_lr(global_step, start_lr)
 
         for param_group in optimizer.param_groups:
-            param_group['lr'] = real_lr * (nr_batch_sample ** 0.5)
-        
+            param_group["lr"] = real_lr * (nr_batch_sample**0.5)
+
         if config.datatype == "float64":
-            Ei_label = Variable(
-                sample_batches["Ei"].double().to(device)
-            )
+            Ei_label = Variable(sample_batches["Ei"].double().to(device))
             Force_label = Variable(
                 sample_batches["Force"][:, :, :].double().to(device)
             )  # [40,108,3]
-           
-            Ri = Variable(
-                sample_batches["Ri"].double().to(device), requires_grad=True
-            )
+
+            Ri = Variable(sample_batches["Ri"].double().to(device), requires_grad=True)
             Ri_d = Variable(sample_batches["Ri_d"].to(device))
-           
+
         elif config.datatype == "float32":
-            Ei_label = Variable(
-                sample_batches["Ei"].float().to(device)
-            )
+            Ei_label = Variable(sample_batches["Ei"].float().to(device))
             Force_label = Variable(
                 sample_batches["Force"][:, :, :].float().to(device)
             )  # [40,108,3]
-             
-            
-            Ri = Variable(
-                sample_batches["Ri"].float().to(device), requires_grad=True
-            )
+
+            Ri = Variable(sample_batches["Ri"].float().to(device), requires_grad=True)
             Ri_d = Variable(sample_batches["Ri_d"].float().to(device))
-            
+
         Etot_label = torch.sum(torch.unsqueeze(Ei_label, 2), dim=1)
-        dR_neigh_list = Variable(
-                sample_batches["ListNeighbor"].int().to(device)
-            )
-        natoms_img = Variable(
-                sample_batches["ImageAtomNum"].int().to(device)
-            )
+        dR_neigh_list = Variable(sample_batches["ListNeighbor"].int().to(device))
+        natoms_img = Variable(sample_batches["ImageAtomNum"].int().to(device))
         natoms_img = torch.squeeze(natoms_img, 1)
         batch_size = Ri.shape[0]
         Etot_predict, Ei_predict, Force_predict = model(
@@ -147,7 +130,7 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
     )
 
     KFOptWrapper = KFOptimizerWrapper(
-        model, optimizer, config.nselect, config.groupsize, config.distributed, "torch"
+        model, optimizer, config.nselect, config.groupsize, config.hvd, "hvd"
     )
 
     # switch to train mode
@@ -159,39 +142,26 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
         data_time.update(time.time() - end)
 
         if config.datatype == "float64":
-            Ei_label = Variable(
-                sample_batches["Ei"].double().to(device)
-            )
+            Ei_label = Variable(sample_batches["Ei"].double().to(device))
             Force_label = Variable(
                 sample_batches["Force"][:, :, :].double().to(device)
             )  # [40,108,3]
 
-            Ri = Variable(
-                sample_batches["Ri"].double().to(device), requires_grad=True
-            )
+            Ri = Variable(sample_batches["Ri"].double().to(device), requires_grad=True)
             Ri_d = Variable(sample_batches["Ri_d"].to(device))
-    
 
         elif config.datatype == "float32":
-            Ei_label = Variable(
-                sample_batches["Ei"].float().to(device)
-            )
+            Ei_label = Variable(sample_batches["Ei"].float().to(device))
             Force_label = Variable(
                 sample_batches["Force"][:, :, :].float().to(device)
             )  # [40,108,3]
-           
-            Ri = Variable(
-                sample_batches["Ri"].float().to(device), requires_grad=True
-            )
+
+            Ri = Variable(sample_batches["Ri"].float().to(device), requires_grad=True)
             Ri_d = Variable(sample_batches["Ri_d"].float().to(device))
-  
+
         Etot_label = torch.sum(Ei_label.unsqueeze(2), dim=1)
-        dR_neigh_list = Variable(
-                sample_batches["ListNeighbor"].int().to(device)
-            )
-        natoms_img = Variable(
-                sample_batches["ImageAtomNum"].int().to(device)
-            )
+        dR_neigh_list = Variable(sample_batches["ListNeighbor"].int().to(device))
+        natoms_img = Variable(sample_batches["ImageAtomNum"].int().to(device))
         natoms_img = torch.squeeze(natoms_img, 1)
 
         Etot_predict, Ei_predict, Force_predict = model(
@@ -205,7 +175,7 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
 
         batch_size = Ri.shape[0]
         kalman_inputs = [Ri, Ri_d, dR_neigh_list, natoms_img, None, None]
-        
+
         KFOptWrapper.update_energy(kalman_inputs, Etot_label)
         KFOptWrapper.update_force(kalman_inputs, Force_label, 2)
 
@@ -221,8 +191,8 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
 
         if i % config.print_freq == 0:
             progress.display(i + 1)
-    
-    if config.distributed:
+
+    if config.hvd:
         losses.all_reduce()
         loss_Etot.all_reduce()
         loss_Force.all_reduce()
@@ -232,47 +202,39 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
     progress.display_summary(["Training Set:"])
     return losses.avg, loss_Etot.root, loss_Force.root, loss_Ei.root
 
+
 def valid(val_loader, model, criterion, device, args):
     def run_validate(loader, base_progress=0):
         end = time.time()
         for i, sample_batches in enumerate(loader):
             i = base_progress + i
             if args.datatype == "float64":
-                Ei_label = Variable(
-                    sample_batches["Ei"].double().to(device)
-                )
+                Ei_label = Variable(sample_batches["Ei"].double().to(device))
                 Force_label = Variable(
                     sample_batches["Force"][:, :, :].double().to(device)
                 )  # [40,108,3]
-                
+
                 Ri = Variable(
                     sample_batches["Ri"].double().to(device),
                     requires_grad=True,
                 )
                 Ri_d = Variable(sample_batches["Ri_d"].to(device))
-               
 
             elif args.datatype == "float32":
-                Ei_label = Variable(
-                    sample_batches["Ei"].float().to(device)
-                )
+                Ei_label = Variable(sample_batches["Ei"].float().to(device))
                 Force_label = Variable(
                     sample_batches["Force"][:, :, :].float().to(device)
                 )  # [40,108,3]
-               
+
                 Ri = Variable(
                     sample_batches["Ri"].float().to(device),
                     requires_grad=True,
                 )
                 Ri_d = Variable(sample_batches["Ri_d"].float().to(device))
-                
+
             Etot_label = torch.sum(torch.unsqueeze(Ei_label, 2), dim=1)
-            dR_neigh_list = Variable(
-                sample_batches["ListNeighbor"].int().to(device)
-            )
-            natoms_img = Variable(
-                sample_batches["ImageAtomNum"].int().to(device)
-            )
+            dR_neigh_list = Variable(sample_batches["ListNeighbor"].int().to(device))
+            natoms_img = Variable(sample_batches["ImageAtomNum"].int().to(device))
             natoms_img = torch.squeeze(natoms_img, 1)
 
             batch_size = Ri.shape[0]
@@ -305,8 +267,8 @@ def valid(val_loader, model, criterion, device, args):
     progress = ProgressMeter(
         len(val_loader)
         + (
-            args.distributed
-            and (len(val_loader.sampler) * args.world_size < len(val_loader.dataset))
+            args.hvd
+            and (len(val_loader.sampler) * hvd.size() < len(val_loader.dataset))
         ),
         [batch_time, losses, loss_Etot, loss_Force, loss_Ei],
         prefix="Test: ",
@@ -316,18 +278,12 @@ def valid(val_loader, model, criterion, device, args):
     model.eval()
 
     run_validate(val_loader)
-    if args.distributed:
-        losses.all_reduce()
-        loss_Etot.all_reduce()
-        loss_Force.all_reduce()
-        loss_Ei.all_reduce()
+   
 
-    if args.distributed and (
-        len(val_loader.sampler) * args.world_size < len(val_loader.dataset)
-    ):
+    if args.hvd and (len(val_loader.sampler) * hvd.size() < len(val_loader.dataset)):
         aux_val_dataset = Subset(
             val_loader.dataset,
-            range(len(val_loader.sampler) * args.world_size, len(val_loader.dataset)),
+            range(len(val_loader.sampler) * hvd.size(), len(val_loader.dataset)),
         )
         aux_val_loader = torch.utils.data.DataLoader(
             aux_val_dataset,
@@ -337,6 +293,12 @@ def valid(val_loader, model, criterion, device, args):
             pin_memory=True,
         )
         run_validate(aux_val_loader, len(val_loader))
+
+    if args.hvd:
+        losses.all_reduce()
+        loss_Etot.all_reduce()
+        loss_Force.all_reduce()
+        loss_Ei.all_reduce()
 
     progress.display_summary(["Test Set:"])
 
@@ -388,8 +350,10 @@ class AverageMeter(object):
             device = torch.device("mps")
         else:
             device = torch.device("cpu")
+
         total = torch.tensor([self.sum, self.count], dtype=torch.float32, device=device)
-        dist.all_reduce(total, dist.ReduceOp.SUM, async_op=False)
+        total = hvd.allreduce(total, hvd.Sum)
+        # dist.all_reduce(total, dist.ReduceOp.SUM, async_op=False)
         self.sum, self.count = total.tolist()
         self.avg = self.sum / self.count
         self.root = self.avg**0.5
