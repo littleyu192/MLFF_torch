@@ -698,8 +698,10 @@ info("Scheduler: opt_LR_T_max = %s" %opt_LR_T_max)
 info("scheduler: opt_autograd = %s" %opt_autograd)
 
 # Create dataset
+# train_dataset = MovementDataset(config, "./train")
+# valid_dataset = MovementDataset(config, "./valid")
 train_dataset = MovementDataset("./train")
-valid_dataset = MovementDataset("./valid")
+valid_dataset = MovementDataset( "./valid")
 
 # create model
 davg, dstd, ener_shift = train_dataset.get_stat()
@@ -815,8 +817,8 @@ for epoch in range(start_epoch, n_epoch + 1):
         for param_group in optimizer.param_groups:
             # param_group['lr'] = real_lr * pm.batch_size
             param_group['lr'] = real_lr * (batch_size ** 0.5)
-        # import ipdb;ipdb.set_trace()
-        natoms_sum = sample_batches['ImageAtomNum'][0][0][0].item()
+
+        natoms_sum = sample_batches['ImageAtomNum'][0][0].item()
         
         if opt_optimizer == 'LKF':
             time_start = time.time()
@@ -909,7 +911,7 @@ for epoch in range(start_epoch, n_epoch + 1):
         valid_loss_F = 0.
         time_valid_start = time.time()
         for i_batch, sample_batches in enumerate(loader_valid):
-            natoms_sum = sample_batches['ImageAtomNum'][0][0][0].item()
+            natoms_sum = sample_batches['ImageAtomNum'][0][0].item()
             nr_batch_sample = sample_batches['Ei'].shape[0]
             valid_error_iter, batch_loss_Etot, batch_loss_Ei, batch_loss_F = valid(sample_batches, model, nn.MSELoss())
             # n_iter = (epoch - 1) * len(loader_valid) + i_batch + 1

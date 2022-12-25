@@ -1,11 +1,8 @@
 import argparse
 import os
 import random
-import signal
 import torch
 import torch.backends.cudnn as cudnn
-import torch.distributed as dist
-import torch.multiprocessing as mp
 import torch.nn as nn
 import torch.nn.parallel
 import torch.optim as optim
@@ -14,15 +11,18 @@ import torch.utils.data.distributed
 import warnings
 
 from model.dp_dp import DP
+
 # from model.MLFF import MLFFNet
 from optimizer.GKF import GKFOptimizer
 from optimizer.LKF import LKFOptimizer
+
 # from pre_data.data_loader_2type import get_torch_data
 from pre_data.dp_data_loader import MovementDataset
 from dp_trainer import *
 
 # import parameters as pm
 import yaml
+
 with open("config.yaml", "r") as yamlfile:
     config = yaml.load(yamlfile, Loader=yaml.FullLoader)
 
@@ -111,22 +111,10 @@ parser.add_argument(
     help="evaluate model on validation set",
 )
 parser.add_argument(
-    "--world-size",
-    default=-1,
-    type=int,
-    help="number of nodes for distributed training",
-)
-parser.add_argument(
-    "--rank", default=-1, type=int, help="node rank for distributed training"
-)
-parser.add_argument(
-    "--dist-url",
-    default="tcp://localhost:23456",
-    type=str,
-    help="url used to set up distributed training",
-)
-parser.add_argument(
-    "--dist-backend", default="nccl", type=str, help="distributed backend"
+    "--hvd",
+    dest="hvd",
+    action="store_true",
+    help="dist training by horovod",
 )
 parser.add_argument(
     "--seed", default=None, type=int, help="seed for initializing training. "
@@ -135,14 +123,6 @@ parser.add_argument("--magic", default=2022, type=int, help="Magic number. ")
 parser.add_argument("--gpu", default=None, type=int, help="GPU id to use.")
 parser.add_argument(
     "--dp", dest="dp", action="store_true", help="Whether to use DP, default False."
-)
-parser.add_argument(
-    "--multiprocessing-distributed",
-    action="store_true",
-    help="Use multi-processing distributed training to launch "
-    "N processes per node, which has N GPUs. This is the "
-    "fastest way to use PyTorch for either single node or "
-    "multi node data parallel training",
 )
 # parser.add_argument("--dummy", action="store_true", help="use fake data to benchmark")
 parser.add_argument(
@@ -171,14 +151,6 @@ parser.add_argument(
 best_loss = 1e10
 
 
-def destory_process(signum, frame):
-    signame = signal.Signals(signum).name
-    print(
-        f"Signal handler called with signal {signame} ({signum}): destory dist process"
-    )
-    dist.destroy_process_group()
-
-
 def main():
     args = parser.parse_args()
 
@@ -195,60 +167,18 @@ def main():
             "from checkpoints."
         )
 
-    if args.gpu is not None:
-        warnings.warn(
-            "You have chosen a specific GPU. This will completely "
-            "disable data parallelism."
-        )
-
-    if args.dist_url == "env://" and args.world_size == -1:
-        args.world_size = int(os.environ["WORLD_SIZE"])
-
-    args.distributed = args.world_size > 1 or args.multiprocessing_distributed
-
     if not os.path.exists(args.store_path):
         os.mkdir(args.store_path)
 
-    if torch.cuda.is_available():
-        ngpus_per_node = torch.cuda.device_count()
-    else:
-        ngpus_per_node = 1
-    if args.multiprocessing_distributed:
-        # Since we have ngpus_per_node processes per node, the total world_size
-        # needs to be adjusted accordingly
-        args.world_size = ngpus_per_node * args.world_size
-        # Use torch.multiprocessing.spawn to launch distributed processes: the
-        # main_worker process function
-        mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
-    else:
-        # Simply call main_worker function
-        main_worker(args.gpu, ngpus_per_node, args)
+    if args.hvd:
+        import horovod.torch as hvd
 
-
-def main_worker(gpu, ngpus_per_node, args):
-    global best_loss
-    args.gpu = gpu
-
-    if args.gpu is not None:
-        print("Use GPU: {} for training".format(args.gpu))
-
-    if args.distributed:
-        if args.dist_url == "env://" and args.rank == -1:
-            args.rank = int(os.environ["RANK"])
-        if args.multiprocessing_distributed:
-            # For multiprocessing distributed training, rank needs to be the
-            # global rank among all the processes
-            args.rank = args.rank * ngpus_per_node + gpu
-        dist.init_process_group(
-            backend=args.dist_backend,
-            init_method=args.dist_url,
-            world_size=args.world_size,
-            rank=args.rank,
-        )
-        signal.signal(signal.SIGINT, destory_process)
+        hvd.init()
+        args.gpu = hvd.local_rank()
 
     if torch.cuda.is_available():
         if args.gpu:
+            print("Use GPU: {} for training".format(args.gpu))
             device = torch.device("cuda:{}".format(args.gpu))
         else:
             device = torch.device("cuda")
@@ -257,11 +187,12 @@ def main_worker(gpu, ngpus_per_node, args):
     else:
         device = torch.device("cpu")
 
-
     if args.datatype == "float32":
         training_type = torch.float32  # training type is weights type
     else:
         training_type = torch.float64
+
+    global best_loss
 
     # Create dataset
     train_dataset = MovementDataset("./train")
@@ -275,27 +206,12 @@ def main_worker(gpu, ngpus_per_node, args):
 
     if not torch.cuda.is_available() and not torch.backends.mps.is_available():
         print("using CPU, this will be slow")
-    elif args.distributed:
-        # For multiprocessing distributed, DistributedDataParallel constructor
-        # should always set the single device scope, otherwise,
-        # DistributedDataParallel will use all available devices.
+    elif args.hvd:
         if torch.cuda.is_available():
             if args.gpu is not None:
                 torch.cuda.set_device(args.gpu)
                 model.cuda(args.gpu)
-                # When using a single GPU per process and per
-                # DistributedDataParallel, we need to divide the batch size
-                # ourselves based on the total number of GPUs of the current node.
-                args.batch_size = int(args.batch_size / ngpus_per_node)
-                args.workers = int((args.workers + ngpus_per_node - 1) / ngpus_per_node)
-                model = torch.nn.parallel.DistributedDataParallel(
-                    model, device_ids=[args.gpu], find_unused_parameters=False
-                )
-            else:
-                model.cuda()
-                # DistributedDataParallel will divide and allocate batch_size to all
-                # available GPUs if device_ids are not set
-                model = torch.nn.parallel.DistributedDataParallel(model)
+                args.batch_size = int(args.batch_size / hvd.size())
     elif args.gpu is not None and torch.cuda.is_available():
         torch.cuda.set_device(args.gpu)
         model = model.cuda(args.gpu)
@@ -330,12 +246,14 @@ def main_worker(gpu, ngpus_per_node, args):
         )
     else:
         print("Unsupported optimizer!")
-    # """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
-    # scheduler = StepLR(optimizer, step_size=30, gamma=0.1)
 
     # optionally resume from a checkpoint
     if args.resume:
-        file_name = os.path.join(args.store_path, "best.pth.tar")
+        if args.evaluate:
+            file_name = os.path.join(args.store_path, "best.pth.tar")
+        else:
+            file_name = os.path.join(args.store_path, "checkpoint.pth.tar")
+
         if os.path.isfile(file_name):
             print("=> loading checkpoint '{}'".format(file_name))
             if args.gpu is None:
@@ -358,15 +276,27 @@ def main_worker(gpu, ngpus_per_node, args):
         else:
             print("=> no checkpoint found at '{}'".format(file_name))
 
-    if args.distributed:
-        train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
+    if args.hvd:
+        optimizer = hvd.DistributedOptimizer(
+            optimizer, named_parameters=model.named_parameters()
+        )
+
+        # Broadcast parameters from rank 0 to all other processes.
+        hvd.broadcast_parameters(model.state_dict(), root_rank=0)
+
+    # """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
+    # scheduler = StepLR(optimizer, step_size=30, gamma=0.1)
+
+    if args.hvd:
+        train_sampler = torch.utils.data.distributed.DistributedSampler(
+            train_dataset, num_replicas=hvd.size(), rank=hvd.rank()
+        )
         val_sampler = torch.utils.data.distributed.DistributedSampler(
-            valid_dataset, shuffle=False, drop_last=True
+            valid_dataset, num_replicas=hvd.size(), rank=hvd.rank(), drop_last=True
         )
     else:
         train_sampler = None
         val_sampler = None
-    
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
@@ -391,9 +321,7 @@ def main_worker(gpu, ngpus_per_node, args):
         valid(val_loader, model, criterion, device, args)
         return
 
-    if not args.multiprocessing_distributed or (
-        args.multiprocessing_distributed and args.rank % ngpus_per_node == 0
-    ):
+    if not args.hvd or (args.hvd and hvd.rank() == 0):
         train_log = os.path.join(args.store_path, "epoch_train.dat")
 
         f_train_log = open(train_log, "w")
@@ -406,7 +334,7 @@ def main_worker(gpu, ngpus_per_node, args):
         f_valid_log.write("epoch\t loss\t RMSE_Etot\t RMSE_Ei\t RMSE_F\n")
 
     for epoch in range(args.start_epoch, args.epochs + 1):
-        if args.distributed:
+        if args.hvd:
             train_sampler.set_epoch(epoch)
 
         # train for one epoch
@@ -427,13 +355,19 @@ def main_worker(gpu, ngpus_per_node, args):
             val_loader, model, criterion, device, args
         )
 
-        if not args.multiprocessing_distributed or (
-            args.multiprocessing_distributed and args.rank % ngpus_per_node == 0
-        ):
+        if not args.hvd or (args.hvd and hvd.rank() == 0):
             f_train_log = open(train_log, "a")
             f_train_log.write(
                 "%d %e %e %e %e %e %s\n"
-                % (epoch, loss, loss_Etot, loss_Ei, loss_Force, real_lr, time_end - time_start)
+                % (
+                    epoch,
+                    loss,
+                    loss_Etot,
+                    loss_Ei,
+                    loss_Force,
+                    real_lr,
+                    time_end - time_start,
+                )
             )
             f_valid_log = open(valid_log, "a")
             f_valid_log.write(
@@ -447,9 +381,7 @@ def main_worker(gpu, ngpus_per_node, args):
         is_best = vld_loss < best_loss
         best_loss = min(loss, best_loss)
 
-        if not args.multiprocessing_distributed or (
-            args.multiprocessing_distributed and args.rank % ngpus_per_node == 0
-        ):
+        if not args.hvd or (args.hvd and hvd.rank() == 0):
             save_checkpoint(
                 {
                     "epoch": epoch,
@@ -462,9 +394,6 @@ def main_worker(gpu, ngpus_per_node, args):
                 "checkpoint.pth.tar",
                 args.store_path,
             )
-
-    if args.distributed:
-        dist.destroy_process_group()
 
 
 if __name__ == "__main__":
