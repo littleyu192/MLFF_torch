@@ -139,7 +139,6 @@ horovod installation(optional):
 1. Train in one GPU
 ```sh
 	python the/path/to/MLFF_torch/src/dp_main.py --gpu 0 -b 1 --opt ADAM --epochs 1000 -s dprecord
-	(or: CUDA_VISIBLE_DEVICES=0 python the/path/to/MLFF_torch/src/dp_train_hvd.py --opt ADAM --epochs 30 -s dprecord)
 	# --gpu 0(0 is the idx of GPU)
 	# -b 1(the batch size is set 1 for training)
 	# --opt ADAM(use the default optimizer if using DP net)
@@ -148,8 +147,7 @@ horovod installation(optional):
 
 2. Train in multi GPUs(One node)
 ```sh
-	python the/path/to/MLFF_torch/src/dp_main.py --dist-url 'tcp://127.0.0.1:1235' --dist-backend 'nccl' --multiprocessing-distributed --world-size 1 --rank 0 -b 4 --opt ADAM --epochs 1000 -s dp_4gpus
-	(or:  horovodrun -np 4 python the/path/to/MLFF_torch/src/dp_train_hvd.py --opt ADAM -b 8 --epochs 200 --hvd -s dp_4gpus)
+	horovodrun -np 4 -H localhost:4 python the/path/to/MLFF_torch/src/dp_main.py --hvd -b 4 --opt ADAM --epochs 1000 -s dp_4gpus
 	# do not need to assigh GPU 
 	# -b 4(the batch size should set an integer multiple of the used GPUs, e.g.,4, 8, 12)
 	# --opt ADAM(use the default optimizer if using DP net)
@@ -158,15 +156,11 @@ horovod installation(optional):
 
 3. Train in multi GPUs(Multi nodes)
 ```sh
-	# in the root node:
-	python the/path/to/MLFF_torch/src/dp_main.py --dist-url 'tcp://127.0.0.1:1235' --dist-backend 'nccl' --multiprocessing-distributed --world-size 2 --rank 0 -b 8 --opt ADAM --epochs 1000 -s dp_8gpus
-	# in the child nodes:
-	python the/path/to//MLFF_torch/src/main.py --dist-url 'tcp://$root_node_IP$:1235' --dist-backend 'nccl' --multiprocessing-distributed --world-size 2 --rank 1 -b 8 --opt ADAM --epochs 1000 -s dp_8gpus
+	horovodrun -np 8 -H server1:2,server2:2 python the/path/to/MLFF_torch/src/dp_main.py --opt ADAM -b 8 --epochs 200 --hvd -s dp_8gpus
 	# do not need to assigh GPU 
 	# -b 8(the batch size should set an integer multiple of the used GPUs, e.g.,8, 16, etc)
 	# --opt ADAM(use the default optimizer if using DP net)
 	# -s dp_8gpus(assign the directory of stored model and log file)
-	(or: horovodrun -np 8 -H server1:2,server2:2 python the/path/to/MLFF_torch/src/dp_train_hvd.py --opt ADAM -b 8 --epochs 200 --hvd -s dp_8gpus)
 ```
 
 
@@ -177,8 +171,7 @@ horovod installation(optional):
 > model validation
 ```sh
 	python the/path/to/MLFF_torch/src/dp_main.py --opt LKF -b 1 -s dpkfrecord -r -e
-
-	python the/path/to/MLFF_torch/src/dp_main.py --dp --opt LKF --dist-url 'tcp://127.0.0.1:1235' --dist-backend 'nccl' --multiprocessing-distributed --world-size 1 --rank 0 -b 32 -s dpkf_4gpus -r -e
+	(or: horovodrun -np 4 -H localhost:4 python the/path/to/MLFF_torch/src/dp_main.py --hvd --opt LKF -b 32 -s dpkf_4gpus -r -e)
 	# -s follows the directory of model you wanna evaluate
 	# -r means recover
 	# -e means evaluate

@@ -263,7 +263,7 @@ def main():
                 loc = "cuda:{}".format(args.gpu)
                 checkpoint = torch.load(file_name, map_location=loc)
 
-            args.start_epoch = checkpoint["epoch"]
+            args.start_epoch = checkpoint["epoch"] + 1
             best_loss = checkpoint["best_loss"]
             model.load_state_dict(checkpoint["state_dict"])
             optimizer.load_state_dict(checkpoint["optimizer"])
