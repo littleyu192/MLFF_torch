@@ -60,7 +60,7 @@ class KFOptimizerWrapper:
         Etot_predict = update_prefactor * Etot_predict
         Etot_predict[mask] = -update_prefactor * Etot_predict[mask]
 
-        Etot_predict.mean().backward()
+        Etot_predict.sum().backward()
         self.optimizer.step(error)
 
     def update_force(
