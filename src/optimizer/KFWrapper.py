@@ -4,7 +4,7 @@ from torch.optim.optimizer import Optimizer
 import time
 import numpy as np
 import torch.distributed as dist
-
+import math
 
 class KFOptimizerWrapper:
     def __init__(
@@ -39,7 +39,7 @@ class KFOptimizerWrapper:
         self.optimizer.set_grad_prefactor(natoms_sum)
 
         self.optimizer.zero_grad()
-
+        bs = Etot_label.shape[0]
         error = Etot_label - Etot_predict
         error = error / natoms_sum
         mask = error < 0
@@ -61,13 +61,14 @@ class KFOptimizerWrapper:
         Etot_predict[mask] = -update_prefactor * Etot_predict[mask]
 
         Etot_predict.sum().backward()
+        error = error * math.sqrt(bs)
         self.optimizer.step(error)
 
     def update_force(
         self, inputs: list, Force_label: torch.Tensor, update_prefactor: float = 1
     ) -> None:
         natoms_sum = inputs[3][0, 0]
-
+        bs = Force_label.shape[0]
         self.optimizer.set_grad_prefactor(natoms_sum * self.atoms_per_group * 3)
 
         index = self.__sample(self.atoms_selected, self.atoms_per_group, natoms_sum)
@@ -97,7 +98,7 @@ class KFOptimizerWrapper:
 
             # In order to solve a pytorch bug, reference: https://github.com/pytorch/pytorch/issues/43259
             (tmp_force_predict.sum() + Etot_predict.sum() * 0).backward()
-
+            error = error * math.sqrt(bs)
             self.optimizer.step(error)
 
     def __sample(
@@ -108,3 +109,7 @@ class KFOptimizerWrapper:
         index = range(natoms)
         res = np.random.choice(index, atoms_selected).reshape(-1, atoms_per_group)
         return res
+
+# with torch.autograd.profiler.profile(enabled=True, use_cuda=True, record_shapes=False) as prof:
+#     the code u wanna profile
+# print(prof.key_averages().table(sort_by="self_cpu_time_total"))
