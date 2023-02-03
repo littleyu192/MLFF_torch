@@ -180,28 +180,6 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
         natoms_img = Variable(sample_batches["ImageAtomNum"].int().to(device))
         natoms_img = torch.squeeze(natoms_img, 1)
 
-        if config.profiling:
-            print("=" * 60, "Start profiling model inference", "=" * 60)
-            with profile(
-                activities=[ProfilerActivity.CUDA, ProfilerActivity.CPU], record_shapes=True
-            ) as prof:
-                with record_function("model_inference"):
-                    Etot_predict, Ei_predict, Force_predict = model(
-                        Ri, Ri_d, dR_neigh_list, natoms_img, None, None
-                    )
-            print(prof.key_averages().table(sort_by="cuda_time_total"))
-            print("=" * 60, "Profiling model inference end", "=" * 60)
-            prof.export_chrome_trace("model_infer.json")
-        else:
-            Etot_predict, Ei_predict, Force_predict = model(
-                Ri, Ri_d, dR_neigh_list, natoms_img, None, None
-            )
-
-        loss_F_val = criterion(Force_predict, Force_label)
-        loss_Etot_val = criterion(Etot_predict, Etot_label)
-        loss_Ei_val = criterion(Ei_predict, Ei_label)
-        loss_val = loss_F_val + loss_Etot_val
-
         batch_size = Ri.shape[0]
         kalman_inputs = [Ri, Ri_d, dR_neigh_list, natoms_img, None, None]
 
@@ -211,7 +189,7 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
                 activities=[ProfilerActivity.CUDA, ProfilerActivity.CPU], record_shapes=True
             ) as prof:
                 with record_function("kf_update_energy"):
-                    KFOptWrapper.update_energy(kalman_inputs, Etot_label)
+                    Etot_predict = KFOptWrapper.update_energy(kalman_inputs, Etot_label)
             print(prof.key_averages().table(sort_by="cuda_time_total"))
             print("=" * 60, "Profiling KF update energy end", "=" * 60)
             prof.export_chrome_trace("kf_update_energy.json")
@@ -221,13 +199,18 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
                 activities=[ProfilerActivity.CUDA, ProfilerActivity.CPU], record_shapes=True
             ) as prof:
                 with record_function("kf_update_force"):
-                    KFOptWrapper.update_force(kalman_inputs, Force_label, 2)
+                    Etot_predict, Ei_predict, Force_predict = KFOptWrapper.update_force(kalman_inputs, Force_label, 2)
             print(prof.key_averages().table(sort_by="cuda_time_total"))
             print("=" * 60, "Profiling KF update force end", "=" * 60)
             prof.export_chrome_trace("kf_update_force.json")
         else:
-            KFOptWrapper.update_energy(kalman_inputs, Etot_label)
-            KFOptWrapper.update_force(kalman_inputs, Force_label, 2)
+            Etot_predict = KFOptWrapper.update_energy(kalman_inputs, Etot_label)
+            Etot_predict, Ei_predict, Force_predict = KFOptWrapper.update_force(kalman_inputs, Force_label, 2)
+
+        loss_F_val = criterion(Force_predict, Force_label)
+        loss_Etot_val = criterion(Etot_predict, Etot_label)
+        loss_Ei_val = criterion(Ei_predict, Ei_label)
+        loss_val = loss_F_val + loss_Etot_val
 
         # measure accuracy and record loss
         losses.update(loss_val.item(), batch_size)
