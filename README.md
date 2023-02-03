@@ -176,6 +176,12 @@ horovod installation(optional):
 	# -r means recover
 	# -e means evaluate
 ```
+> profiling
+```sh
+	python the/path/to/MLFF_torch/src/dp_main.py -b 32 --gpu 0 --opt LKF --epochs 3 --profiling | tee kernel.log
+	# --profiling means open profiling function
+```
+
 
 ## ContributionGuidance
 ```sh
