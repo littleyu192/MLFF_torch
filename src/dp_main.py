@@ -96,6 +96,12 @@ parser.add_argument(
     help="resume the latest checkpoint",
 )
 parser.add_argument(
+    "--profiling",
+    dest="profiling",
+    action="store_true",
+    help="profiling the training",
+)
+parser.add_argument(
     "-s" "--store-path",
     default="default",
     type=str,
