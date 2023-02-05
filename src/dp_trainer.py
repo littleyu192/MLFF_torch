@@ -13,6 +13,7 @@ import horovod.torch as hvd
 
 from torch.profiler import profile, record_function, ProfilerActivity
 
+
 def train(train_loader, model, criterion, optimizer, epoch, start_lr, device, config):
     batch_time = AverageMeter("Time", ":6.3f")
     data_time = AverageMeter("Data", ":6.3f")
@@ -20,9 +21,10 @@ def train(train_loader, model, criterion, optimizer, epoch, start_lr, device, co
     loss_Etot = AverageMeter("Etot", ":.4e", Summary.ROOT)
     loss_Force = AverageMeter("Force", ":.4e", Summary.ROOT)
     loss_Ei = AverageMeter("Ei", ":.4e", Summary.ROOT)
+    loss_Egroup = AverageMeter("Egroup", ":.4e", Summary.ROOT)
     progress = ProgressMeter(
         len(train_loader),
-        [batch_time, data_time, losses, loss_Etot, loss_Force, loss_Ei],
+        [batch_time, data_time, losses, loss_Etot, loss_Force, loss_Ei, loss_Egroup],
         prefix="Epoch: [{}]".format(epoch),
     )
 
@@ -43,6 +45,11 @@ def train(train_loader, model, criterion, optimizer, epoch, start_lr, device, co
 
         if config.datatype == "float64":
             Ei_label = Variable(sample_batches["Ei"].double().to(device))
+            Egroup_label = Variable(sample_batches["Egroup"].double().to(device))
+            Divider = Variable(sample_batches["Divider"].double().to(device))
+            Egroup_weight = Variable(
+                sample_batches["Egroup_weight"].double().to(device)
+            )
             Force_label = Variable(
                 sample_batches["Force"][:, :, :].double().to(device)
             )  # [40,108,3]
@@ -52,6 +59,9 @@ def train(train_loader, model, criterion, optimizer, epoch, start_lr, device, co
 
         elif config.datatype == "float32":
             Ei_label = Variable(sample_batches["Ei"].float().to(device))
+            Egroup_label = Variable(sample_batches["Egroup"].float().to(device))
+            Divider = Variable(sample_batches["Divider"].float().to(device))
+            Egroup_weight = Variable(sample_batches["Egroup_weight"].float().to(device))
             Force_label = Variable(
                 sample_batches["Force"][:, :, :].float().to(device)
             )  # [40,108,3]
@@ -68,10 +78,11 @@ def train(train_loader, model, criterion, optimizer, epoch, start_lr, device, co
         if config.profiling:
             print("=" * 60, "Start profiling model inference", "=" * 60)
             with profile(
-                activities=[ProfilerActivity.CUDA, ProfilerActivity.CPU], record_shapes=True
+                activities=[ProfilerActivity.CUDA, ProfilerActivity.CPU],
+                record_shapes=True,
             ) as prof:
                 with record_function("model_inference"):
-                    Etot_predict, Ei_predict, Force_predict = model(
+                    Etot_predict, Ei_predict, Force_predict, _ = model(
                         Ri, Ri_d, dR_neigh_list, natoms_img, None, None
                     )
 
@@ -79,8 +90,8 @@ def train(train_loader, model, criterion, optimizer, epoch, start_lr, device, co
             print("=" * 60, "Profiling model inference end", "=" * 60)
             prof.export_chrome_trace("model_infer.json")
         else:
-            Etot_predict, Ei_predict, Force_predict = model(
-                Ri, Ri_d, dR_neigh_list, natoms_img, None, None
+            Etot_predict, Ei_predict, Force_predict, Egroup_predict = model(
+                Ri, Ri_d, dR_neigh_list, natoms_img, Egroup_weight, Divider
             )
 
         optimizer.zero_grad()
@@ -88,10 +99,11 @@ def train(train_loader, model, criterion, optimizer, epoch, start_lr, device, co
         loss_F_val = criterion(Force_predict, Force_label)
         loss_Etot_val = criterion(Etot_predict, Etot_label)
         # loss_Ei_val = criterion(Ei_predict, Ei_label)
-        loss_Ei_val, loss_Egroup_val = 0, 0
+        loss_Ei_val = 0
+        loss_Egroup_val = criterion(Egroup_predict, Egroup_label)
         loss_val = loss_F_val + loss_Etot_val
 
-        w_f, w_e, w_eg, w_ei = 1, 1, 0, 0
+        w_f, w_e, w_eg, w_ei = 1, 1, 1, 0
         loss, _, _ = dp_loss(
             0.001,
             real_lr,
@@ -113,6 +125,7 @@ def train(train_loader, model, criterion, optimizer, epoch, start_lr, device, co
         losses.update(loss_val.item(), batch_size)
         loss_Etot.update(loss_Etot_val.item(), batch_size)
         # loss_Ei.update(loss_Ei_val.item(), batch_size)
+        loss_Egroup.update(loss_Egroup_val.item(), batch_size)
         loss_Force.update(loss_F_val.item(), batch_size)
 
         # measure elapsed time
@@ -128,6 +141,7 @@ def train(train_loader, model, criterion, optimizer, epoch, start_lr, device, co
         loss_Etot.root,
         loss_Force.root,
         loss_Ei.root,
+        loss_Egroup.root,
         real_lr,
     )
 
@@ -139,6 +153,7 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
     loss_Etot = AverageMeter("Etot", ":.4e", Summary.ROOT)
     loss_Force = AverageMeter("Force", ":.4e", Summary.ROOT)
     loss_Ei = AverageMeter("Ei", ":.4e", Summary.ROOT)
+    loss_Egroup = AverageMeter("Egroup", ":.4e", Summary.ROOT)
     progress = ProgressMeter(
         len(train_loader),
         [batch_time, data_time, losses, loss_Etot, loss_Force, loss_Ei],
@@ -159,6 +174,11 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
 
         if config.datatype == "float64":
             Ei_label = Variable(sample_batches["Ei"].double().to(device))
+            Egroup_label = Variable(sample_batches["Egroup"].double().to(device))
+            Divider = Variable(sample_batches["Divider"].double().to(device))
+            Egroup_weight = Variable(
+                sample_batches["Egroup_weight"].double().to(device)
+            )
             Force_label = Variable(
                 sample_batches["Force"][:, :, :].double().to(device)
             )  # [40,108,3]
@@ -168,6 +188,9 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
 
         elif config.datatype == "float32":
             Ei_label = Variable(sample_batches["Ei"].float().to(device))
+            Egroup_label = Variable(sample_batches["Egroup"].float().to(device))
+            Divider = Variable(sample_batches["Divider"].float().to(device))
+            Egroup_weight = Variable(sample_batches["Egroup_weight"].float().to(device))
             Force_label = Variable(
                 sample_batches["Force"][:, :, :].float().to(device)
             )  # [40,108,3]
@@ -181,12 +204,13 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
         natoms_img = torch.squeeze(natoms_img, 1)
 
         batch_size = Ri.shape[0]
-        kalman_inputs = [Ri, Ri_d, dR_neigh_list, natoms_img, None, None]
+        kalman_inputs = [Ri, Ri_d, dR_neigh_list, natoms_img, Egroup_weight, Divider]
 
         if config.profiling:
             print("=" * 60, "Start profiling KF update energy", "=" * 60)
             with profile(
-                activities=[ProfilerActivity.CUDA, ProfilerActivity.CPU], record_shapes=True
+                activities=[ProfilerActivity.CUDA, ProfilerActivity.CPU],
+                record_shapes=True,
             ) as prof:
                 with record_function("kf_update_energy"):
                     Etot_predict = KFOptWrapper.update_energy(kalman_inputs, Etot_label)
@@ -196,26 +220,34 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
 
             print("=" * 60, "Start profiling KF update force", "=" * 60)
             with profile(
-                activities=[ProfilerActivity.CUDA, ProfilerActivity.CPU], record_shapes=True
+                activities=[ProfilerActivity.CUDA, ProfilerActivity.CPU],
+                record_shapes=True,
             ) as prof:
                 with record_function("kf_update_force"):
-                    Etot_predict, Ei_predict, Force_predict = KFOptWrapper.update_force(kalman_inputs, Force_label, 2)
+                    Etot_predict, Ei_predict, Force_predict = KFOptWrapper.update_force(
+                        kalman_inputs, Force_label, 2
+                    )
             print(prof.key_averages().table(sort_by="cuda_time_total"))
             print("=" * 60, "Profiling KF update force end", "=" * 60)
             prof.export_chrome_trace("kf_update_force.json")
         else:
             Etot_predict = KFOptWrapper.update_energy(kalman_inputs, Etot_label)
-            Etot_predict, Ei_predict, Force_predict = KFOptWrapper.update_force(kalman_inputs, Force_label, 2)
+            Egroup_predict = KFOptWrapper.update_egroup(kalman_inputs, Egroup_label)
+            Etot_predict, Ei_predict, Force_predict = KFOptWrapper.update_force(
+                kalman_inputs, Force_label, 2
+            )
 
         loss_F_val = criterion(Force_predict, Force_label)
         loss_Etot_val = criterion(Etot_predict, Etot_label)
         loss_Ei_val = criterion(Ei_predict, Ei_label)
+        loss_Egroup_val = criterion(Egroup_predict, Egroup_label)
         loss_val = loss_F_val + loss_Etot_val
 
         # measure accuracy and record loss
         losses.update(loss_val.item(), batch_size)
         loss_Etot.update(loss_Etot_val.item(), batch_size)
         loss_Ei.update(loss_Ei_val.item(), batch_size)
+        loss_Egroup.update(loss_Egroup_val.item(), batch_size)
         loss_Force.update(loss_F_val.item(), batch_size)
 
         # measure elapsed time
@@ -230,10 +262,11 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
         loss_Etot.all_reduce()
         loss_Force.all_reduce()
         loss_Ei.all_reduce()
+        loss_Egroup.all_reduce()
         batch_time.all_reduce()
 
     progress.display_summary(["Training Set:"])
-    return losses.avg, loss_Etot.root, loss_Force.root, loss_Ei.root
+    return losses.avg, loss_Etot.root, loss_Force.root, loss_Ei.root, loss_Egroup.root
 
 
 def valid(val_loader, model, criterion, device, args):
@@ -243,6 +276,11 @@ def valid(val_loader, model, criterion, device, args):
             i = base_progress + i
             if args.datatype == "float64":
                 Ei_label = Variable(sample_batches["Ei"].double().to(device))
+                Egroup_label = Variable(sample_batches["Egroup"].double().to(device))
+                Divider = Variable(sample_batches["Divider"].double().to(device))
+                Egroup_weight = Variable(
+                    sample_batches["Egroup_weight"].double().to(device)
+                )
                 Force_label = Variable(
                     sample_batches["Force"][:, :, :].double().to(device)
                 )  # [40,108,3]
@@ -255,6 +293,11 @@ def valid(val_loader, model, criterion, device, args):
 
             elif args.datatype == "float32":
                 Ei_label = Variable(sample_batches["Ei"].float().to(device))
+                Egroup_label = Variable(sample_batches["Egroup"].float().to(device))
+                Divider = Variable(sample_batches["Divider"].float().to(device))
+                Egroup_weight = Variable(
+                    sample_batches["Egroup_weight"].float().to(device)
+                )
                 Force_label = Variable(
                     sample_batches["Force"][:, :, :].float().to(device)
                 )  # [40,108,3]
@@ -271,19 +314,21 @@ def valid(val_loader, model, criterion, device, args):
             natoms_img = torch.squeeze(natoms_img, 1)
 
             batch_size = Ri.shape[0]
-            Etot_predict, Ei_predict, Force_predict = model(
-                Ri, Ri_d, dR_neigh_list, natoms_img, None, None
+            Etot_predict, Ei_predict, Force_predict, Egroup_predict = model(
+                Ri, Ri_d, dR_neigh_list, natoms_img, Egroup_weight, Divider
             )
 
             loss_F_val = criterion(Force_predict, Force_label)
             loss_Etot_val = criterion(Etot_predict, Etot_label)
             loss_Ei_val = criterion(Ei_predict, Ei_label)
+            loss_Egroup_val = criterion(Egroup_predict, Egroup_label)
             loss_val = loss_F_val + loss_Etot_val
 
             # measure accuracy and record loss
             losses.update(loss_val.item(), batch_size)
             loss_Etot.update(loss_Etot_val.item(), batch_size)
             loss_Ei.update(loss_Ei_val.item(), batch_size)
+            loss_Egroup.update(loss_Egroup_val.item(), batch_size)
             loss_Force.update(loss_F_val.item(), batch_size)
             # measure elapsed time
             batch_time.update(time.time() - end)
@@ -297,13 +342,14 @@ def valid(val_loader, model, criterion, device, args):
     loss_Etot = AverageMeter("Etot", ":.4e", Summary.ROOT)
     loss_Force = AverageMeter("Force", ":.4e", Summary.ROOT)
     loss_Ei = AverageMeter("Ei", ":.4e", Summary.ROOT)
+    loss_Egroup = AverageMeter("Egroup", ":.4e", Summary.ROOT)
     progress = ProgressMeter(
         len(val_loader)
         + (
             args.hvd
             and (len(val_loader.sampler) * hvd.size() < len(val_loader.dataset))
         ),
-        [batch_time, losses, loss_Etot, loss_Force, loss_Ei],
+        [batch_time, losses, loss_Etot, loss_Force, loss_Ei, loss_Egroup],
         prefix="Test: ",
     )
 
@@ -311,7 +357,6 @@ def valid(val_loader, model, criterion, device, args):
     model.eval()
 
     run_validate(val_loader)
-   
 
     if args.hvd and (len(val_loader.sampler) * hvd.size() < len(val_loader.dataset)):
         aux_val_dataset = Subset(
@@ -335,7 +380,7 @@ def valid(val_loader, model, criterion, device, args):
 
     progress.display_summary(["Test Set:"])
 
-    return losses.avg, loss_Etot.root, loss_Force.root, loss_Ei.root
+    return losses.avg, loss_Etot.root, loss_Force.root, loss_Ei.root, loss_Egroup.root
 
 
 def save_checkpoint(state, is_best, filename, prefix):

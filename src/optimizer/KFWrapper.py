@@ -6,6 +6,7 @@ import numpy as np
 import torch.distributed as dist
 import math
 
+
 class KFOptimizerWrapper:
     def __init__(
         self,
@@ -26,7 +27,7 @@ class KFOptimizerWrapper:
     def update_energy(
         self, inputs: list, Etot_label: torch.Tensor, update_prefactor: float = 1
     ) -> None:
-        Etot_predict, _, _ = self.model(
+        Etot_predict, _, _, _ = self.model(
             inputs[0],
             inputs[1],
             inputs[2],
@@ -65,6 +66,48 @@ class KFOptimizerWrapper:
         self.optimizer.step(error)
         return Etot_predict
 
+    def update_egroup(
+        self, inputs: list, Egroup_label: torch.Tensor, update_prefactor: float = 1
+    ) -> None:
+        _, _, _, Egroup_predict = self.model(
+            inputs[0],
+            inputs[1],
+            inputs[2],
+            inputs[3],
+            inputs[4],
+            inputs[5],
+            is_calc_f=False,
+        )
+        natoms_sum = inputs[3][0, 0]
+        self.optimizer.set_grad_prefactor(natoms_sum)
+
+        self.optimizer.zero_grad()
+        bs = Egroup_label.shape[0]
+        error = Egroup_label - Egroup_predict
+        error = error / natoms_sum
+        mask = error < 0
+
+        error = error * update_prefactor
+        error[mask] = -1 * error[mask]
+        error = error.mean()
+
+        if self.is_distributed:
+            if self.distributed_backend == "horovod":
+                import horovod as hvd
+
+                error = hvd.torch.allreduce(error)
+            elif self.distributed_backend == "torch":
+                dist.all_reduce(error)
+                error /= dist.get_world_size()
+
+        Egroup_predict = update_prefactor * Egroup_predict
+        Egroup_predict[mask] = -update_prefactor * Egroup_predict[mask]
+
+        Egroup_predict.sum().backward()
+        error = error * math.sqrt(bs)
+        self.optimizer.step(error)
+        return Egroup_predict
+
     def update_force(
         self, inputs: list, Force_label: torch.Tensor, update_prefactor: float = 1
     ) -> None:
@@ -76,7 +119,7 @@ class KFOptimizerWrapper:
 
         for i in range(index.shape[0]):
             self.optimizer.zero_grad()
-            Etot_predict, Ei_predict, force_predict = self.model(
+            Etot_predict, Ei_predict, force_predict, _ = self.model(
                 inputs[0], inputs[1], inputs[2], inputs[3], inputs[4], inputs[5]
             )
             error_tmp = Force_label[:, index[i]] - force_predict[:, index[i]]
@@ -111,6 +154,7 @@ class KFOptimizerWrapper:
         index = range(natoms)
         res = np.random.choice(index, atoms_selected).reshape(-1, atoms_per_group)
         return res
+
 
 # with torch.autograd.profiler.profile(enabled=True, use_cuda=True, record_shapes=False) as prof:
 #     the code u wanna profile

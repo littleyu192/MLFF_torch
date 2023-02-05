@@ -56,15 +56,15 @@ class DP(nn.Module):
             fitting_net_input_dim = self.config["net_cfg"]["embedding_net"]["network_size"][-1]
             self.fitting_net.append(FittingNet(config["net_cfg"]["fitting_net"], 16 * fitting_net_input_dim, self.stat[2][i], magic))
 
-    def get_egroup(self, Egroup_weight, divider):
-        batch_size = self.Ei.shape[0]
-        Egroup = torch.zeros_like(self.Ei)
+    def get_egroup(self, Ei, Egroup_weight, divider):
+        batch_size = Ei.shape[0]
+        Egroup = torch.zeros_like(Ei)
         for i in range(batch_size):
-            Etot1 = self.Ei[i]
+            Etot1 = Ei[i]
             weight_inner = Egroup_weight[i]
             E_inner = torch.matmul(weight_inner, Etot1)
             Egroup[i] = E_inner
-        Egroup_out = torch.divide(Egroup, divider)
+        Egroup_out = torch.divide(Egroup.squeeze(-1), divider)
         return Egroup_out
 
 
@@ -108,11 +108,11 @@ class DP(nn.Module):
         
         
         Etot = torch.sum(Ei, 1)   
-        # Egroup = self.get_egroup(Ei, Egroup_weight, divider)
+        Egroup = self.get_egroup(Ei, Egroup_weight, divider)
         F = torch.zeros((batch_size, atom_sum, 3), device=self.device)
         Ei = torch.squeeze(Ei, 2)
         if is_calc_f == False:
-            return Etot, Ei, F
+            return Etot, Ei, F, Egroup
         # start_autograd = time.time()
         # print("fitting time:", start_autograd - start_fitting, 's')
 
@@ -132,5 +132,5 @@ class DP(nn.Module):
         list_neigh = (list_neigh - 1).type(torch.int)
         F = CalculateForce.apply(list_neigh, dE, Ri_d, F)
 
-        return Etot, Ei, F
+        return Etot, Ei, F, Egroup
 

@@ -26,7 +26,11 @@ class MovementDataset(Dataset):
         data = {}
 
         data["Force"] = -1 * np.load(os.path.join(path, "Force.npy"))
+        data["Virial"] = np.load(os.path.join(path, "Virial.npy"))
         data["Ei"] = np.load(os.path.join(path, "Ei.npy"))
+        data["Egroup"] = np.load(os.path.join(path, "Egroup.npy"))
+        data["Divider"] = np.load(os.path.join(path, "Divider.npy"))
+        data["Egroup_weight"] = np.load(os.path.join(path, "Egroup_weight.npy"))
         data["ListNeighbor"] = np.load(os.path.join(path, "ListNeighbor.npy"))
         data["Ri"] = np.load(os.path.join(path, "Ri.npy"))
         data["Ri_d"] = np.load(os.path.join(path, "Ri_d.npy"))
@@ -104,7 +108,11 @@ def main():
         # import ipdb;ipdb.set_trace()
 
         print(sample_batches["Force"].shape)
+        print(sample_batches["Virial"].shape)
         print(sample_batches["Ei"].shape)
+        print(sample_batches["Egroup"].shape)
+        print(sample_batches["Divider"].shape)
+        print(sample_batches["Egroup_weight"].shape)
         print(sample_batches["ListNeighbor"].shape)
         print(sample_batches["Ri"].shape)
         print(sample_batches["Ri_d"].shape)

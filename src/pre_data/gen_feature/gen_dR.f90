@@ -147,7 +147,6 @@ PROGRAM gen_dR
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
     call scan_title (move_file,"ITERATION",if_find=nextline)
-
     if(.not.nextline) goto 2000
     num_step=num_step+1
 
@@ -158,7 +157,11 @@ PROGRAM gen_dR
     close(1317)
     ALLOCATE (iatom(natom),xatom(3,natom),fatom(3,natom),Eatom(natom))
 
-    CALL scan_title (move_file, "LATTICE")
+    CALL scan_title (move_file, "(ANGSTROM)", if_find=nextline)
+    if(.not.nextline) then
+        write(6,*) "LATTICE not found, stop",num_step
+        stop
+    endif
     DO j = 1, 3
         READ (move_file,*) AL(1:3,j)
     ENDDO

@@ -52,6 +52,13 @@ def gen_config_inputfile(config):
 
         GenFeatInput.write(str(config["E_tolerance"]) + "    ! E_tolerance  \n")
 
+    output_path = os.path.join(config["dRFeatureInputDir"], "egroup.in")
+    with open(output_path, "w") as f:
+        f.writelines(str(config["dwidth"]) + "\n")
+        f.writelines(str(len(config["atomType"])) + "\n")
+        for i in range(len(config["atomType"])):
+            f.writelines(str(config["atomType"][i]["b_init"]) + "\n")
+
 
 def gen_train_data(config):
     trainset_dir = config["trainSetDir"]
@@ -70,6 +77,60 @@ def gen_train_data(config):
 
     movement_files = collect_all_sourcefiles(trainset_dir, "MOVEMENT")
 
+    for movement_file in movement_files:
+        with open(os.path.join(movement_file, "MOVEMENT"), "r") as mov:
+            lines = mov.readlines()
+            for idx, line in enumerate(lines):
+                if "Lattice vector" in line and "stress" in lines[idx + 1]:
+                    tmp_v = []
+                    cell = []
+                    for dd in range(3):
+                        tmp_l = lines[idx + 1 + dd]
+                        cell.append([float(ss) for ss in tmp_l.split()[0:3]])
+                        tmp_v.append([float(stress) for stress in tmp_l.split()[5:8]])
+
+                    tmp_virial = np.zeros([3, 3])
+                    tmp_virial[0][0] = tmp_v[0][0]
+                    tmp_virial[0][1] = tmp_v[0][1]
+                    tmp_virial[0][2] = tmp_v[0][2]
+                    tmp_virial[1][0] = tmp_v[1][0]
+                    tmp_virial[1][1] = tmp_v[1][1]
+                    tmp_virial[1][2] = tmp_v[1][2]
+                    tmp_virial[2][0] = tmp_v[2][0]
+                    tmp_virial[2][1] = tmp_v[2][1]
+                    tmp_virial[2][2] = tmp_v[2][2]
+                    volume = np.linalg.det(np.array(cell))
+                    tmp_virial = tmp_virial * 160.2 * 10.0 / volume
+
+                    with open(
+                        os.path.join(movement_file, "Virial.dat"), "a"
+                    ) as virial_file:
+                        virial_file.write(
+                            str(tmp_virial[0, 0])
+                            + " "
+                            + str(tmp_virial[0, 1])
+                            + " "
+                            + str(tmp_virial[0, 2])
+                            + " "
+                            + str(tmp_virial[1, 0])
+                            + " "
+                            + str(tmp_virial[1, 1])
+                            + " "
+                            + str(tmp_virial[1, 2])
+                            + " "
+                            + str(tmp_virial[2, 0])
+                            + " "
+                            + str(tmp_virial[2, 1])
+                            + " "
+                            + str(tmp_virial[2, 2])
+                            + "\n"
+                        )
+                        # virial_file.write(tmp_virial[0,0], tmp_virial[0,1], tmp_virial[0,2], tmp_virial[1,0], tmp_virial[1,1], tmp_virial[1,2], tmp_virial[2,0], tmp_virial[2,1], tmp_virial[2,2])
+
+    # import ipdb
+
+    # ipdb.set_trace()
+
     location_path = os.path.join(config["dRFeatureInputDir"], "location")
     with open(location_path, "w") as location_writer:
         location_writer.write(str(len(movement_files)) + "\n")
@@ -80,6 +141,9 @@ def gen_train_data(config):
 
     command = "gen_dR.x | tee ./output/out"
     print("==============Start generating data==============")
+    os.system(command)
+    command = "gen_egroup.x | tee ./output/out_write_egroup"
+    print("==============Start generating egroup==============")
     os.system(command)
     print("==============Success==============")
 
@@ -94,12 +158,20 @@ def save_npy_files(data_path, data_set):
     np.save(os.path.join(data_path, "ListNeighbor.npy"), data_set["ListNeighbor"])
     print("    Ei.npy", data_set["Ei"].shape)
     np.save(os.path.join(data_path, "Ei.npy"), data_set["Ei"])
+    print("    Egroup.npy", data_set["Egroup"].shape)
+    np.save(os.path.join(data_path, "Egroup.npy"), data_set["Egroup"])
+    print("    Divider.npy", data_set["Divider"].shape)
+    np.save(os.path.join(data_path, "Divider.npy"), data_set["Divider"])
+    print("    Egroup_weight.npy", data_set["Egroup_weight"].shape)
+    np.save(os.path.join(data_path, "Egroup_weight.npy"), data_set["Egroup_weight"])
     print("    Ri.npy", data_set["Ri"].shape)
     np.save(os.path.join(data_path, "Ri.npy"), data_set["Ri"])
     print("    Ri_d.npy", data_set["Ri_d"].shape)
     np.save(os.path.join(data_path, "Ri_d.npy"), data_set["Ri_d"])
     print("    Force.npy", data_set["Force"].shape)
     np.save(os.path.join(data_path, "Force.npy"), data_set["Force"])
+    print("    Virial.npy", data_set["Virial"].shape)
+    np.save(os.path.join(data_path, "Virial.npy"), data_set["Virial"])
     print("    ImageAtomNum.npy", data_set["ImageAtomNum"].shape)
     np.save(os.path.join(data_path, "ImageAtomNum.npy"), data_set["ImageAtomNum"])
 
@@ -476,7 +548,14 @@ def sepper_data(config):
     image_dR = dR_neigh[:, :3]
     list_neigh = dR_neigh[:, 3]
     Ei = np.loadtxt(os.path.join(trainset_dir, "Ei.dat"))
+    Egroup_file = np.loadtxt(
+        os.path.join(trainset_dir, "Egroup_weight.dat"), delimiter=","
+    )
+    Egroup = Egroup_file[:, 0]
+    divider = Egroup_file[:, 1]
+    Egroup_weight = Egroup_file[:, 2:]
     Force = np.loadtxt(os.path.join(trainset_dir, "Force.dat"))
+    Virial = np.loadtxt(os.path.join(trainset_dir, "Virial.dat"), delimiter=" ")
     atom_num_per_image = np.loadtxt(
         os.path.join(trainset_dir, "ImageAtomNum.dat"), dtype=int
     )
@@ -543,9 +622,15 @@ def sepper_data(config):
                 image_index[start_index] : image_index[end_index]
             ],
             "Ei": Ei[image_index[start_index] : image_index[end_index]],
+            "Egroup": Egroup[image_index[start_index] : image_index[end_index]],
+            "Divider": divider[image_index[start_index] : image_index[end_index]],
+            "Egroup_weight": Egroup_weight[
+                image_index[start_index] : image_index[end_index]
+            ],
             "Ri": Ri[image_index[start_index] : image_index[end_index]],
             "Ri_d": Ri_d[image_index[start_index] : image_index[end_index]],
             "Force": Force[image_index[start_index] : image_index[end_index]],
+            "Virial": Virial[start_index:end_index],
             "ImageAtomNum": atom_num_per_image[start_index:end_index],
         }
 
@@ -574,9 +659,15 @@ def sepper_data(config):
                 image_index[start_index] : image_index[end_index]
             ],
             "Ei": Ei[image_index[start_index] : image_index[end_index]],
+            "Egroup": Egroup[image_index[start_index] : image_index[end_index]],
+            "Divider": divider[image_index[start_index] : image_index[end_index]],
+            "Egroup_weight": Egroup_weight[
+                image_index[start_index] : image_index[end_index]
+            ],
             "Ri": Ri[image_index[start_index] : image_index[end_index]],
             "Ri_d": Ri_d[image_index[start_index] : image_index[end_index]],
             "Force": Force[image_index[start_index] : image_index[end_index]],
+            "Virial": Virial[start_index:end_index],
             "ImageAtomNum": atom_num_per_image[start_index:end_index],
         }
 
