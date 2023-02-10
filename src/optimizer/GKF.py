@@ -82,3 +82,9 @@ class GKFOptimizer(Optimizer):
                 i += 1
 
         self.__update(H, error, weights)
+        
+    def set_kalman_P(self, P, kalman_lambda = 0.999999999999872, kalman_nue = 0.9987):
+        self._state.update({"kalman_lambda": kalman_lambda})
+        self.param_groups[0]["kalman_nue"] = kalman_nue
+        for i in range(len(P)):
+            self._state["P"][i] = P[i].cpu().to(self.device)

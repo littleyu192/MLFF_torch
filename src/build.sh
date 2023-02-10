@@ -9,7 +9,7 @@ make -C pre_data/fortran_code  # spack load gcc@7.5.0
 #cd QCAD/fortran_code
 #make libiotk.a
 #cd ../..
-#make -C QCAD/fortran_code
+make -C md/fortran_code
 cd bin
 ln -s ../clean_data.sh .
 chmod +x clean_data.sh

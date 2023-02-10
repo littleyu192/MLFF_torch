@@ -239,7 +239,7 @@ subroutine gen_feature(AL,xatom)
       enddo
       enddo
       if(num.gt.m_neigh) then
-      write(6,*) "total num_neigh.gt.m_neigh,stop",m_neigh
+      write(6,*) "Error! maxNeighborNum too small",m_neigh
       stop
       endif
       num_neigh_alltype(iat)=num

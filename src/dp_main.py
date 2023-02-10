@@ -23,7 +23,11 @@ from dp_trainer import *
 # import parameters as pm
 import yaml
 
-with open("config.yaml", "r") as yamlfile:
+# workpath = "/home/wuxingxing/datas/system_config/cu_72104/dpkf_data/tmp2_calc4"
+# os.chdir(workpath)
+
+# configpath= "/home/wuxingxing/codespace/mutli_mlff/cu_config_template.yaml"
+with open("/share/home/wuxingxing/codespace/mutli_mlff/cu_config_template.yaml", "r") as yamlfile:
     config = yaml.load(yamlfile, Loader=yaml.FullLoader)
 
 parser = argparse.ArgumentParser(description="PyTorch MLFF Training")
@@ -168,6 +172,7 @@ def main():
         )
 
     if not os.path.exists(args.store_path):
+        print(args.store_path)
         os.mkdir(args.store_path)
 
     if args.hvd:
@@ -193,7 +198,7 @@ def main():
         training_type = torch.float64
 
     global best_loss
-
+    
     # Create dataset
     train_dataset = MovementDataset("./train")
     valid_dataset = MovementDataset("./valid")
@@ -253,7 +258,7 @@ def main():
             file_name = os.path.join(args.store_path, "best.pth.tar")
         else:
             file_name = os.path.join(args.store_path, "checkpoint.pth.tar")
-
+        p_path = os.path.join(args.store_path, "P.pt")
         if os.path.isfile(file_name):
             print("=> loading checkpoint '{}'".format(file_name))
             if args.gpu is None:
@@ -268,6 +273,9 @@ def main():
             model.load_state_dict(checkpoint["state_dict"])
             optimizer.load_state_dict(checkpoint["optimizer"])
             # scheduler.load_state_dict(checkpoint["scheduler"])
+            if args.opt == "LKF" or args.opt == "GKF":
+                load_p = torch.load(p_path)
+                optimizer.set_kalman_P(load_p, checkpoint["kalman_lambda"], checkpoint["kalman_nue"])
             print(
                 "=> loaded checkpoint '{}' (epoch {})".format(
                     file_name, checkpoint["epoch"]
@@ -298,6 +306,9 @@ def main():
         train_sampler = None
         val_sampler = None
 
+    # print("====================")#lambda 0.98
+    # print(optimizer._state['P'])
+    # print("====================")
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=args.batch_size,
@@ -324,13 +335,13 @@ def main():
     if not args.hvd or (args.hvd and hvd.rank() == 0):
         train_log = os.path.join(args.store_path, "epoch_train.dat")
 
-        f_train_log = open(train_log, "w")
+        f_train_log = open(train_log, "a")
         f_train_log.write(
             "epoch\t loss\t RMSE_Etot\t RMSE_Ei\t RMSE_F\t real_lr\t time\n"
         )
 
         valid_log = os.path.join(args.store_path, "epoch_valid.dat")
-        f_valid_log = open(valid_log, "w")
+        f_valid_log = open(valid_log, "a")
         f_valid_log.write("epoch\t loss\t RMSE_Etot\t RMSE_Ei\t RMSE_F\n")
 
     for epoch in range(args.start_epoch, args.epochs + 1):
@@ -382,17 +393,24 @@ def main():
         best_loss = min(loss, best_loss)
 
         if not args.hvd or (args.hvd and hvd.rank() == 0):
+            kalman_p, kalman_lambda, kalman_nue = None, None, None
+            if(args.opt == "GKF" or args.opt == "LKF"):
+                kalman_p = optimizer._state['P']
+                kalman_lambda = optimizer._state['kalman_lambda']
+                kalman_nue = optimizer.param_groups[0]["kalman_nue"]
             save_checkpoint(
                 {
                     "epoch": epoch,
                     "state_dict": model.state_dict(),
                     "best_loss": best_loss,
                     "optimizer": optimizer.state_dict(),
-                    # "scheduler": scheduler.state_dict(),
+                    "kalman_lambda": kalman_lambda, 
+                    "kalman_nue": kalman_nue
                 },
                 is_best,
                 "checkpoint.pth.tar",
                 args.store_path,
+                kalman_p
             )
 
 

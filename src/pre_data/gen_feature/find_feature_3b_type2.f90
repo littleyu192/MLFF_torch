@@ -59,7 +59,7 @@
 
       num=num+1
         if(num.gt.m_neigh) then
-        write(6,*) "total num_neigh.gt.m_neigh,stop",m_neigh
+        write(6,*) "Error! maxNeighborNum too small",m_neigh
         stop
         endif
       ind_all_neigh(j,itype,iat)=num

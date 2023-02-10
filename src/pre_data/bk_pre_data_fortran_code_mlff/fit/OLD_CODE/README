@@ -1,0 +1,30 @@
+in the fread_dfeat, edit the fit.input
+copy train.txt and dfeat.fbin in the file
+ (1) Run First: feat_PCA_metric.f
+ ../feat_PCA_metric.r
+  It will read in the xxx_feat_train.csv
+  Have to change image, maxNb,natom,ntype,nlpp2b,nlpp3b in the code (should
+  be read in from a input file)
+  It will do a PCA analysis, generate: PCA_eigen_feat (the singular values) 
+  feat_PV: the transformation between features 
+  feat_new_stored0: new feature (without normalization). 
+  feat_new_stored:  new feature (after scaling and normalization). 
+ 
+ (2) Run Second: sparcify_CUR2.f,
+ ../sparcify_CUR2.r
+  It will select reference states from the num_case 
+  it will generate: Ind_reference
+  weight_case
+
+ (3) Run: GPR_fit_force.f
+     It will use In_reference for the selected reference states
+     Do a linear fitting. It will ask the parameter for the kernal. 
+     However, it is worth to test different kernels
+     The result is in E_fit. 
+
+ (4) Run: linear_fit.f
+     This start from new, just do a linear fitting, the result is in 
+     E_fit.linear
+
+
+  

@@ -11,7 +11,7 @@ from loss.dploss import dp_loss, adjust_lr
 from optimizer.KFWrapper import KFOptimizerWrapper
 import horovod.torch as hvd
 
-
+import pandas as pd
 def train(train_loader, model, criterion, optimizer, epoch, start_lr, device, config):
     batch_time = AverageMeter("Time", ":6.3f")
     data_time = AverageMeter("Data", ":6.3f")
@@ -304,10 +304,78 @@ def valid(val_loader, model, criterion, device, args):
 
     return losses.avg, loss_Etot.root, loss_Force.root, loss_Ei.root
 
+def kpu(train_loader, model, criterion, optimizer, device, config):
+    kpu_save_path = os.path.join(config.store_path, config.kpu_dir)
+    if not config.hvd or (config.hvd and hvd.rank() == 0):
+        if os.path.exists(kpu_save_path) is False:
+            os.makedirs(kpu_save_path)
 
-def save_checkpoint(state, is_best, filename, prefix):
+    KFOptWrapper = KFOptimizerWrapper(
+        model, optimizer, config.nselect, config.groupsize, config.hvd, "hvd"
+    )
+
+    model.eval()
+
+    df = pd.DataFrame(columns = ["batch", "gpu", "img_idx", "natoms", \
+                                "mse_loss", "mse_e", "mse_ei", "mse_f",\
+                                "etot_lab", "etot_pre", "f_avg_lab", "f_avg_pre", \
+                                "f_x_norm", "f_y_norm", "f_z_norm", "f_kpu" , "etot_kpu"])
+
+    for i, sample_batches in enumerate(train_loader):
+        if i % config.fre_kpu != 0:
+            continue
+        if config.datatype == "float64":
+            Ei_label = Variable(sample_batches["Ei"].double().to(device))
+            Force_label = Variable(
+                sample_batches["Force"][:, :, :].double().to(device)
+            )  # [40,108,3]
+
+            Ri = Variable(sample_batches["Ri"].double().to(device), requires_grad=True)
+            Ri_d = Variable(sample_batches["Ri_d"].to(device))
+
+        elif config.datatype == "float32":
+            Ei_label = Variable(sample_batches["Ei"].float().to(device))
+            Force_label = Variable(
+                sample_batches["Force"][:, :, :].float().to(device)
+            )  # [40,108,3]
+
+            Ri = Variable(sample_batches["Ri"].float().to(device), requires_grad=True)
+            Ri_d = Variable(sample_batches["Ri_d"].float().to(device))
+
+        Etot_label = torch.sum(Ei_label.unsqueeze(2), dim=1)
+        dR_neigh_list = Variable(sample_batches["ListNeighbor"].int().to(device))
+        natoms_img = Variable(sample_batches["ImageAtomNum"].int().to(device))
+        natoms_img = torch.squeeze(natoms_img, 1)
+        index_image = int(sample_batches["ImgIdx"])
+        kalman_inputs = [Ri, Ri_d, dR_neigh_list, natoms_img, None, None]
+        etot_kpu, Etot_label, Etot_predict = KFOptWrapper.cal_kpu_etot(kalman_inputs, Etot_label)
+        natoms_sum, Force_label, Force_predict, Ei_predict, \
+            f_avg_lab, f_avg_pre, f_x_norm, f_y_norm, f_z_norm, \
+                f_kpu, force_kpu_detail = \
+            KFOptWrapper.cal_kpu_force(kalman_inputs, Force_label)
+        
+        loss_F_val = criterion(Force_predict, Force_label)
+        loss_Etot_val = criterion(Etot_predict, Etot_label)
+        loss_Ei_val = criterion(Ei_predict, Ei_label)
+        loss_val = loss_F_val + loss_Etot_val
+        
+        avg_kpu = [i, config.gpu, index_image, int(natoms_sum), \
+            float(loss_val), float(loss_Etot_val) , float(loss_Ei_val), float(loss_F_val), \
+            float(Etot_label), float(Etot_predict), float(f_avg_lab), float(f_avg_pre), \
+            float(f_x_norm), float(f_y_norm), float(f_z_norm), \
+            float(f_kpu), float(etot_kpu)]
+        
+        force_kpu_detail.to_csv(os.path.join(kpu_save_path, "gpu_{}_img_{}_batch_{}.csv".format(config.gpu, index_image, i)))
+        df.loc[i] = avg_kpu
+        print("img idx {} kpu claculate done, process: {}".format(index_image, df.shape[0] / len(train_loader)))
+    df.to_csv(os.path.join(kpu_save_path,"gpu_{}_kpu_info.csv".format(config.gpu)))
+
+
+def save_checkpoint(state, is_best, filename, prefix, kalman_p = None):
     filename = os.path.join(prefix, filename)
     torch.save(state, filename)
+    if kalman_p is not None:
+        torch.save(kalman_p, os.path.join(prefix, "P.pt"))
     if is_best:
         shutil.copyfile(filename, os.path.join(prefix, "best.pth.tar"))
 

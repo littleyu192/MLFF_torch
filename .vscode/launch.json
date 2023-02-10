@@ -1,0 +1,91 @@
+{
+    // 使用 IntelliSense 了解相关属性。 
+    // 悬停以查看现有属性的描述。
+    // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "dp_mlff",
+            "type": "python",
+            // "request": "launch",
+            "request": "launch",
+            "localRoot": "@{workspaceRoot}",
+            "remoteRoot": "/home/wuxingxing/codespace/mutli_mlff",
+            // "port": 22,
+            // "host": "10.18.98.1",
+            "program": "/home/wuxingxing/codespace/mutli_mlff/src/pre_data/dp_mlff.py",
+            // "console": "integratedTerminal",
+            "console": "integratedTerminal",
+            "env": {"PYTHONPATH": "${workspaceRoot}"
+            },
+            "envFile": "${workspaceFolder}/.env",
+            "outputCapture": "std",
+            "justMyCode": false,
+            "args": [
+                "-c", "/home/wuxingxing/codespace/mutli_mlff/cu_config_template.yaml", 
+                "-w", "/home/wuxingxing/datas/al_dir/cu_bulk_system/iter.0000/exploring/md_dpkf_dir",
+                "-d", "/home/wuxingxing/datas/system_config/cu_72104/dpkf_data/calc4/train"
+            ]
+            ///home/wuxingxing/datas/active_learning_dir/cu_1646_system/iter.0000/exploring/tmp_dpkf
+        },
+        {
+            "name": "dp_main",
+            "type": "python",
+            // "request": "launch",
+            "request": "launch",
+            "localRoot": "@{workspaceRoot}",
+            "remoteRoot": "/home/wuxingxing/codespace/mutli_mlff",
+            // "port": 22,
+            // "host": "10.18.98.1",
+            "program": "/home/wuxingxing/codespace/mutli_mlff/src/dp_main.py",
+            // "console": "integratedTerminal",
+            "console": "integratedTerminal",
+            "env": {"PYTHONPATH": "${workspaceRoot}"
+            },
+            "envFile": "${workspaceFolder}/.env",
+            "outputCapture": "std",
+            "justMyCode": false,
+            // single GPU
+            "args": [
+                "--dp", "--gpu", "0", "--opt", "LKF", "--epochs", "50", "-s", "dp_4gpu_single", "-r",  
+                "-b", "128"
+                ]
+
+            // multi GPUs
+            // "args": [
+            //     "--hvd", "--opt", "LKF", "-b", "32", "-s", "dp_4gpus", "-r","--epochs", "100"
+            //     ]
+
+        },
+        {
+            "name": "dp_main_kpu",
+            "type": "python",
+            // "request": "launch",
+            "request": "launch",
+            "localRoot": "@{workspaceRoot}",
+            "remoteRoot": "/home/wuxingxing/codespace/mutli_mlff",
+            // "port": 22,
+            // "host": "10.18.98.1",
+            "program": "/home/wuxingxing/codespace/mutli_mlff/src/dp_main_kpu.py",
+            // "console": "integratedTerminal",
+            "console": "integratedTerminal",
+            "env": {"PYTHONPATH": "${workspaceRoot}"
+            },
+            "envFile": "${workspaceFolder}/.env",
+            "outputCapture": "std",
+            "justMyCode": false,
+            // single GPU
+            // "args": [
+            //     "--dp", "--gpu", "0", "--opt", "LKF", "--epochs", "50", "-s", "sngbch", "-r",  
+            //     "-b", "1", "-k", "-f", "2"
+            //     ]
+
+            // multi GPUs
+            "args": [
+                "--hvd", "--opt", "LKF", "--epochs", "100", "-r", "-b", "4", 
+                "-c", "/home/wuxingxing/datas/al_dir/cu_bulk_system/iter.0000/training/train.yaml", 
+                "-s", "/home/wuxingxing/datas/al_dir/cu_bulk_system/iter.0000/training/model_dir"
+            ]
+        }
+    ]
+}

@@ -1,39 +1,64 @@
-ALLEXE = calc_lin_forceMM.r  feat_collect_PCA.r  fit_lin_forceMM.r select_mm_VV.r fit_VV_forceMM.r calc_VV_forceMM.r fit_vdw.r
-NORANEXE =  calc_lin_forceMM.r  feat_collect_PCA.r  fit_lin_forceMM.r fit_VV_forceMM.r calc_VV_forceMM.r fit_vdw.r
-RANEXE = feat_collect_PCA.r select_mm_VV.r
-NORANOBJ = $(NORANEXE:.r=.o)
-RANOBJ = $(RANEXE:.r=.o)
-#.PHONY: all lin 
 .PHONY: all
 
-MPIFC = mpiifort
-is_mpiifort := $(shell which mpiifort 1>&2 2> /dev/null; echo $$?)
-ifneq ($(is_mpiifort),0)
-	MPIFC=mpif90
-endif
-
-
-all: $(ALLEXE) select_mm_VV_forceMPI.r feat_dist_xp.r
+all: fit_lin_forceMM.r fit_VV_forceMM.r fit_vdw.r calc_lin_forceMM.r select_mm_VV_forceMPI.r feat_dist_xp.r feat_collect_PCA.r select_mm_VV.r calc_VV_forceMM.r
 	\cp *.r ../../bin/
 
-$(NORANEXE): %.r : %.o
-	ifort -o $@ $< -mkl
-$(NORANOBJ): %.o : %.f
-	ifort -c $<
-$(RANEXE): %.r : %.o ran1.o
-	ifort -o $@ $< ran1.o -mkl
-$(RANOBJ): %.o : %.f
-	ifort -c $<
-ran1.o: ran1.f
-	ifort -c ran1.f
+MPIFC = mpiifort
+FFLAG = -O3
+# mpif90 = intelmpi+ifort on some machine, but they won't use this any more
+#is_mpiifort := $(shell which mpiifort 1>&2 2> /dev/null; echo $$?)
+#ifneq ($(is_mpiifort),0)
+#	MPIFC=mpif90
+#endif
+
+%.mod: %.f90
+	$(MPIFC) $(FFLAG) -c $<
+%.o:  %.f90
+	$(MPIFC) $(FFLAG) -c $<
+%.o:  %.f
+	$(MPIFC) $(FFLAG) -c $<
+%.o: %.cpp
+	$(MPICXX) $(CFLAG) -c $<
+
+feat_collect_PCA.r: feat_collect_PCA.o ran1.o
+	$(MPIFC)  $(FFLAG) -o $@ $^ -mkl
+calc_VV_forceMM.r: %.r : %.o
+	$(MPIFC)  $(FFLAG) -o $@ $^ -mkl
+fit_vdw.r: %.r : %.o
+	$(MPIFC)  $(FFLAG) -o $@ $^ -mkl
+select_mm_VV.r: select_mm_VV.o ran1.o
+	$(MPIFC)  $(FFLAG) -o $@ $^ -mkl
+select_mm_VV_G2MPI.r: select_mm_VV_G2MPI.o ran1.o
+	$(MPIFC)  $(FFLAG) -o $@ $^ -mkl
+
+
+
+calc_lin_forceMM.r: data_ewald.o get_ewald.o get_ALI.o gaussj.o calc_lin_forceMM.o
+	$(MPIFC) $(FFLAG) -mkl $^ -o calc_lin_forceMM.r
+
+fit_lin_forceMM.r:  data_ewald.o get_ewald.o get_ALI.o gaussj.o fit_lin_forceMM.o
+	$(MPIFC) $(FFLAG) -mkl $^ -o fit_lin_forceMM.r
+
+fit_VV_forceMM.r:  data_ewald.o get_ewald.o get_ALI.o gaussj.o fit_VV_forceMM.o
+	$(MPIFC) $(FFLAG) -mkl $^ -o fit_VV_forceMM.r
+
 
 select_mm_VV_forceMPI.r:
-	$(MPIFC) -O3 select_mm_VV_forceMPI.f  calc_VV_force_sub.f fit_VV_force_sub.f -mkl -o $@
+	$(MPIFC) $(FFLAG) select_mm_VV_forceMPI.f90  calc_VV_force_sub.f90 fit_VV_force_sub.f90 -mkl -o $@
 feat_dist_xp.r:
-	ifort -O3 feat_dist_xp.f -mkl -o $@
+	$(MPIFC) $(FFLAG) feat_dist_xp.f90 -mkl -o $@
 
-#lin: all
-#	make lin -C fread_dfeat
+#$(NORANEXE): %.r : %.o
+#	ifort -o $@ $^ -mkl
+#$(NORANOBJ): %.o : %.f90
+#	ifort -c $^
+#$(RANEXE): %.r : %.o ran1.o
+#	ifort -o $@ $^ -mkl
+#$(RANOBJ): %.o : %.f90
+#	ifort -c $^
+#ran1.o: ran1.f90
+#	ifort -c ran1.f90
+
 
 clean:
 	rm -f *.o *.r *.mod
@@ -46,3 +71,5 @@ clean:
 	rm -f ../../bin/feat_dist_xp.r
 	rm -f ../../bin/fit_vdw.r
 	rm -f ../../bin/select_mm_VV_forceMPI.r
+	rm -f ../../bin/select_mm_VV_G2MPI.r
+

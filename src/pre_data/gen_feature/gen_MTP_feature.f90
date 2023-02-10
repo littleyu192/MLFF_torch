@@ -458,7 +458,7 @@ PROGRAM gen_MTP_feature
       do j=1,num_neigh_M(itype,iat)
       num_M=num_M+1
       if(num_M.gt.m_neigh) then
-      write(6,*) "total num_neigh.gt.m_neigh,stop",m_neigh
+      write(6,*) "Error! maxNeighborNum too small",m_neigh
       stop
       endif
       list_neigh_alltypeM(num_M,iat)=list_neigh_M(j,itype,iat)

@@ -37,9 +37,10 @@ class MovementDataset(Dataset):
         return data
 
     def __getitem__(self, index):
-
+        
         file_path = self.dirs[index]
         data = self.__load_data(file_path)
+        data["ImgIdx"] = np.array([index])
         return data
 
     def __len__(self):
