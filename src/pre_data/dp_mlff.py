@@ -100,8 +100,10 @@ def gen_train_data(config):
                     tmp_virial[2][1] = tmp_v[2][1]
                     tmp_virial[2][2] = tmp_v[2][2]
                     volume = np.linalg.det(np.array(cell))
-                    tmp_virial = tmp_virial * 160.2 * 10.0 / volume
-
+                    print(volume)
+                    print("====================================")
+                    # import ipdb;ipdb.set_trace()
+                    # tmp_virial = tmp_virial * 160.2 * 10.0 / volume
                     with open(
                         os.path.join(movement_file, "Virial.dat"), "a"
                     ) as virial_file:
@@ -125,8 +127,6 @@ def gen_train_data(config):
                             + str(tmp_virial[2, 2])
                             + "\n"
                         )
-                        # virial_file.write(tmp_virial[0,0], tmp_virial[0,1], tmp_virial[0,2], tmp_virial[1,0], tmp_virial[1,1], tmp_virial[1,2], tmp_virial[2,0], tmp_virial[2,1], tmp_virial[2,2])
-
     # import ipdb
 
     # ipdb.set_trace()

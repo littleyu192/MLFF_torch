@@ -20,11 +20,12 @@ def train(train_loader, model, criterion, optimizer, epoch, start_lr, device, co
     losses = AverageMeter("Loss", ":.4e", Summary.AVERAGE)
     loss_Etot = AverageMeter("Etot", ":.4e", Summary.ROOT)
     loss_Force = AverageMeter("Force", ":.4e", Summary.ROOT)
+    loss_Virial = AverageMeter("Virial", ":.4e", Summary.ROOT)
     loss_Ei = AverageMeter("Ei", ":.4e", Summary.ROOT)
     loss_Egroup = AverageMeter("Egroup", ":.4e", Summary.ROOT)
     progress = ProgressMeter(
         len(train_loader),
-        [batch_time, data_time, losses, loss_Etot, loss_Force, loss_Ei, loss_Egroup],
+        [batch_time, data_time, losses, loss_Etot, loss_Force, loss_Ei, loss_Egroup, loss_Virial],
         prefix="Epoch: [{}]".format(epoch),
     )
 
@@ -53,7 +54,11 @@ def train(train_loader, model, criterion, optimizer, epoch, start_lr, device, co
             Force_label = Variable(
                 sample_batches["Force"][:, :, :].double().to(device)
             )  # [40,108,3]
+            Virial_label = Variable(
+                sample_batches["Virial"].double().to(device)
+            ).squeeze(1)
 
+            ImageDR = Variable(sample_batches["ImageDR"].double().to(device))
             Ri = Variable(sample_batches["Ri"].double().to(device), requires_grad=True)
             Ri_d = Variable(sample_batches["Ri_d"].to(device))
 
@@ -65,7 +70,10 @@ def train(train_loader, model, criterion, optimizer, epoch, start_lr, device, co
             Force_label = Variable(
                 sample_batches["Force"][:, :, :].float().to(device)
             )  # [40,108,3]
+            Virial_label = Variable(
+                sample_batches["Virial"].float().to(device))
 
+            ImageDR = Variable(sample_batches["ImageDR"].float().to(device))
             Ri = Variable(sample_batches["Ri"].float().to(device), requires_grad=True)
             Ri_d = Variable(sample_batches["Ri_d"].float().to(device))
 
@@ -90,8 +98,8 @@ def train(train_loader, model, criterion, optimizer, epoch, start_lr, device, co
             print("=" * 60, "Profiling model inference end", "=" * 60)
             prof.export_chrome_trace("model_infer.json")
         else:
-            Etot_predict, Ei_predict, Force_predict, Egroup_predict = model(
-                Ri, Ri_d, dR_neigh_list, natoms_img, Egroup_weight, Divider
+            Etot_predict, Ei_predict, Force_predict, Egroup_predict, Virial_predict = model(
+                ImageDR, Ri, Ri_d, dR_neigh_list, natoms_img, Egroup_weight, Divider
             )
 
         optimizer.zero_grad()
@@ -101,9 +109,10 @@ def train(train_loader, model, criterion, optimizer, epoch, start_lr, device, co
         # loss_Ei_val = criterion(Ei_predict, Ei_label)
         loss_Ei_val = 0
         loss_Egroup_val = criterion(Egroup_predict, Egroup_label)
+        loss_Virial_val = criterion(Virial_predict, Virial_label.squeeze(1))
         loss_val = loss_F_val + loss_Etot_val
 
-        w_f, w_e, w_eg, w_ei = 1, 1, 1, 0
+        w_f, w_e, w_v, w_eg, w_ei = 1, 1, 1, 0, 0
         loss, _, _ = dp_loss(
             0.001,
             real_lr,
@@ -111,13 +120,15 @@ def train(train_loader, model, criterion, optimizer, epoch, start_lr, device, co
             loss_F_val,
             w_e,
             loss_Etot_val,
+            w_v,
+            loss_Virial_val,
             w_eg,
             loss_Egroup_val,
             w_ei,
             loss_Ei_val,
             natoms_img[0, 0].item(),
         )
-
+        # import ipdb;ipdb.set_trace()
         loss.backward()
         optimizer.step()
 
@@ -126,6 +137,7 @@ def train(train_loader, model, criterion, optimizer, epoch, start_lr, device, co
         loss_Etot.update(loss_Etot_val.item(), batch_size)
         # loss_Ei.update(loss_Ei_val.item(), batch_size)
         loss_Egroup.update(loss_Egroup_val.item(), batch_size)
+        loss_Virial.update(loss_Virial_val.item(), batch_size)
         loss_Force.update(loss_F_val.item(), batch_size)
 
         # measure elapsed time
@@ -142,6 +154,7 @@ def train(train_loader, model, criterion, optimizer, epoch, start_lr, device, co
         loss_Force.root,
         loss_Ei.root,
         loss_Egroup.root,
+        loss_Virial.root,
         real_lr,
     )
 
@@ -154,9 +167,10 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
     loss_Force = AverageMeter("Force", ":.4e", Summary.ROOT)
     loss_Ei = AverageMeter("Ei", ":.4e", Summary.ROOT)
     loss_Egroup = AverageMeter("Egroup", ":.4e", Summary.ROOT)
+    loss_Virial = AverageMeter("Virial", ":.4e", Summary.ROOT)
     progress = ProgressMeter(
         len(train_loader),
-        [batch_time, data_time, losses, loss_Etot, loss_Force, loss_Ei],
+        [batch_time, data_time, losses, loss_Etot, loss_Force, loss_Ei, loss_Egroup, loss_Virial],
         prefix="Epoch: [{}]".format(epoch),
     )
 
@@ -182,7 +196,11 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
             Force_label = Variable(
                 sample_batches["Force"][:, :, :].double().to(device)
             )  # [40,108,3]
+            Virial_label = Variable(
+                sample_batches["Virial"].double().to(device)
+            )
 
+            ImageDR = Variable(sample_batches["ImageDR"].double().to(device))
             Ri = Variable(sample_batches["Ri"].double().to(device), requires_grad=True)
             Ri_d = Variable(sample_batches["Ri_d"].to(device))
 
@@ -194,7 +212,10 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
             Force_label = Variable(
                 sample_batches["Force"][:, :, :].float().to(device)
             )  # [40,108,3]
+            Virial_label = Variable(
+                sample_batches["Virial"].float().to(device))
 
+            ImageDR = Variable(sample_batches["ImageDR"].float().to(device))
             Ri = Variable(sample_batches["Ri"].float().to(device), requires_grad=True)
             Ri_d = Variable(sample_batches["Ri_d"].float().to(device))
 
@@ -204,7 +225,7 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
         natoms_img = torch.squeeze(natoms_img, 1)
 
         batch_size = Ri.shape[0]
-        kalman_inputs = [Ri, Ri_d, dR_neigh_list, natoms_img, Egroup_weight, Divider]
+        kalman_inputs = [ImageDR, Ri, Ri_d, dR_neigh_list, natoms_img, Egroup_weight, Divider]
 
         if config.profiling:
             print("=" * 60, "Start profiling KF update energy", "=" * 60)
@@ -231,9 +252,11 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
             print("=" * 60, "Profiling KF update force end", "=" * 60)
             prof.export_chrome_trace("kf_update_force.json")
         else:
-            Etot_predict = KFOptWrapper.update_energy(kalman_inputs, Etot_label)
-            Egroup_predict = KFOptWrapper.update_egroup(kalman_inputs, Egroup_label)
-            Etot_predict, Ei_predict, Force_predict = KFOptWrapper.update_force(
+            # import ipdb;ipdb.set_trace()
+            KFOptWrapper.update_energy(kalman_inputs, Etot_label)
+            # KFOptWrapper.update_egroup(kalman_inputs, Egroup_label)
+            # KFOptWrapper.update_virial(kalman_inputs, Virial_label)
+            Etot_predict, Ei_predict, Force_predict, Egroup_predict, Virial_predict = KFOptWrapper.update_force(
                 kalman_inputs, Force_label, 2
             )
 
@@ -241,6 +264,7 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
         loss_Etot_val = criterion(Etot_predict, Etot_label)
         loss_Ei_val = criterion(Ei_predict, Ei_label)
         loss_Egroup_val = criterion(Egroup_predict, Egroup_label)
+        loss_Virial_val = criterion(Virial_predict, Virial_label.squeeze(1))
         loss_val = loss_F_val + loss_Etot_val
 
         # measure accuracy and record loss
@@ -248,6 +272,7 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
         loss_Etot.update(loss_Etot_val.item(), batch_size)
         loss_Ei.update(loss_Ei_val.item(), batch_size)
         loss_Egroup.update(loss_Egroup_val.item(), batch_size)
+        loss_Virial.update(loss_Virial_val.item(), batch_size)
         loss_Force.update(loss_F_val.item(), batch_size)
 
         # measure elapsed time
@@ -263,10 +288,11 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
         loss_Force.all_reduce()
         loss_Ei.all_reduce()
         loss_Egroup.all_reduce()
+        loss_Virial.all_reduce()
         batch_time.all_reduce()
 
     progress.display_summary(["Training Set:"])
-    return losses.avg, loss_Etot.root, loss_Force.root, loss_Ei.root, loss_Egroup.root
+    return losses.avg, loss_Etot.root, loss_Force.root, loss_Ei.root, loss_Egroup.root, loss_Virial.root
 
 
 def valid(val_loader, model, criterion, device, args):
@@ -283,8 +309,11 @@ def valid(val_loader, model, criterion, device, args):
                 )
                 Force_label = Variable(
                     sample_batches["Force"][:, :, :].double().to(device)
-                )  # [40,108,3]
+                )
+                Virial_label = Variable(
+                sample_batches["Virial"].double().to(device))
 
+                ImageDR = Variable(sample_batches["ImageDR"].double().to(device))
                 Ri = Variable(
                     sample_batches["Ri"].double().to(device),
                     requires_grad=True,
@@ -300,8 +329,11 @@ def valid(val_loader, model, criterion, device, args):
                 )
                 Force_label = Variable(
                     sample_batches["Force"][:, :, :].float().to(device)
-                )  # [40,108,3]
+                )
+                Virial_label = Variable(
+                sample_batches["Virial"].float().to(device))
 
+                ImageDR = Variable(sample_batches["ImageDR"].float().to(device))
                 Ri = Variable(
                     sample_batches["Ri"].float().to(device),
                     requires_grad=True,
@@ -314,14 +346,15 @@ def valid(val_loader, model, criterion, device, args):
             natoms_img = torch.squeeze(natoms_img, 1)
 
             batch_size = Ri.shape[0]
-            Etot_predict, Ei_predict, Force_predict, Egroup_predict = model(
-                Ri, Ri_d, dR_neigh_list, natoms_img, Egroup_weight, Divider
+            Etot_predict, Ei_predict, Force_predict, Egroup_predict, Virial_predict = model(
+                ImageDR, Ri, Ri_d, dR_neigh_list, natoms_img, Egroup_weight, Divider
             )
 
             loss_F_val = criterion(Force_predict, Force_label)
             loss_Etot_val = criterion(Etot_predict, Etot_label)
             loss_Ei_val = criterion(Ei_predict, Ei_label)
             loss_Egroup_val = criterion(Egroup_predict, Egroup_label)
+            loss_Virial_val = criterion(Virial_predict, Virial_label.squeeze(1))
             loss_val = loss_F_val + loss_Etot_val
 
             # measure accuracy and record loss
@@ -329,6 +362,7 @@ def valid(val_loader, model, criterion, device, args):
             loss_Etot.update(loss_Etot_val.item(), batch_size)
             loss_Ei.update(loss_Ei_val.item(), batch_size)
             loss_Egroup.update(loss_Egroup_val.item(), batch_size)
+            loss_Virial.update(loss_Virial_val.item(), batch_size)
             loss_Force.update(loss_F_val.item(), batch_size)
             # measure elapsed time
             batch_time.update(time.time() - end)
@@ -343,6 +377,7 @@ def valid(val_loader, model, criterion, device, args):
     loss_Force = AverageMeter("Force", ":.4e", Summary.ROOT)
     loss_Ei = AverageMeter("Ei", ":.4e", Summary.ROOT)
     loss_Egroup = AverageMeter("Egroup", ":.4e", Summary.ROOT)
+    loss_Virial = AverageMeter("Virial", ":.4e", Summary.ROOT)
     progress = ProgressMeter(
         len(val_loader)
         + (
@@ -380,7 +415,7 @@ def valid(val_loader, model, criterion, device, args):
 
     progress.display_summary(["Test Set:"])
 
-    return losses.avg, loss_Etot.root, loss_Force.root, loss_Ei.root, loss_Egroup.root
+    return losses.avg, loss_Etot.root, loss_Force.root, loss_Ei.root, loss_Egroup.root, loss_Virial.root
 
 
 def save_checkpoint(state, is_best, filename, prefix):

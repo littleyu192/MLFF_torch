@@ -10,7 +10,7 @@ sys.path.append(os.getcwd())
 # import prepare as pp
 # pp.readFeatnum()
 from model.dp_embedding import EmbeddingNet, FittingNet
-from model.calculate_force import CalculateForce
+from model.calculate_force import CalculateForce, CalculateVirialForce
 # logging and our extension
 import logging
 logging_level_DUMP = 5
@@ -68,7 +68,7 @@ class DP(nn.Module):
         return Egroup_out
 
 
-    def forward(self, Ri, dfeat, list_neigh, natoms_img, Egroup_weight, divider, is_calc_f=None):
+    def forward(self, ImageDR, Ri, dfeat, list_neigh, natoms_img, Egroup_weight, divider, is_calc_f=None):
 
         torch.autograd.set_detect_anomaly(True)
         
@@ -110,9 +110,10 @@ class DP(nn.Module):
         Etot = torch.sum(Ei, 1)   
         Egroup = self.get_egroup(Ei, Egroup_weight, divider)
         F = torch.zeros((batch_size, atom_sum, 3), device=self.device)
+        Virial = torch.zeros((batch_size, 9), device=self.device)
         Ei = torch.squeeze(Ei, 2)
         if is_calc_f == False:
-            return Etot, Ei, F, Egroup
+            return Etot, Ei, F, Egroup, Virial
         # start_autograd = time.time()
         # print("fitting time:", start_autograd - start_fitting, 's')
 
@@ -132,5 +133,12 @@ class DP(nn.Module):
         list_neigh = (list_neigh - 1).type(torch.int)
         F = CalculateForce.apply(list_neigh, dE, Ri_d, F)
 
-        return Etot, Ei, F, Egroup
+        # virial = CalculateVirialForce.apply(list_neigh, dE, Ri[:,:,:,:3], Ri_d)
+        virial = CalculateVirialForce.apply(list_neigh, dE, ImageDR, Ri_d)
+        virial = virial * (-1)
+        # print(Etot)
+        # print(virial)
+        # print("==============================")
+        # import ipdb; ipdb.set_trace()
 
+        return Etot, Ei, F, Egroup, virial

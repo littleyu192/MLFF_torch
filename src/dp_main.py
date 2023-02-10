@@ -347,17 +347,17 @@ def main():
         time_start = time.time()
         if args.opt == "LKF" or args.opt == "GKF":
             real_lr = args.lr
-            loss, loss_Etot, loss_Force, loss_Ei, loss_egroup = train_KF(
+            loss, loss_Etot, loss_Force, loss_Ei, loss_egroup, loss_virial = train_KF(
                 train_loader, model, criterion, optimizer, epoch, device, args
             )
         else:
-            loss, loss_Etot, loss_Force, loss_Ei, loss_egroup, real_lr = train(
+            loss, loss_Etot, loss_Force, loss_Ei, loss_egroup, loss_virial, real_lr = train(
                 train_loader, model, criterion, optimizer, epoch, args.lr, device, args
             )
         time_end = time.time()
 
         # evaluate on validation set
-        vld_loss, vld_loss_Etot, vld_loss_Force, vld_loss_Ei, val_loss_egroup = valid(
+        vld_loss, vld_loss_Etot, vld_loss_Force, vld_loss_Ei, val_loss_egroup, val_loss_virial = valid(
             val_loader, model, criterion, device, args
         )
 

@@ -32,6 +32,7 @@ class MovementDataset(Dataset):
         data["Divider"] = np.load(os.path.join(path, "Divider.npy"))
         data["Egroup_weight"] = np.load(os.path.join(path, "Egroup_weight.npy"))
         data["ListNeighbor"] = np.load(os.path.join(path, "ListNeighbor.npy"))
+        data["ImageDR"] = np.load(os.path.join(path, "ImageDR.npy"))
         data["Ri"] = np.load(os.path.join(path, "Ri.npy"))
         data["Ri_d"] = np.load(os.path.join(path, "Ri_d.npy"))
         data["ImageAtomNum"] = np.load(os.path.join(path, "ImageAtomNum.npy")).reshape(
@@ -115,6 +116,7 @@ def main():
         print(sample_batches["Egroup_weight"].shape)
         print(sample_batches["ListNeighbor"].shape)
         print(sample_batches["Ri"].shape)
+        print(sample_batches["ImageDR"].shape)
         print(sample_batches["Ri_d"].shape)
         print(sample_batches["ImageAtomNum"].shape)
 
