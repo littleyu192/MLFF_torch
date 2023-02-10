@@ -12,15 +12,15 @@ setup(
             [
                 "calculate_force.cpp", 
                 "kernel/calculateForce.cu",
+                "calculate_force_grad.cpp",
+                "kernel/calculateForceGrad.cu",
+                "calculate_virial_force.cpp", 
+                "kernel/calculateVirial.cu",
+                "calculate_virial_force_grad.cpp", 
+                "kernel/calculateVirialGrad.cu",
+                "register_op.cpp",
             ],
         ),
-        CUDAExtension(
-            "op_grad",
-            [
-                "calculate_force_grad.cpp",
-                "kernel/calculateForceGrad.cu"
-            ],
-        )
     ],
     cmdclass={
         "build_ext": BuildExtension
