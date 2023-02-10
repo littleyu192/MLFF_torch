@@ -39,6 +39,6 @@ net_cfg:
       - 50
       - 1
     bias: True
-    resnet_dt: True
+    resnet_dt: False
     activation: tanh
 
