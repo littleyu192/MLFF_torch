@@ -188,25 +188,25 @@ module calc_deepMD
 
         ! **************** read fit_linearMM.input ********************    
         ! ****************** read vdw ************************
-        open(10,file=trim(vdw_path))
-        rewind(10)
-        read(10,*) ntype_t,nterm
+        ! open(10,file=trim(vdw_path))
+        ! rewind(10)
+        ! read(10,*) ntype_t,nterm
 
-        if(nterm.gt.2) then
-            write(6,*) "nterm.gt.2,stop"
-            stop
-        endif
+        ! if(nterm.gt.2) then
+        !     write(6,*) "nterm.gt.2,stop"
+        !     stop
+        ! endif
 
-        if(ntype_t.ne.ntype) then
-            write(6,*) "ntype not same in vwd_fitB.ntype,something wrong"
-            stop
-        endif
+        ! if(ntype_t.ne.ntype) then
+        !     write(6,*) "ntype not same in vwd_fitB.ntype,something wrong"
+        !     stop
+        ! endif
         
-        do itype1=1,ntype
-            read(10,*) itype_t,rad_atom(itype1),E_ave_vdw(itype1),((wp_atom(i,itype1,j1),i=1,ntype),j1=1,nterm)
-        enddo
+        ! do itype1=1,ntype
+        !     read(10,*) itype_t,rad_atom(itype1),E_ave_vdw(itype1),((wp_atom(i,itype1,j1),i=1,ntype),j1=1,nterm)
+        ! enddo
         
-        close(10)
+        ! close(10)
 
         !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
         open (12, file=trim(model_Wij_path1))
@@ -616,10 +616,10 @@ module calc_deepMD
                     
                     
                     ! wlj dbg
-                    !if (iat.eq.1) then 
-                    !    write(*,*) s_neigh(:,1,iat)
-                    !    write(*,*) "***************************************************"
-                    !endif 
+                    if (iat.eq.1) then 
+                        write(*,*) s_neigh(:,1,iat)
+                        write(*,*) "***************************************************"
+                    endif 
                     
                 enddo
                 

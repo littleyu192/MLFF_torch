@@ -1,5 +1,6 @@
 import argparse
 import os
+os.environ['MKL_THREADING_LAYER'] = 'GNU' 
 import random
 import torch
 import torch.backends.cudnn as cudnn

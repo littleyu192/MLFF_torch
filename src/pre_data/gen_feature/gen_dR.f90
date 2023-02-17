@@ -251,6 +251,7 @@ PROGRAM gen_dR
     ! print *, "print m_neigh:", m_neigh
     ! print *, "print ntype:", ntype
     ! print *, "print natom:", natom
+    
     open(1314, file='./PWdata/dRneigh.dat', access='append')
     ! m_neigh,ntype,natom
     do k=1, natom
@@ -266,7 +267,7 @@ PROGRAM gen_dR
         end do
     end do
     close(1314)
-
+    
 !ccccccccccccccccccccccccccccccccc
 !ccccccccccccccccccccccccccccccccc
 

@@ -169,26 +169,27 @@ subroutine find_neighbore(iatom,natom,xatom,AL,Rc_type,num_neigh,list_neigh, &
         !print *, "print m_neigh:", m_neigh
         !print *, "print ntype:", ntype
         !print *, "print natom:", natom
-        open(1314, file='./PWdata/dRneigh.dat', access='append')
-        ! m_neigh,ntype,natom
-        do k=1, natom
-            do j=1, ntype
-                do i=1, m_neigh
-                    ! wlj altered 
-                    ! match the selection criteria with on-the-fly calc (aboves)
-                    dd = dR_neigh(1, i, j, k) **2 + dR_neigh(2, i, j, k)**2 + dR_neigh(3, i, j, k)**2
-                    
-                    if ((dd < Rc2).and.(dd > 1.D-8)) then
-                    !if ((abs(dR_neigh(1, i, j, k)) + abs(dR_neigh(2, i, j, k)) + abs(dR_neigh(3, i, j, k))) > 1.D-8) then
-                        write(1314, "(3(E17.10,1x), 1x, i6)") dR_neigh(1, i, j, k), dR_neigh(2, i, j, k), dR_neigh(3, i, j, k), list_neigh(i,j,k)
-                    else
-                        write(1314, *) 0,0,0,0
-                    end if
-
-                enddo
-            enddo
-        enddo
         
-        close(1314)
+        ! open(1314, file='./PWdata/dRneigh.dat', access='append')
+        ! ! m_neigh,ntype,natom
+        ! do k=1, natom
+        !     do j=1, ntype
+        !         do i=1, m_neigh
+        !             ! wlj altered 
+        !             ! match the selection criteria with on-the-fly calc (aboves)
+        !             dd = dR_neigh(1, i, j, k) **2 + dR_neigh(2, i, j, k)**2 + dR_neigh(3, i, j, k)**2
+                    
+        !             if ((dd < Rc2).and.(dd > 1.D-8)) then
+        !             !if ((abs(dR_neigh(1, i, j, k)) + abs(dR_neigh(2, i, j, k)) + abs(dR_neigh(3, i, j, k))) > 1.D-8) then
+        !                 write(1314, "(3(E17.10,1x), 1x, i6)") dR_neigh(1, i, j, k), dR_neigh(2, i, j, k), dR_neigh(3, i, j, k), list_neigh(i,j,k)
+        !             else
+        !                 write(1314, *) 0,0,0,0
+        !             end if
+
+        !         enddo
+        !     enddo
+        ! enddo
+        
+        ! close(1314)
 
 end subroutine find_neighbore
