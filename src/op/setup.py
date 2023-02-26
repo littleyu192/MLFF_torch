@@ -18,6 +18,8 @@ setup(
                 "kernel/calculateVirial.cu",
                 "calculate_virial_force_grad.cpp", 
                 "kernel/calculateVirialGrad.cu",
+                "calculate_DR.cpp",
+                "kernel/calculateDR.cu",
                 "register_op.cpp",
             ],
         ),
