@@ -183,7 +183,7 @@ def main():
         args.gpu = hvd.local_rank()
 
     if torch.cuda.is_available():
-        if args.gpu:
+        if args.gpu != None:
             print("Use GPU: {} for training".format(args.gpu))
             device = torch.device("cuda:{}".format(args.gpu))
         else:

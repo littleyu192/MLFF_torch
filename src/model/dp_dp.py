@@ -1,11 +1,8 @@
 import torch
 import torch.nn as nn
-import sys, os
-
-sys.path.append(os.getcwd())
 
 from model.dp_embedding import EmbeddingNet, FittingNet
-from model.calculate_force import CalculateForce, CalculateDR
+from model.op_func import CalculateForce, CalculateDR
 
 
 class DP(nn.Module):
@@ -89,16 +86,17 @@ class DP(nn.Module):
                     xyz_scater_a = tmp_b
                 else:
                     xyz_scater_a = xyz_scater_a + tmp_b
-            # xyz_scater = xyz_scater_a.clone()
 
-            DR_ntype = CalculateDR.apply(xyz_scater_a, self.maxNeighborNum, self.ntypes, list_neigh)
+            DR_ntype = CalculateDR.apply(
+                xyz_scater_a, self.maxNeighborNum, self.ntypes, list_neigh
+            )
 
-            # import ipdb; ipdb.set_trace()
+            # ======================================================
             # xyz_scater_a = xyz_scater_a * 4.0 / (self.maxNeighborNum * self.ntypes * 4)
             # xyz_scater_b = xyz_scater_a[:, :, :, :16]
             # DR_ntype = torch.matmul(xyz_scater_a.transpose(-2, -1), xyz_scater_b)
             # DR_ntype = DR_ntype.reshape(batch_size, natoms[ntype], -1)
-            # import ipdb; ipdb.set_trace()
+            # ======================================================
 
             if ntype == 0:
                 DR = DR_ntype
