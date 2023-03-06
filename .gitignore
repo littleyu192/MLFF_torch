@@ -17,7 +17,8 @@ demo/cuo1000/*
 demo/cuo1000/PWdata/
 # !demo/cuo1000/PWdata/MOVEMENT
 
-/src/md
+/src/md_bk
+# /src/md
 /dataset
 !/dataset/SiC/PWdata/MOVEMENT
 !/dataset/surface_Li/PWdata/MOVEMENT

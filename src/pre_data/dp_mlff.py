@@ -17,6 +17,13 @@ def collect_all_sourcefiles(workDir, sourceFileName="MOVEMENT"):
     for path, dirList, fileList in os.walk(workDir):
         if sourceFileName in fileList:
             res.append(os.path.abspath(path))
+    
+    init = None
+    for i , _ in enumerate(res):
+        if "init" in _.split("/")[-1]:
+            init = res.pop(i)
+    if init is not None:
+        res.insert(0, init)
     return res
 
 

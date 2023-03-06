@@ -111,6 +111,24 @@ class KFOptimizerWrapper:
         res = np.random.choice(index, atoms_selected).reshape(-1, atoms_per_group)
         return res
 
+    '''
+    description: do predict 
+    return {*}
+    '''    
+    def valid(
+        self, inputs: list, Etot_label: torch.Tensor, update_prefactor: float = 1
+    ) -> None:
+        Etot_predict, Ei_predict, Force_predict = self.model(
+                inputs[0],
+                inputs[1],
+                inputs[2],
+                inputs[3],
+                inputs[4],
+                inputs[5],
+                is_calc_f=True,
+            )
+        return Etot_predict, Ei_predict, Force_predict
+
     # """
     # @Description :
     # calculate kpu by etot

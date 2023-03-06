@@ -20,22 +20,23 @@ class MovementDataset(Dataset):
     '''    
     def __init__(self, data_paths, is_train=True):
         super(MovementDataset, self).__init__()
+        self.data_path_list = []
         if is_train:
             data_paths = [os.path.join(path, "train") for path in data_paths]
         else:
             data_paths = [os.path.join(path, "valid") for path in data_paths]
-
+        self.data_path_list.extend(data_paths)
         """"davg.npy or dstd.npy in diffrent dirs are the same"""
-        self.davg = np.load(os.path.join(data_paths[-1], "davg.npy"))
-        self.dstd = np.load(os.path.join(data_paths[-1], "dstd.npy"))
+        self.davg = np.load(os.path.join(data_paths[0], "davg.npy"))
+        self.dstd = np.load(os.path.join(data_paths[0], "dstd.npy"))
 
         self.dirs = []
         for data_path in data_paths:
-            for current_dir, child_dir, child_file in os.walk(data_path):
+            for current_dir, child_dir, child_file in os.walk(data_path, followlinks=True):
                 if len(child_dir) == 0 and "Ri.npy" in child_file:
                     self.dirs.append(current_dir)
 
-        self.dirs = sorted(self.dirs)
+        # self.dirs = sorted(self.dirs)
 
         self.__compute_stat_output(10, 1e-3)
 
@@ -57,8 +58,10 @@ class MovementDataset(Dataset):
     def __getitem__(self, index):
         
         file_path = self.dirs[index]
+        # print(file_path)
         data = self.__load_data(file_path)
         data["ImgIdx"] = np.array([index])
+        data["file_path"] = np.array([self.data_path_list.index(os.path.dirname(file_path))])
         return data
 
     def __len__(self):

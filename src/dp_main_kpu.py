@@ -109,6 +109,9 @@ parser.add_argument(
     help="evaluate model on validation set",
 )
 parser.add_argument(
+    "--eval_name", default="train_valid", type=str, help="specify the evaluate result saved name: {}.csv"
+)
+parser.add_argument(
     "--hvd",
     dest="hvd",
     action="store_true",
@@ -159,7 +162,7 @@ parser.add_argument(
 parser.add_argument(
     "-f",
     "--fre-kpu",
-    default=2,
+    default=1,
     type=int,
     metavar="N",
     help="precent kpu calculate(4:25%, 2:50%, 1:100%)",
@@ -222,7 +225,7 @@ def main():
     
     # Create dataset
     train_dataset = MovementDataset(config["data_paths"], is_train=True)
-    valid_dataset = MovementDataset(config["data_paths"], is_train=False)
+    valid_dataset = MovementDataset(config["data_paths"], is_train=True)
 
     # create model
     davg, dstd, ener_shift = train_dataset.get_stat()
@@ -275,10 +278,10 @@ def main():
 
     # optionally resume from a checkpoint
     if args.resume:
-        if args.evaluate:
-            file_name = os.path.join(args.store_path, "best.pth.tar")
-        else:
-            file_name = os.path.join(args.store_path, "checkpoint.pth.tar")
+        # if args.evaluate:
+        #     file_name = os.path.join(args.store_path, "best.pth.tar")
+        # else:
+        file_name = os.path.join(args.store_path, "checkpoint.pth.tar")
         p_path = os.path.join(args.store_path, "P.pt")
         if os.path.isfile(file_name):
             print("=> loading checkpoint '{}'".format(file_name))
@@ -295,8 +298,9 @@ def main():
             optimizer.load_state_dict(checkpoint["optimizer"])
             # scheduler.load_state_dict(checkpoint["scheduler"])
             if args.opt == "LKF" or args.opt == "GKF":
-                load_p = torch.load(p_path)
-                optimizer.set_kalman_P(load_p, checkpoint["kalman_lambda"], checkpoint["kalman_nue"])
+                # load_p = torch.load(p_path)
+                load_p = checkpoint["optimizer"]['state'][0]['P']
+                optimizer.set_kalman_P(load_p, checkpoint["optimizer"]['state'][0]['kalman_lambda'])
             print(
                 "=> loaded checkpoint '{}' (epoch {})".format(
                     file_name, checkpoint["epoch"]
@@ -347,7 +351,8 @@ def main():
 
     if args.evaluate:
         # validate(val_loader, model, criterion, args)
-        valid(val_loader, model, criterion, device, args)
+        # predict(train_loader, "train", model, criterion, optimizer, device, args)
+        predict(train_loader, "valid", model, criterion, optimizer, device, args)
         return
 
     if args.kpu:
@@ -416,26 +421,17 @@ def main():
         best_loss = min(loss, best_loss)
 
         if not args.hvd or (args.hvd and hvd.rank() == 0):
-            kalman_p, kalman_lambda, kalman_nue = None, None, None
-            if(args.opt == "GKF" or args.opt == "LKF"):
-                kalman_p = optimizer._state['P']
-                kalman_lambda = optimizer._state['kalman_lambda']
-                kalman_nue = optimizer.param_groups[0]["kalman_nue"]
             save_checkpoint(
                 {
                     "epoch": epoch,
                     "state_dict": model.state_dict(),
                     "best_loss": best_loss,
-                    "optimizer": optimizer.state_dict(),
-                    "kalman_lambda": kalman_lambda, 
-                    "kalman_nue": kalman_nue
+                    "optimizer": optimizer.state_dict()
                 },
                 is_best,
                 "checkpoint.pth.tar",
-                args.store_path,
-                kalman_p
+                args.store_path
             )
-
 
 if __name__ == "__main__":
     main()

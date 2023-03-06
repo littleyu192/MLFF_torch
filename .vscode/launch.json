@@ -10,10 +10,10 @@
             // "request": "launch",
             "request": "launch",
             "localRoot": "@{workspaceRoot}",
-            "remoteRoot": "/home/wuxingxing/codespace/mutli_mlff",
+            "remoteRoot": "/share/home/wuxingxing/codespace/mutli_mlff",
             // "port": 22,
             // "host": "10.18.98.1",
-            "program": "/home/wuxingxing/codespace/mutli_mlff/src/pre_data/dp_mlff.py",
+            "program": "/share/home/wuxingxing/codespace/mutli_mlff/src/pre_data/dp_mlff.py",
             // "console": "integratedTerminal",
             "console": "integratedTerminal",
             "env": {"PYTHONPATH": "${workspaceRoot}"
@@ -22,11 +22,12 @@
             "outputCapture": "std",
             "justMyCode": false,
             "args": [
-                "-c", "/home/wuxingxing/codespace/mutli_mlff/cu_config_template.yaml", 
-                "-w", "/home/wuxingxing/datas/al_dir/cu_bulk_system/iter.0000/exploring/md_dpkf_dir",
-                "-d", "/home/wuxingxing/datas/system_config/cu_72104/dpkf_data/calc4/train"
+                "-c", "/share/home/wuxingxing/codespace/active_learning_mlff/cu_config_template.yaml", 
+                "-w", "/share/home/wuxingxing/datas/al_dir/cu_bulk_system/iter.0000/exploring/md_dp",
+                "-d", "/share/home/wuxingxing/datas/al_dir/cu_bulk_system/iter.0000/exploring/init_dp/train"
             ]
-            ///home/wuxingxing/datas/active_learning_dir/cu_1646_system/iter.0000/exploring/tmp_dpkf
+            //"-d", "/share/home/wuxingxing/datas/system_config/cu_72104/dpkf_data/calc4/train"
+            ///share/home/wuxingxing/datas/active_learning_dir/cu_1646_system/iter.0000/exploring/tmp_dpkf
         },
         {
             "name": "dp_main",
@@ -34,10 +35,10 @@
             // "request": "launch",
             "request": "launch",
             "localRoot": "@{workspaceRoot}",
-            "remoteRoot": "/home/wuxingxing/codespace/mutli_mlff",
+            "remoteRoot": "/share/home/wuxingxing/codespace/mutli_mlff",
             // "port": 22,
             // "host": "10.18.98.1",
-            "program": "/home/wuxingxing/codespace/mutli_mlff/src/dp_main.py",
+            "program": "/share/home/wuxingxing/codespace/mutli_mlff/src/dp_main.py",
             // "console": "integratedTerminal",
             "console": "integratedTerminal",
             "env": {"PYTHONPATH": "${workspaceRoot}"
@@ -63,10 +64,10 @@
             // "request": "launch",
             "request": "launch",
             "localRoot": "@{workspaceRoot}",
-            "remoteRoot": "/home/wuxingxing/codespace/mutli_mlff",
+            "remoteRoot": "/share/home/wuxingxing/codespace/mutli_mlff",
             // "port": 22,
             // "host": "10.18.98.1",
-            "program": "/home/wuxingxing/codespace/mutli_mlff/src/dp_main_kpu.py",
+            "program": "/share/home/wuxingxing/codespace/mutli_mlff/src/dp_main_kpu.py",
             // "console": "integratedTerminal",
             "console": "integratedTerminal",
             "env": {"PYTHONPATH": "${workspaceRoot}"
@@ -82,10 +83,51 @@
 
             // multi GPUs
             "args": [
-                "--hvd", "--opt", "LKF", "--epochs", "100", "-r", "-b", "4", 
-                "-c", "/home/wuxingxing/datas/al_dir/cu_bulk_system/iter.0000/training/train.yaml", 
-                "-s", "/home/wuxingxing/datas/al_dir/cu_bulk_system/iter.0000/training/model_dir"
+                "--hvd", "--opt", "LKF", "--epochs", "100", "-r", "-b", "1", "-k", "-f", "1", "--kpu_dir", "test_md_kpu_dir",
+                "-c", "/share/home/wuxingxing/datas/al_dir/si_system/iter.0000/training/md_kpu_0.yaml", 
+                "-s", "/share/home/wuxingxing/datas/al_dir/si_system/iter.0000/training/model_dir"
             ]
+            // cu kpu:
+            // "args": [ 
+            //     "--hvd", "--opt", "LKF", "--epochs", "100", "-r", "-b", "1", "-k", "-f", "1", "--kpu_dir", "ali_md_kpu_dir",
+            //     "-c", "/share/home/wuxingxing/datas/al_dir/cu_bulk_system/iter.0000/training/md_kpu.yaml", 
+            //     "-s", "/share/home/wuxingxing/datas/al_dir/cu_bulk_system/iter.0000/training/model_dir"
+            // ]
+
+            // cuo valid:
+            // "args": [ 
+            //     "--hvd", "--opt", "LKF", "--epochs", "100", "-r", "-b", "1", "-e", "--eval_name", "eval_3090_wu_xx_dir",
+            //     "-c", "/share/home/wuxingxing/datas/al_dir/cuo_system/iter.0000/training/md_kpu.yaml", 
+            //     "-s", "/share/home/wuxingxing/datas/al_dir/cuo_system/iter.0000/training/model_dir"
+            // ]
+            
+            // si valid:
+            // "args": [ 
+            //     "--hvd", "--opt", "LKF", "--epochs", "100", "-r", "-b", "1", "-e", "--eval_name", "eval_3090_wu_xx_dir",
+            //     "-c", "/share/home/wuxingxing/datas/al_dir/si_system/iter.0000/training/md_kpu.yaml", 
+            //     "-s", "/share/home/wuxingxing/datas/al_dir/si_system/iter.0000/training/model_dir"
+            // ]
+
+            // cu valid:
+            // "args": [ 
+            //     "--hvd", "--opt", "LKF", "--epochs", "100", "-r", "-b", "1", "-e", "--eval_name", "al_eval_a100_wu_xx_dir",
+            //     "-c", "/share/home/wuxingxing/codespace/active_learning_mlff/al_dir/cu_bulk_system_v6/iter.0000/training/md_kpu.yaml", 
+            //     "-s", "/share/home/wuxingxing/codespace/active_learning_mlff/al_dir/cu_bulk_system_v6/iter.0000/training/model_dir"
+            // ]
+
+            // cu valid train data:
+            // "args": [ 
+            //     "--hvd", "--opt", "LKF", "--epochs", "100", "-r", "-b", "1", "-e", "--eval_name", "eval_train_dir",
+            //     "-c", "/share/home/wuxingxing/codespace/active_learning_mlff/al_dir/cu_bulk_system/iter.0000/training/train.yaml", 
+            //     "-s", "/share/home/wuxingxing/codespace/active_learning_mlff/al_dir/cu_bulk_system/iter.0000/training/model_dir"
+            // ]
+
+            // "args": [
+            //     "--hvd", "--opt", "LKF", "--epochs", "100", "-r", "-f", "1", "-b", "128",
+            //     "-c", "/share/home/wuxingxing/datas/al_dir/cu_bulk_system/iter.0001/training/train.yaml", 
+            //     "-s", "/share/home/wuxingxing/datas/al_dir/cu_bulk_system/iter.0001/training/test_model_dir"
+            // ]
+
         }
     ]
 }

@@ -1,15 +1,15 @@
   !// forquill v1.01 beta www.fcode.cn
 module calc_deepMD
-! This version has used the bug in the original DP code, e.g., the ghost
-! neighbore in s_neigh, and dxyz_neigh
-! It is controlled by iflag_ghost_neigh
-! if iflag_ghost_neigh=1, the result depends on m_neigh
+    ! This version has used the bug in the original DP code, e.g., the ghost
+    ! neighbore in s_neigh, and dxyz_neigh
+    ! It is controlled by iflag_ghost_neigh
+    ! if iflag_ghost_neigh=1, the result depends on m_neigh
     use mod_mpi
     use calc_deepmd_f,only:num_neigh,s_neigh,ds_neigh,dR_neigh,dxyz_neigh,dxyz_dx_neigh,list_neigh,gen_deepMD_feature,dp_M2
     !implicit double precision (a-h, o-z)
     implicit none
 
-  !!!!!!!!!!!!!          以下为  module variables     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    !!!!!!!!!!!!!          以下为  module variables     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   
     character(80),parameter :: feat_info_path0="fread_dfeat/feat.info"
     character(80),parameter :: model_Wij_path01="embeding.net"
@@ -35,8 +35,6 @@ module calc_deepMD
     real(8),allocatable,dimension(:,:) :: bb_type          !不明白有何作用,似乎应该是之前用的变量
     real(8),allocatable,dimension(:,:) :: bb_type0         !将bb分别归类到不同种类的原子中，第二维才是代表原子种类
     real(8),allocatable,dimension (:, :) :: w_feat         !不同reference points的权重(对linear无意义)
-  
-    
     
     integer(4) :: natom                                    !image的原子个数  
     integer(4),allocatable,dimension(:) :: num             !属于每种原子的原子个数，但似乎在calc_linear中无用
@@ -49,6 +47,7 @@ module calc_deepMD
     real(8),allocatable,dimension(:) :: energy_pred_tmp        !每个原子的能量预测值
     real(8),allocatable,dimension(:,:) :: force_pred_NN       !每个原子的受力预测值
     real(8),allocatable,dimension(:,:) :: force_pred_tmp       !每个原子的受力预测值
+    
     real(8) :: etot_pred_deepMD
     character(200) :: error_msg
     integer(4) :: istat
@@ -56,6 +55,7 @@ module calc_deepMD
     integer(4),allocatable, dimension(:) :: direction,add_force_atom,const_force_atom
     integer(4) :: add_force_num,power,axis,const_force_num
     real(8) :: alpha, y1, z1
+
     ! INTEGER*4  access, status
     logical*2::alive
 
@@ -75,15 +75,12 @@ module calc_deepMD
     integer nodeMM_em,nlayer_em,nodeMM_NN,nlayer_NN
     integer nodeMM,nlayer ! to be removed
     integer iflag_resNN(100)
-  
     
-  
-  !!!!!!!!!!!!!          以上为  module variables     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    !!!!!!!!!!!!!          以上为  module variables     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   
     contains
-    
-  
-   
+
     subroutine set_paths_deepMD(fit_dir_input)
         character(*),intent(in) :: fit_dir_input
         character(:),allocatable :: fit_dir,fit_dir_simp
@@ -108,32 +105,40 @@ module calc_deepMD
     
         integer(4) :: nimage,num_refm,num_reftot,nfeat1_tmp,itype,i,k,itmp,j1
         integer(4) :: iflag_PCA,kkk,ntype_tmp,iatom_tmp,ntype_t,nterm,itype_t
+
         real(8) :: dist0
         character*20 txt
-        integer i1,i2,j,ii,ntmp,nlayer_tmp,j2
+        integer i1,i2,j,ii,ntmp,nlayer_tmp,j2 
+
         real*8 w_tmp,b_tmp
+        
         integer itype1,itype2,ntype_pair,ll
         integer node_tmp,node_nn_tmp(100),nlayer_nn_tmp
+
         real*8 sum
 
         ! integer(4),allocatable,dimension(:,:) :: nfeat,ipos_feat
-
-
-! **************** read feat.info ********************
+        
+        ! **************** read feat.info ********************
         open(10,file=trim(feat_info_path))
+        
         rewind(10)
+
         read(10,*) iflag_PCA   ! this can be used to turn off degmm part
         read(10,*) nfeat_type_n
+
         do kkk=1,nfeat_type_n
-          read(10,*) ifeat_type_n(kkk)   ! the index (1,2,3) of the feature type
+            read(10,*) ifeat_type_n(kkk)   ! the index (1,2,3) of the feature type
         enddo
+        
         read(10,*) ntype,m_neigh
+        
         close(10)
         
-!  m_neight get from gen_feature input file
-!   just to get ntype,m_neight, will read again
-
-! **************** read fit_linearMM.input ********************    
+        !  m_neight get from gen_feature input file
+        !   just to get ntype,m_neight, will read again 
+        
+        ! **************** read fit_linearMM.input ********************    
         if (allocated(itype_atom)) deallocate(itype_atom)
         if (allocated(nfeat1)) deallocate(nfeat1)
         if (allocated(rad_atom)) deallocate(rad_atom)
@@ -161,7 +166,7 @@ module calc_deepMD
         allocate(wp_atom(ntype,ntype,2))
         wp_atom=0.d0
 
-!ccccccccccccccccccccccccccccccccccccccccc
+        !ccccccccccccccccccccccccccccccccccccccccc
         open(10,file=trim(feat_info_path))
         rewind(10)
         read(10,*) iflag_PCA   ! this can be used to turn off degmm part
@@ -176,69 +181,79 @@ module calc_deepMD
         enddo
         close(10)
 
-           nfeat1m=0   ! the original feature
-           do i=1,ntype
+        nfeat1m=0   ! the original feature
+        do i=1,ntype
            if(nfeat1(i).gt.nfeat1m) nfeat1m=nfeat1(i)
-           enddo
-! **************** read fit_linearMM.input ********************    
-! ****************** read vdw ************************
+        enddo
+
+        ! **************** read fit_linearMM.input ********************    
+        ! ****************** read vdw ************************
         ! open(10,file=trim(vdw_path))
         ! rewind(10)
         ! read(10,*) ntype_t,nterm
+
         ! if(nterm.gt.2) then
-        ! write(6,*) "nterm.gt.2,stop"
-        ! stop
+        !     write(6,*) "nterm.gt.2,stop"
+        !     stop
         ! endif
+
         ! if(ntype_t.ne.ntype) then
-        ! write(6,*) "ntype not same in vwd_fitB.ntype,something wrong"
-        ! stop
+        !     write(6,*) "ntype not same in vwd_fitB.ntype,something wrong"
+        !     stop
         ! endif
-        !  do itype1=1,ntype
-        !  read(10,*) itype_t,rad_atom(itype1),E_ave_vdw(itype1),((wp_atom(i,itype1,j1),i=1,ntype),j1=1,nterm)
+        
+        ! do itype1=1,ntype
+        !     read(10,*) itype_t,rad_atom(itype1),E_ave_vdw(itype1),((wp_atom(i,itype1,j1),i=1,ntype),j1=1,nterm)
         ! enddo
+        
         ! close(10)
 
-
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+        !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
         open (12, file=trim(model_Wij_path1))
         rewind (12)
         read(12,*) ntype_pair
         read(12,*) nlayer_em   ! _em: embedding
         read(12,*) (node_em(ll),ll=1,nlayer_em+1)
-        if(ntype_pair.ne.ntype**2) then
-        write(6,*) "ntype_pair.ne.ntype**2,stop,deepMD",ntype_pair,ntype
-        stop
-        endif
 
+        if(ntype_pair.ne.ntype**2) then
+            write(6,*) "ntype_pair.ne.ntype**2,stop,deepMD",ntype_pair,ntype
+            stop
+        endif
+        
         nodeMM_em=0
         do itype=1,ntype_pair
-        do ii=1,nlayer_em+1
-        if(node_em(ii).gt.nodeMM_em) nodeMM_em=node_em(ii)
+            do ii=1,nlayer_em+1
+                if(node_em(ii).gt.nodeMM_em) nodeMM_em=node_em(ii)
+            enddo
         enddo
-        enddo
-
-        allocate(Wij_em(nodeMM_em,nodeMM_em,nlayer_em,ntype,ntype))
-        allocate(B_em(nodeMM_em,nlayer_em,ntype,ntype))
-
-
+        
+        if (.not.allocated(Wij_em)) then
+            allocate(Wij_em(nodeMM_em,nodeMM_em,nlayer_em,ntype,ntype))
+        endif 
+        
+        if (.not. allocated(B_em)) then
+            allocate(B_em(nodeMM_em,nlayer_em,ntype,ntype))
+        endif
+        
         do itype1=1,ntype
-        do itype2=1,ntype
-        do ll=1,nlayer_em
-         do j1=1,node_em(ll)
-          read(12,*) (wij_em(j1,j2,ll,itype2,itype1),j2=1,node_em(ll+1))
-! wij_em(j1,j2,ll,itype2,itype1):
-! itype1: center atom
-! itype2: neigboring atom
-! j1: the layer ll node
-! j2: the layer ll+1 node
+            do itype2=1,ntype
+                do ll=1,nlayer_em
+                    do j1=1,node_em(ll)
+                        read(12,*) (wij_em(j1,j2,ll,itype2,itype1),j2=1,node_em(ll+1))
+                        ! wij_em(j1,j2,ll,itype2,itype1):
+                        ! itype1: center atom
+                        ! itype2: neigboring atom
+                        ! j1: the layer ll node
+                        ! j2: the layer ll+1 node
 
-! b_em(j2,ll,itype2,itype1): it is for ll+1 (before the input of ll+1), before
-! nonlincear function
-         enddo
-         read(12,*) (b_em(j2,ll,itype2,itype1),j2=1,node_em(ll+1))
+                        ! b_em(j2,ll,itype2,itype1): it is for ll+1 (before the input of ll+1), before
+                        ! nonlincear function
+                    enddo
+                    read(12,*) (b_em(j2,ll,itype2,itype1),j2=1,node_em(ll+1))
+                enddo
+            enddo
         enddo
-        enddo
-        enddo
+
         close(12)
 
 
@@ -256,26 +271,31 @@ module calc_deepMD
         enddo
         enddo
 
-        allocate(Wij_nn(nodeMM_nn,nodeMM_nn,nlayer_nn,ntype))
-        allocate(B_nn(nodeMM_nn,nlayer_nn,ntype))
+        if (.not.allocated(Wij_nn)) then
+            allocate(Wij_nn(nodeMM_nn,nodeMM_nn,nlayer_nn,ntype))
+        endif 
+
+        if (.not.allocated(B_nn)) then 
+            allocate(B_nn(nodeMM_nn,nlayer_nn,ntype))
+        endif 
 
         do itype=1,ntype
-        do ll=1,nlayer_nn
-         do j1=1,node_nn(ll)
-          read(12,*) (Wij_NN(j1,j2,ll,itype),j2=1,node_nn(ll+1))
-! Wij_NN(j1,j2,itype):
-! itype: center atom
-! j1: the layer ll node
-! j2: the layer ll+1 node
-         enddo
-         read(12,*) (B_NN(j2,ll,itype),j2=1,node_nn(ll+1))
-        enddo
+            do ll=1,nlayer_nn
+                do j1=1,node_nn(ll)
+                    read(12,*) (Wij_NN(j1,j2,ll,itype),j2=1,node_nn(ll+1))
+                    ! Wij_NN(j1,j2,itype):
+                    ! itype: center atom
+                    ! j1: the layer ll node
+                    ! j2: the layer ll+1 node
+                enddo
+                read(12,*) (B_NN(j2,ll,itype),j2=1,node_nn(ll+1))
+            enddo
         enddo
         close(12)
 
-
-        allocate(W_res_NN(nodeMM_nn,nlayer_nn+1,ntype))
-
+        if (.not.allocated(W_res_NN)) then
+            allocate(W_res_NN(nodeMM_nn,nlayer_nn+1,ntype))
+        endif
 
         open(12,file="fittingNet.resnet")
         read(12,*) ntype_tmp
@@ -311,55 +331,51 @@ module calc_deepMD
         close(12)
 
 
-! TEST
-!        iflag_resNN=0
+        !write(6,*) "finished read W_res_NN"
 
 
-        write(6,*) "finished read W_res_NN"
+        !cccccccccccccccccccccccccccccccccccccccccccccccccccc
 
-
-!cccccccccccccccccccccccccccccccccccccccccccccccccccc
-
-!********************add_force****************
+        !********************add_force****************
         inquire(file='add_force',exist=alive)
-    !     status = access ("add_force",' ')    ! blank mode
-    !   if (status .eq. 0 ) then
-      if (alive) then
-        open(10,file="add_force")
-        rewind(10)
-        read(10,*) add_force_num, alpha,y1,z1
-        allocate(add_force_atom(add_force_num))
-        ! allocate(direction(add_force_num))
-        allocate(const_fa(add_force_num))
-        allocate(const_fb(add_force_num))
-        allocate(const_fc(add_force_num))
-        do i=1,add_force_num
-            read(10,*) add_force_atom(i), const_fa(i), const_fb(i),const_fc(i)
-        enddo
-        close(10)
-    else
-        add_force_num=0
-    endif
-!********************
-    inquire(file='force_constraint',exist=alive)
-    !     status = access ("add_force",' ')    ! blank mode
-    !   if (status .eq. 0 ) then
-      if (alive) then
-        open(10,file="force_constraint")
-        rewind(10)
-        read(10,*) const_force_num
-        allocate(const_force_atom(const_force_num))
-        ! allocate(direction(add_force_num))
-        allocate(const_fx(const_force_num))
-        allocate(const_fy(const_force_num))
-        allocate(const_fz(const_force_num))
-        do i=1,const_force_num
-            read(10,*) const_force_atom(i), const_fx(i), const_fy(i), const_fz(i)
-        enddo
-        close(10)
-    else
-        const_force_num=0
-    endif
+        !   status = access ("add_force",' ')    ! blank mode
+        !   if (status .eq. 0 ) then
+        if (alive) then
+            open(10,file="add_force")
+            rewind(10)
+            read(10,*) add_force_num, alpha,y1,z1
+            allocate(add_force_atom(add_force_num))
+            ! allocate(direction(add_force_num))
+            allocate(const_fa(add_force_num))
+            allocate(const_fb(add_force_num))
+            allocate(const_fc(add_force_num))
+            do i=1,add_force_num
+                read(10,*) add_force_atom(i), const_fa(i), const_fb(i),const_fc(i)
+            enddo
+            close(10)
+        else
+            add_force_num=0
+        endif
+        !********************
+        inquire(file='force_constraint',exist=alive)
+        !     status = access ("add_force",' ')    ! blank mode
+        !   if (status .eq. 0 ) then
+        if (alive) then
+            open(10,file="force_constraint")
+            rewind(10)
+            read(10,*) const_force_num
+            allocate(const_force_atom(const_force_num))
+            ! allocate(direction(add_force_num))
+            allocate(const_fx(const_force_num))
+            allocate(const_fy(const_force_num))
+            allocate(const_fz(const_force_num))
+            do i=1,const_force_num
+                read(10,*) const_force_atom(i), const_fx(i), const_fy(i), const_fz(i)
+            enddo
+            close(10)
+        else
+            const_force_num=0
+        endif
 
     end subroutine load_model_deepMD
   
@@ -394,11 +410,9 @@ module calc_deepMD
             allocate(force_pred_NN(3,natom))
             allocate(force_pred_tmp(3,natom))
             !allocate()
-              
 
-              
             iatom=iatom_tmp
-              
+            
             do i = 1, natom
                 iitype = 0
                 do itype = 1, ntype
@@ -417,30 +431,29 @@ module calc_deepMD
                 itype = iatom_type(i)
                 num_atomtype(itype) = num_atomtype(itype) + 1
             end do
+
         end if
         
     end subroutine set_image_info_deepMD
   
     subroutine cal_energy_force_deepMD(AL,xatom,Etot,fatom)
-
-
+        
         use mod_data, only: e_atom
+
         integer(4)  :: itype,ixyz,i,j,jj
         integer natom_tmp,nfeat0_tmp,m_neigh_tmp,kk
         real(8) :: sum,direct,mean
         real(8), intent(in) :: AL(3,3)
-!        real(8),dimension(:,:),intent(in) :: xatom
+        !  real(8),dimension(:,:),intent(in) :: xatom
         real(8) xatom(3,natom),fatom(3,natom)
         real(8) Etot
 
-
         integer natom_n_type(50)
         integer,allocatable,dimension(:,:) :: iat_ind
-                
-        
+
         real(8),allocatable,dimension(:,:,:) :: feat_type
-!        real(8),allocatable,dimension(:,:,:) :: dfeat_type
-        
+        !  real(8),allocatable,dimension(:,:,:) :: dfeat_type   
+
         real(8),allocatable,dimension(:,:,:) :: f_in,f_out,f_back,f_back0
         real(8),allocatable,dimension(:,:,:,:) :: f_d
         real(8),allocatable,dimension(:,:) :: energy_type
@@ -453,14 +466,11 @@ module calc_deepMD
         real(8),allocatable,dimension(:,:) :: dE_dfout
         real(8),allocatable,dimension(:,:,:) :: f_back0_em,f_back_em
         real(8),allocatable,dimension(:,:) :: force_all,force_all_tmp
-
-       
-      
+        
+        ! atomic energy    
         real(8),allocatable,dimension(:) :: energy_pred_dp, energy_pred_dp_local    
         real(8),allocatable,dimension(:,:,:) :: s_neigh_tmp
-       
-
-
+        
         real*8 pi,dE,dFx,dFy,dFz
         real*8 rad1,rad2,rad,dx1,dx2,dx3,dx,dy,dz,dd,yy,w22,dEdd,d,w22_1,w22_2,w22F_1,w22F_2
         integer iat1,iat2,ierr
@@ -470,6 +480,7 @@ module calc_deepMD
         integer natom_m_type,jjm,itype1,itype2,iat,ll,num,nn1,k,m,k1,k2
         real*8 Etot_tmp
         integer j1,j2,kkk
+        
         real*8 y
         real*8 dE0,dE1,energy_type0,dE_df,d_sum,d_sum2
         integer m2
@@ -480,87 +491,83 @@ module calc_deepMD
         integer iflag_ghost_neigh,neigh_add
         real*8 fact1
 
-!        write(6,*) "nnodes,inode",nnodes,inode
+        !  write(6,*) "nnodes,inode",nnodes,inode
+        iflag_ghost_neigh=1   ! 1: use the ghost neigh, 0: not use the ghost neigh
 
-         iflag_ghost_neigh=1   ! 1: use the ghost neigh, 0: not use the ghost neigh
-!         iflag_ghost_neigh=0   ! 1: use the ghost neigh, 0: not use the ghost neigh
-
-
-         pi=4*datan(1.d0)
+        pi=4*datan(1.d0)
         
-        tt0=mpi_wtime()
+        !tt0=mpi_wtime()
         call gen_deepMD_feature(AL,xatom)
-        tt1=mpi_wtime()
-
-
+        !tt1=mpi_wtime()
+        
         istat=0
         error_msg=''
 
         natom_n_type= 0
         iat1=0
+
         do i = 1, natom
-        if(mod(i-1,nnodes).eq.inode-1) then
-        iat1=iat1+1
-            itype = iatom_type(i)
-            natom_n_type(itype) = natom_n_type(itype) + 1
-        endif
+            if(mod(i-1,nnodes).eq.inode-1) then
+                iat1=iat1+1
+                itype = iatom_type(i)
+                natom_n_type(itype) = natom_n_type(itype) + 1
+            endif
         enddo
 
-       natom_m_type=0
-       do itype=1,ntype
-       if(natom_n_type(itype).gt.natom_m_type) natom_m_type=natom_n_type(itype)
-       enddo
+        natom_m_type=0
+        do itype=1,ntype
+            if(natom_n_type(itype).gt.natom_m_type) natom_m_type=natom_n_type(itype)
+        enddo
 
-       allocate(iat_ind(natom_m_type,ntype))
+        allocate(iat_ind(natom_m_type,ntype))  
 
         natom_n_type= 0
         iat1=0
+
         do i = 1, natom
-        if(mod(i-1,nnodes).eq.inode-1) then
-        iat1=iat1+1
-            itype = iatom_type(i)
-            natom_n_type(itype) = natom_n_type(itype) + 1
-            iat_ind(natom_n_type(itype),itype)=i
-        endif
+            if(mod(i-1,nnodes).eq.inode-1) then
+                iat1=iat1+1
+                itype = iatom_type(i)
+                natom_n_type(itype) = natom_n_type(itype) + 1
+                iat_ind(natom_n_type(itype),itype)=i
+            endif
         enddo
 
-!ccccccccccccccccccccc test
-
-
+        !ccccccccccccccccccccc test
 
         jjm=0
+
         do itype1=1,ntype
-        do itype2=1,ntype
-  
-        jj=0
-        do i=1,natom_n_type(itype1)
-        iat=iat_ind(i,itype1)
+            do itype2=1,ntype
+    
+                jj=0
+                do i=1,natom_n_type(itype1)
+                    iat=iat_ind(i,itype1)
 
-        neigh_add=0
-        if(iflag_ghost_neigh.eq.1.and.num_neigh(itype2,iat).lt.m_neigh) neigh_add=1
+                    neigh_add=0
+                    if(iflag_ghost_neigh.eq.1.and.num_neigh(itype2,iat).lt.m_neigh) neigh_add=1
 
-! the neigh_add is the ghost neighbor
+                    ! the neigh_add is the ghost neighbor
+                    do j=1,num_neigh(itype2,iat)+neigh_add
+                        jj=jj+1
+                    enddo
+                enddo
 
-
-        do j=1,num_neigh(itype2,iat)+neigh_add
-        jj=jj+1
-        enddo
-        enddo
-        if(jj.gt.jjm) jjm=jj
-        enddo
+                if(jj.gt.jjm) jjm=jj
+            
+            enddo
         enddo
 
         nodeMM_em=0
         do ll=1,nlayer_em+1
-        if(node_em(ll).gt.nodeMM_em) nodeMM_em=node_em(ll)
+            if(node_em(ll).gt.nodeMM_em) nodeMM_em=node_em(ll)
         enddo
 
         nodeMM_NN=0
         do ll=1,nlayer_NN+1
-        if(node_NN(ll).gt.nodeMM_NN) nodeMM_NN=node_NN(ll)
+            if(node_NN(ll).gt.nodeMM_NN) nodeMM_NN=node_NN(ll)
         enddo
-        
-
+            
         allocate(f_in(nodeMM_em,jjm,nlayer_em+1))
         allocate(f_out(nodeMM_em,jjm,nlayer_em+1))
         allocate(f_d(nodeMM_em,jjm,nlayer_em+1,ntype))
@@ -578,276 +585,291 @@ module calc_deepMD
         allocate(d_ss_fout(4,nodeMM_em,m_neigh,ntype,natom_m_type))
         allocate(dE_dfout(nodeMM_em,jjm))
 
-!         do 400 itype1=1,ntype    ! center atom
-         dE_dx=0.d0
-         do 400 itype1=1,ntype
+        ! do 400 itype1=1,ntype    ! center atom
+        dE_dx=0.d0
 
+        do 400 itype1=1,ntype
 
-         f_in_NN=0.d0
-         ss=0.d0
-         d_ss=0.d0
-         d_ss_fout=0.d0
-!         do 300 itype2=1,ntype    ! neighboring atom
-         do 300 itype2=1,ntype
+            f_in_NN=0.d0
+            ss=0.d0
+            d_ss=0.d0
+            d_ss_fout=0.d0
+            
+            !do 300 itype2=1,ntype    ! neighboring atom
+            do itype2=1,ntype
 
-         jj=0
-         do i=1,natom_n_type(itype1)
-         iat=iat_ind(i,itype1)
-         neigh_add=0
-         if(iflag_ghost_neigh.eq.1.and.num_neigh(itype2,iat).lt.m_neigh) neigh_add=1
-         do j=1,num_neigh(itype2,iat)+neigh_add
-         jj=jj+1
-         f_in(1,jj,1)=s_neigh(j,itype2,iat)
-         f_out(1,jj,1)=s_neigh(j,itype2,iat)
-         f_d(1,jj,1,itype2)=1.d0
+                jj=0
 
-         enddo
-         enddo
-         num=jj     ! the same (itype2,itype1), all the neigh, and all the atomi belong to this CPU
+                do i=1,natom_n_type(itype1)
+                    iat=iat_ind(i,itype1)
+                    neigh_add=0
+                    
+                    if(iflag_ghost_neigh.eq.1.and.num_neigh(itype2,iat).lt.m_neigh) neigh_add=1
 
+                    !flattened matrix
+                    do j=1,num_neigh(itype2,iat)+neigh_add
+                        jj=jj+1
+                        f_in(1,jj,1)=s_neigh(j,itype2,iat)
+                        f_out(1,jj,1)=s_neigh(j,itype2,iat)
+                        f_d(1,jj,1,itype2)=1.d0
+                    enddo   
+                    
+                    
+                    ! wlj dbg
+                    if (iat.eq.1) then 
+                        write(*,*) s_neigh(:,1,iat)
+                        write(*,*) "***************************************************"
+                    endif 
+                    
+                enddo
+                
+                num=jj   ! the same (itype2,itype1), all the neigh, and all the atomi belong to this CPU
+                
+                do ll=1,nlayer_em  
 
+                    call dgemm('T', 'N', node_em(ll+1),num,node_em(ll), 1.d0,  &
+                    Wij_em(1,1,ll,itype2,itype1),nodeMM_em,f_out(1,1,ll),nodeMM_em,0.d0,f_in(1,1,ll+1),nodeMM_em)
 
-         do 100 ll=1,nlayer_em
-    
+                    do i=1,num
+                        do j=1,node_em(ll+1)
+                            f_in(j,i,ll+1)=f_in(j,i,ll+1)+B_em(j,ll,itype2,itype1)
+                        enddo
+                    enddo
 
-         call dgemm('T', 'N', node_em(ll+1),num,node_em(ll), 1.d0,  &
-           Wij_em(1,1,ll,itype2,itype1),nodeMM_em,f_out(1,1,ll),nodeMM_em,0.d0,f_in(1,1,ll+1),nodeMM_em)
+                    do i=1,num
+                        do j=1,node_em(ll+1)
+                            
+                            x=f_in(j,i,ll+1)
 
-         do i=1,num
-         do j=1,node_em(ll+1)
-         f_in(j,i,ll+1)=f_in(j,i,ll+1)+B_em(j,ll,itype2,itype1)
-         enddo
-         enddo
+                            if(x.gt.20.d0) then
+                                y=1.d0
+                            elseif(x.gt.-20.d0.and.x.le.20.d0) then
+                                y=(exp(x)-exp(-x))/(exp(x)+exp(-x))
+                            elseif(x.lt.-20.d0) then
+                                y=-1.d0
+                            endif
+                            ! f_out(j, i, ll) = (exp(x)-exp(-x)) / (exp(x)+exp(-x))  ! tanh ! maybe if softplus, sigmoid, tanh
+                            f_out(j, i, ll+1) = y
+                            f_d(j, i, ll+1,itype2) = 1.0d0 - f_out(j,i,ll+1)*f_out(j,i,ll+1)
 
-         do i=1,num
-         do j=1,node_em(ll+1)
-         x=f_in(j,i,ll+1)
-         if(x.gt.20.d0) then
-         y=1.d0
-         elseif(x.gt.-20.d0.and.x.le.20.d0) then
-         y=(exp(x)-exp(-x))/(exp(x)+exp(-x))
-         elseif(x.lt.-20.d0) then
-         y=-1.d0
-         endif
-!         f_out(j, i, ll) = (exp(x)-exp(-x)) / (exp(x)+exp(-x))  ! tanh ! maybe if softplus, sigmoid, tanh
-         f_out(j, i, ll+1) = y
-         f_d(j, i, ll+1,itype2) = 1.0d0 - f_out(j,i,ll+1)*f_out(j,i,ll+1)
-         enddo
-         enddo
+                        enddo
+                    enddo
 
-!  This is the reconnect
-!         goto 3011
-         if(node_em(ll+1).eq.2*node_em(ll)) then
-         do i=1,num
-         do j=1,node_em(ll)
-         f_out(j,i,ll+1)=f_out(j,i,ll+1)+f_out(j,i,ll)
-         f_out(j+node_em(ll),i,ll+1)=f_out(j+node_em(ll),i,ll+1)+f_out(j,i,ll)
-         enddo
-         enddo
-         endif
+                    !  This is the reconnect
+                    if(node_em(ll+1).eq.2*node_em(ll)) then
+                        do i=1,num
+                            do j=1,node_em(ll)
+                                f_out(j,i,ll+1)=f_out(j,i,ll+1)+f_out(j,i,ll)
+                                f_out(j+node_em(ll),i,ll+1)=f_out(j+node_em(ll),i,ll+1)+f_out(j,i,ll)
+                            enddo
+                        enddo
+                    endif   
+                    
+                    !  This is the reconnect
+                    if(node_em(ll+1).eq.node_em(ll)) then
+                        do i=1,num
+                            do j=1,node_em(ll)
+                                f_out(j,i,ll+1)=f_out(j,i,ll+1)+f_out(j,i,ll)
+                            enddo
+                        enddo
+                    endif 
 
-!  This is the reconnect
-         if(node_em(ll+1).eq.node_em(ll)) then
-         do i=1,num
-         do j=1,node_em(ll)
-         f_out(j,i,ll+1)=f_out(j,i,ll+1)+f_out(j,i,ll)
-         enddo
-         enddo
-         endif
-3011     continue
+                enddo   
+                
+                ! wlj dbg 
+                !if ((itype1.eq.1).and.(itype2.eq.1)) then 
+                !    write(*,*) "embedding output"
+                !    write(*,*) f_out(1:100,1,nlayer_em+1)
+                !endif
+                !ccccccccccccc   get the 100 R(s). 
+                nn1=node_em(nlayer_em+1)
+                jj=0
 
+                do i=1,natom_n_type(itype1)
+                    iat=iat_ind(i,itype1)
+                    neigh_add=0
+                    if(iflag_ghost_neigh.eq.1.and.num_neigh(itype2,iat).lt.m_neigh) neigh_add=1
+                     
+                    do j=1,num_neigh(itype2,iat)+neigh_add   ! j is sum over
+                        jj=jj+1
+                        fact1=1
+                        
+                        if(neigh_add.eq.1.and.j.eq.num_neigh(itype2,iat)+neigh_add) then  ! the ghost neighbor
+                            fact1=m_neigh-num_neigh(itype2,iat)
+                        endif
 
- 100     continue
+                        do k=1,nn1
+                            do m=1,4
+                                ! ss(m,k,i)=ss(m,k,i)+dxyz_neigh(m,j,itype2,iat)*f_in(k,jj,nlayer_em+1)
+                                ss(m,k,i)=ss(m,k,i)+dxyz_neigh(m,j,itype2,iat)*f_out(k,jj,nlayer_em+1)*fact1
+                                
+                                d_ss_fout(m,k,j,itype2,i)=d_ss_fout(m,k,j,itype2,i)+dxyz_neigh(m,j,itype2,iat)*fact1
 
+                                if(j.ne.num_neigh(itype2,iat)+neigh_add) then
+                                    do m2=1,3
+                                        !! It is possible to do this later, to save memory
+                                        d_ss(m,m2,k,j,itype2,i)=d_ss(m,m2,k,j,itype2,i)+dxyz_dx_neigh(m2,m,j,itype2,iat)*f_out(k,jj,nlayer_em+1)
+                                        ! d_ss is to assume s_neigh, thus f_out is fixed
+                                        ! d_ss(m,m2,k,i)=d_SS(m,k,i)/d_x(m2,k,i)
+                                        ! d_ss_fout is to take the derivative with respect to f_out (only s_neigh, thus
+                                        ! f_out is changing.  
+                                    enddo
+                                endif
 
-!ccccccccccccc   get the 100 R(s). 
+                            enddo
+                        enddo
+                    enddo
+                enddo
+                
+                ! We need to double check, is it first sum in the ss for different itype2, 
+                ! or sum over ss*ss for different itype2
+            enddo 
 
+            !write(*,*) "printing m_neigh"
+            !write(*,*) m_neigh
 
-         nn1=node_em(nlayer_em+1)
-         jj=0
-         do i=1,natom_n_type(itype1)
-         iat=iat_ind(i,itype1)
-         neigh_add=0
-         if(iflag_ghost_neigh.eq.1.and.num_neigh(itype2,iat).lt.m_neigh) neigh_add=1
+            !ss=ss/(2*m_neigh)
+            !d_ss=d_ss/(2*m_neigh)
+            !d_ss_fout=d_ss_fout/(2*m_neigh)
 
+            ss=ss/(ntype*m_neigh)
+            d_ss=d_ss/(ntype*m_neigh)
+            d_ss_fout=d_ss_fout/(ntype*m_neigh)
 
-         do j=1,num_neigh(itype2,iat)+neigh_add   ! j is sum over
-         jj=jj+1
-         fact1=1
-         if(neigh_add.eq.1.and.j.eq.num_neigh(itype2,iat)+neigh_add) then  ! the ghost neighbor
-         fact1=m_neigh-num_neigh(itype2,iat)
-         endif
+            nn1=node_em(nlayer_em+1)
 
-         do k=1,nn1
-         do m=1,4
-!         ss(m,k,i)=ss(m,k,i)+dxyz_neigh(m,j,itype2,iat)*f_in(k,jj,nlayer_em+1)
-         ss(m,k,i)=ss(m,k,i)+dxyz_neigh(m,j,itype2,iat)*f_out(k,jj,nlayer_em+1)*fact1
+            !write(*,*) "printing ss"
+            !write(*,*) ss(1,:,1)
 
-         d_ss_fout(m,k,j,itype2,i)=d_ss_fout(m,k,j,itype2,i)+dxyz_neigh(m,j,itype2,iat)*fact1
+            do i=1,natom_n_type(itype1)
+                do k1=1,nn1
+                    do k2=1,dp_M2   ! fixed, first index
+                        kk=(k1-1)*dp_M2+k2   ! NN feature index
+                        sum=0.d0
 
-!! WANG, BUG, 2023/3/1
-!         if(j.ne.num_neigh(itype2,iat)+neigh_add) then
-         if(j.ne.num_neigh(itype2,iat)+1) then
-         do m2=1,3
-!! It is possible to do this later, to save memory
-         d_ss(m,m2,k,j,itype2,i)=d_ss(m,m2,k,j,itype2,i)+dxyz_dx_neigh(m2,m,j,itype2,iat)*f_out(k,jj,nlayer_em+1)
-! d_ss is to assume s_neigh, thus f_out is fixed
-!!  d_ss(m,m2,k,i)=d_SS(m,k,i)/d_x(m2,k,i)
-! d_ss_fout is to take the derivative with respect to f_out (only s_neigh, thus
-! f_out is changing.  
-         enddo
-         endif
+                        do m=1,4
+                            sum=sum+ss(m,k1,i)*ss(m,k2,i)
+                        enddo
 
-         enddo
-         enddo
-         enddo
-         enddo
+                        f_in_NN(kk,i,1)=f_in_NN(kk,i,1)+sum    ! this is sum over itype2
 
-! We need to double check, is it first sum in the ss for different itype2, 
-! or sum over ss*ss for different itype2
-          
+                    enddo
+                enddo
+            enddo
+            ! wlj dbg 
+            !if ((1.eq.1).and.(1.eq.1)) then 
+            !    write(*,*) "fitting net input"
+            !    write(*,*) f_in_NN(1:100,1,1)
+            !endif
 
-300      continue
+            !if(node_NN(1).ne.nn1*16) then
+            !    write(6,*) "node_NN(1).ne.nn1*16,stop",node_NN(1),nn1*16
+            !    stop
+            !endif
+            
 
+            num=natom_n_type(itype1)
+            
 
-
-         ss=ss/(ntype*m_neigh)
-         d_ss=d_ss/(ntype*m_neigh)
-         d_ss_fout=d_ss_fout/(ntype*m_neigh)
-
-
-
-         nn1=node_em(nlayer_em+1)
-         do i=1,natom_n_type(itype1)
-         do k1=1,nn1
-         do k2=1,dp_M2   ! fixed, first index
-         kk=(k1-1)*dp_M2+k2   ! NN feature index
-         sum=0.d0
-         do m=1,4
-         sum=sum+ss(m,k1,i)*ss(m,k2,i)
-         enddo
-         f_in_NN(kk,i,1)=f_in_NN(kk,i,1)+sum    ! this is sum over itype2
-
-         enddo
-         enddo
-         enddo
-
-
-!ccccccccccccc special
-!ccccccccccccc special
-
-
-         if(node_NN(1).ne.nn1*16) then
-         write(6,*) "node_NN(1).ne.nn1*16,stop",node_NN(1),nn1*16
-         stop
-         endif
-
-
-
-         num=natom_n_type(itype1)
-
-         do 101 ll=1,nlayer_NN
-    
-         if(ll.gt.1) then      
-         do i=1,num
-         do j=1,node_NN(ll)
-         x=f_in_NN(j,i,ll)
-         if(x.gt.20.d0) then
-         y=1.d0
-         elseif(x.gt.-20.d0.and.x.le.20.d0) then
-         y=(exp(x)-exp(-x))/(exp(x)+exp(-x))
-         elseif(x.lt.-20.d0) then
-         y=-1.d0
-         endif
-!         f_out_NN(j, i, ll) = (exp(x)-exp(-x)) / (exp(x)+exp(-x))  ! tanh ! maybe if softplus, sigmoid, tanh
-         f_out_NN(j, i, ll) = y
-         f_d_NN(j, i, ll) = 1.0d0 - f_out_NN(j,i,ll)*f_out_NN(j,i,ll)
-         !f_out(j, i, ii) = 1.0d0/(exp(-x)+1.0d0)  ! sigmoid ! maybe if softplus, sigmoid, tanh
-         !f_d(j, i, ii) = f_out(j,i,ii) * (1.0d0 - f_out(j,i,ii))
-         ! if(x.gt.-150.d0.and.x.lt.150.d0) then
-         ! f_out(j,i,ii)=log(1.d0+exp(x))  ! softplus
-         ! f_d(j,i,ii)=1.d0/(exp(-x)+1.d0)
-         ! elseif(x.le.-150.d0) then
-         ! f_out(j,i,ii)=0.d0
-         ! f_d(j,i,ii)=0.d0
-         ! elseif(x.ge.150.d0) then 
-         ! f_out(j,i,ii)=x
-         ! f_d(j,i,ii)=1.d0
-         ! endif
-         enddo
-         enddo
-         else
-         do i=1,num
-         do j=1,node_NN(ll)
-         f_out_NN(j,i,ll)=f_in_NN(j,i,ll)
-         f_d_NN(j,i,ll)=1.d0
-         enddo
-         enddo
-         endif
-
-
-!!!!! reconnect
-         if(iflag_resNN(ll).eq.1) then
-         do i=1,num
-         do j=1,node_NN(ll)
-!         f_out_NN(j,i,ll)=f_out_NN(j,i,ll)+W_res_NN(j,ll,itype1)*f_out_NN(j,i,ll-1)
-         f_out_NN(j,i,ll)=f_out_NN(j,i,ll)*W_res_NN(j,ll,itype1)+f_out_NN(j,i,ll-1)
-         enddo
-         enddo
-         endif
-
-       !write(*,*) "llp test, f_out(:,1,ii), layer: ", ii
-       !write(*,*) f_out(:,1,ii)
-
-         call dgemm('T', 'N', node_NN(ll+1),num,node_NN(ll), 1.d0,  &
-           Wij_NN(1,1,ll,itype1),nodeMM_NN,f_out_NN(1,1,ll),nodeMM_NN,0.d0,f_in_NN(1,1,ll+1),nodeMM_NN)
-       !write(*,*) "llp test, f_in(:,1,ii+1)=wij*f_out,layer: ", ii+1
-       !write(*,*) f_in(:,1,ii+1)
-
-        !if (ii .eq. 1 ) then
-        !    write(*,*) "layer0 feature -> layer1. layer1:"
-        !    write(*,*) f_in(:,1,ii+1)
-        !endif
-         do i=1,num
-         do j=1,node_NN(ll+1)
-         f_in_NN(j,i,ll+1)=f_in_NN(j,i,ll+1)+B_NN(j,ll,itype1)
-         enddo
-         enddo
-
-       !write(*,*) "llp test, x_ii+1 = wij*x_ii+bj,layer: ", ii+1
-       !write(*,*) f_in(:,1,ii+1)
-
- 101     continue
-
-
-
-!ccccccccccccc   get the 100 R(s). 
+            do ll=1,nlayer_NN
         
-         
+                if(ll.gt.1) then      
+                    do i=1,num
+                        do j=1,node_NN(ll)
+                            x=f_in_NN(j,i,ll)
 
-         if(node_NN(nlayer_NN+1).ne.1) then
-         write(6,*) "node_NN(nlayer_NN+1).ne.1,stop",node_NN(nlayer_NN+1)
-         stop
-         endif
-!cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-         do i=1,natom_n_type(itype1)
-         energy_type(i,itype1)=f_in_NN(1,i,nlayer_NN+1)
-         enddo
+                            if(x.gt.20.d0) then
+                                y=1.d0
+                            elseif(x.gt.-20.d0.and.x.le.20.d0) then
+                                y=(exp(x)-exp(-x))/(exp(x)+exp(-x))
+                            elseif(x.lt.-20.d0) then
+                                y=-1.d0
+                            endif
+                            !         f_out_NN(j, i, ll) = (exp(x)-exp(-x)) / (exp(x)+exp(-x))  ! tanh ! maybe if softplus, sigmoid, tanh
+                            f_out_NN(j, i, ll) = y
+                            f_d_NN(j, i, ll) = 1.0d0 - f_out_NN(j,i,ll)*f_out_NN(j,i,ll)
+                            !f_out(j, i, ii) = 1.0d0/(exp(-x)+1.0d0)  ! sigmoid ! maybe if softplus, sigmoid, tanh
+                            !f_d(j, i, ii) = f_out(j,i,ii) * (1.0d0 - f_out(j,i,ii))
+                            ! if(x.gt.-150.d0.and.x.lt.150.d0) then
+                            ! f_out(j,i,ii)=log(1.d0+exp(x))  ! softplus
+                            ! f_d(j,i,ii)=1.d0/(exp(-x)+1.d0)
+                            ! elseif(x.le.-150.d0) then
+                            ! f_out(j,i,ii)=0.d0
+                            ! f_d(j,i,ii)=0.d0
+                            ! elseif(x.ge.150.d0) then 
+                            ! f_out(j,i,ii)=x
+                            ! f_d(j,i,ii)=1.d0
+                            ! endif
+                        enddo
+                    enddo
+                else
+                    do i=1,num
+                        do j=1,node_NN(ll)
+                            f_out_NN(j,i,ll)=f_in_NN(j,i,ll)
+                            f_d_NN(j,i,ll)=1.d0
+                        enddo
+                    enddo
+                endif
+                
+                !!!!! reconnect
+                if(iflag_resNN(ll).eq.1) then
+                    do i=1,num
+                        do j=1,node_NN(ll)
+                        !  f_out_NN(j,i,ll)=f_out_NN(j,i,ll)+W_res_NN(j,ll,itype1)*f_out_NN(j,i,ll-1)
+                            f_out_NN(j,i,ll)=f_out_NN(j,i,ll)*W_res_NN(j,ll,itype1)+f_out_NN(j,i,ll-1)
+                        enddo
+                    enddo
+                endif
 
-!cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!   Now, we wil do the back propagation
-! f_back0(j,i,ll)=dE/d_(f_out(j,i,ll))
-! f_back(j,i,ll)=dE/d_(f_in(j,i,ll))=f_fac0*df(j,i,ll)*W_res
-!  f_out(j,i,ll)=sigma(f_in(j,i,ll))*W_res+f_out(j,i,ll-1)  ! if there are res
-!  f_out(j,i,ll)=sigma(f_in(j,i,ll))                        ! if no rest
-!  f_in(j,i,ll+1)=W(j2,i,ll)*f_out(j2,i,ll)+B(j,i,ii)
+                !write(*,*) "llp test, f_out(:,1,ii), layer: ", ii
+                !write(*,*) f_out(:,1,ii)
+
+                call dgemm('T', 'N', node_NN(ll+1),num,node_NN(ll), 1.d0,  &
+                Wij_NN(1,1,ll,itype1),nodeMM_NN,f_out_NN(1,1,ll),nodeMM_NN,0.d0,f_in_NN(1,1,ll+1),nodeMM_NN)
+                !write(*,*) "llp test, f_in(:,1,ii+1)=wij*f_out,layer: ", ii+1
+                !write(*,*) f_in(:,1,ii+1)
+
+                    !if (ii .eq. 1 ) then
+                    !    write(*,*) "layer0 feature -> layer1. layer1:"
+                    !    write(*,*) f_in(:,1,ii+1)
+                    !endif
+                do i=1,num
+                    do j=1,node_NN(ll+1)
+                        f_in_NN(j,i,ll+1)=f_in_NN(j,i,ll+1)+B_NN(j,ll,itype1)
+                    enddo
+                enddo
+
+                !write(*,*) "llp test, x_ii+1 = wij*x_ii+bj,layer: ", ii+1
+                !write(*,*) f_in(:,1,ii+1)
+
+            enddo
+
+            !ccccccccccccc   get the 100 R(s). 
+
+            if(node_NN(nlayer_NN+1).ne.1) then
+                write(6,*) "node_NN(nlayer_NN+1).ne.1,stop",node_NN(nlayer_NN+1)
+                stop
+            endif
+
+            !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+            do i=1,natom_n_type(itype1)
+                energy_type(i,itype1)=f_in_NN(1,i,nlayer_NN+1)
+            enddo
+
+            !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+            !   Now, we wil do the back propagation
+            ! f_back0(j,i,ll)=dE/d_(f_out(j,i,ll))
+            ! f_back(j,i,ll)=dE/d_(f_in(j,i,ll))=f_fac0*df(j,i,ll)*W_res
+            !  f_out(j,i,ll)=sigma(f_in(j,i,ll))*W_res+f_out(j,i,ll-1)  ! if there are res
+            !  f_out(j,i,ll)=sigma(f_in(j,i,ll))                        ! if no rest
+            !  f_in(j,i,ll+1)=W(j2,i,ll)*f_out(j2,i,ll)+B(j,i,ii)
 
 
-         do i=1,num
-         do j=1,node_NN(nlayer_NN)
-         f_back0(j,i,nlayer_NN)=Wij_NN(j,1,nlayer_NN,itype1)
-         enddo
-         enddo
+            do i=1,num
+                do j=1,node_NN(nlayer_NN)
+                    f_back0(j,i,nlayer_NN)=Wij_NN(j,1,nlayer_NN,itype1)
+                enddo
+            enddo
 
          do 200 ll=nlayer_NN,2,-1
 
@@ -870,7 +892,6 @@ module calc_deepMD
           call dgemm('N', 'N', node_NN(ll-1),num,node_NN(ll),1.d0,  &
           Wij_NN(1,1,ll-1,itype1),nodeMM_NN,f_back(1,1,ll),nodeMM_NN,0.d0,f_back0(1,1,ll-1),nodeMM_NN)
 
-!  There is no W_res_NN, why ?!, does not sounds right,maybe correct
          if(iflag_resNN(ll).eq.1) then
          do i=1,num
          do j=1,node_NN(ll-1)
@@ -887,9 +908,7 @@ module calc_deepMD
 ! Now, there are two terms for the force:
 !   (dE/df_NN)*(df_NN/d_x)
 !   (dE/df_NN)*(df_NN/d_fem)*(d_fem/d_s)*(d_s/d_x)
-!  let't do the first term
-
-
+!  let't do the first term  
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -924,11 +943,11 @@ module calc_deepMD
          enddo
          enddo
          enddo
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+        !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+        !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+        !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+        !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+        !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
  
          nn1=node_em(nlayer_em+1)
          do 130 itype2=1,ntype
@@ -938,12 +957,7 @@ module calc_deepMD
          jj=0
          do i=1,natom_n_type(itype1)
          iat=iat_ind(i,itype1)
-! The index for jj is wrong, althought the neigbore+add never used!
-!         do j=1,num_neigh(itype2,iat)
-! Wang, bug, 2023/3/1
-         neigh_add=0
-         if(iflag_ghost_neigh.eq.1.and.num_neigh(itype2,iat).lt.m_neigh) neigh_add=1
-         do j=1,num_neigh(itype2,iat)+neigh_add
+         do j=1,num_neigh(itype2,iat)
          jj=jj+1
 
          d_sum2=0.d0
@@ -954,7 +968,6 @@ module calc_deepMD
          do m=1,4
          d_sum=d_sum+d_ss_fout(m,k1,j,itype2,i)*ss(m,k2,i)
          enddo
-
          dE_dfout(k1,jj)=dE_dfout(k1,jj)+d_sum*f_back0(kk,i,1)
          d_sum=0.d0
          do m=1,4
@@ -987,7 +1000,6 @@ module calc_deepMD
            f_back0_em(1,1,ll-1),nodeMM_em)
 
 
-!         goto 3033
 !reconnect
          if(node_em(ll).eq.2*node_em(ll-1)) then
          do i=1,num
@@ -1006,40 +1018,31 @@ module calc_deepMD
          enddo
          enddo
          endif
-3033     continue
 
 220     continue
 
      
          
          jj=0
-         do i=1,natom_n_type(itype1)
-         iat=iat_ind(i,itype1)
-!       index wrong
-!         do j=1,num_neigh(itype2,iat)
-! Wang, bug, 2023/3/1
-         neigh_add=0
-         if(iflag_ghost_neigh.eq.1.and.num_neigh(itype2,iat).lt.m_neigh) neigh_add=1
-         do j=1,num_neigh(itype2,iat)+neigh_add
-         jj=jj+1
+        do i=1,natom_n_type(itype1)
+            iat=iat_ind(i,itype1)
+                do j=1,num_neigh(itype2,iat)
+                    jj=jj+1
 
-         if(j.ne.num_neigh(itype2,iat)+1) then
-         do m2=1,3
-         dE_dx(m2,j,itype2,iat)=dE_dx(m2,j,itype2,iat)+f_back0_em(1,jj,1)*ds_neigh(m2,j,itype2,iat)
-!1 This is the derivative through s_neigh change, has through the back
-!propagation of the embedding net
-         enddo
-         endif
-         enddo
-         enddo
+                    do m2=1,3
+                        dE_dx(m2,j,itype2,iat)=dE_dx(m2,j,itype2,iat)+f_back0_em(1,jj,1)*ds_neigh(m2,j,itype2,iat)
+            !1 This is the derivative through s_neigh change, has through the back
+            !propagation of the embedding net
+                    enddo
+                enddo
+        enddo
 
-130      continue
+130     continue
 
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !  back propagation for the embedding net. 
 
-400      continue
-
+400     continue
 
         ! update etot & atomic energy 
         Etot=0.d0
@@ -1063,37 +1066,38 @@ module calc_deepMD
 
             enddo
         enddo
+        
+        allocate(force_all(3,natom))
+        allocate(force_all_tmp(3,natom))
+        
+        ! update force
+        force_all=0.d0
+        do itype1=1,ntype
+            do i=1,natom_n_type(itype1)
+                iat=iat_ind(i,itype1)
+                do itype2=1,ntype
+                    do j=1,num_neigh(itype2,iat)
+                        iat2=list_neigh(j,itype2,iat)
 
+                        force_all(:,iat2)=force_all(:,iat2)+dE_dx(:,j,itype2,iat)
+                        force_all(:,iat)=force_all(:,iat)-dE_dx(:,j,itype2,iat)   ! the centeratom is a negative derivative
+                    enddo
+                enddo
+            enddo
+        enddo
 
-         allocate(force_all(3,natom))
-         allocate(force_all_tmp(3,natom))
-
-         force_all=0.d0
-         do itype1=1,ntype
-         do i=1,natom_n_type(itype1)
-         iat=iat_ind(i,itype1)
-         do itype2=1,ntype
-         do j=1,num_neigh(itype2,iat)
-         iat2=list_neigh(j,itype2,iat)
-         force_all(:,iat2)=force_all(:,iat2)+dE_dx(:,j,itype2,iat)
-         force_all(:,iat)=force_all(:,iat)-dE_dx(:,j,itype2,iat)   ! the centeratom is a negative derivative
-         enddo
-         enddo
-         enddo
-         enddo
-
-
-       call mpi_allreduce(Etot,Etot_tmp,1,MPI_REAL8,MPI_SUM,MPI_COMM_WORLD,ierr)
-       call mpi_allreduce(force_all,force_all_tmp,3*natom,MPI_REAL8,MPI_SUM,MPI_COMM_WORLD,ierr)
-       call mpi_allreduce(energy_pred_dp_local,energy_pred_dp,natom,MPI_REAL8,MPI_SUM,MPI_COMM_WORLD,ierr) 
-
+        call mpi_allreduce(Etot,Etot_tmp,1,MPI_REAL8,MPI_SUM,MPI_COMM_WORLD,ierr)
+        call mpi_allreduce(force_all,force_all_tmp,3*natom,MPI_REAL8,MPI_SUM,MPI_COMM_WORLD,ierr)
+        call mpi_allreduce(energy_pred_dp_local,energy_pred_dp,natom,MPI_REAL8,MPI_SUM,MPI_COMM_WORLD,ierr) 
+        
         Etot=Etot_tmp
-        force_all=force_all_tmp
 
+        force_all=force_all_tmp
+        ! now energy_pred_dp contians the final atomic energy to be written 
         e_atom(1:natom) = energy_pred_dp(1:natom)
+        ! force copy is done here
         fatom(:,1:natom)=force_all(:,1:natom)
-        write(6,*) "Etot(eV)=",Etot
-        write(6,*) "fatom", fatom(:, 1:2)
+
         deallocate(force_all)
         deallocate(force_all_tmp)
         deallocate(energy_pred_dp)
@@ -1117,11 +1121,11 @@ module calc_deepMD
         deallocate(iat_ind)
         tt2=mpi_wtime()
 
-!        write(6,"('time find_neigh,calc_force ',2(f10.4,1x))") tt1-tt0,tt2-tt1
-!        write(6,*) "natom_n_type", natom_n_type(1:ntype)
+        !        write(6,"('time find_neigh,calc_force ',2(f10.4,1x))") tt1-tt0,tt2-tt1
+        !        write(6,*) "natom_n_type", natom_n_type(1:ntype)
 
         return
-!  Now, back propagation for the derivative for energy, in respect to the f_in(j,i,1)      
+        !  Now, back propagation for the derivative for energy, in respect to the f_in(j,i,1)      
 
 
 !ccccccccccccccccccccccccccccccccccccccccccccc
