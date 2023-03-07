@@ -351,8 +351,8 @@ def main():
 
     if args.evaluate:
         # validate(val_loader, model, criterion, args)
-        # predict(train_loader, "train", model, criterion, optimizer, device, args)
-        predict(train_loader, "valid", model, criterion, optimizer, device, args)
+        predict(train_loader, "train", model, criterion, optimizer, device, args)
+        # predict(train_loader, "valid", model, criterion, optimizer, device, args)
         return
 
     if args.kpu:

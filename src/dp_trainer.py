@@ -320,6 +320,7 @@ def predict(train_loader, valid_type, model, criterion, optimizer, device, confi
         if os.path.exists(save_dir) is False:
             os.makedirs(save_dir)
     save_path = os.path.join(save_dir, "{}_valid.csv".format(valid_type))
+    save_rmse = os.path.join(save_dir, "{}_valid_rmse.txt".format(valid_type))
     KFOptWrapper = KFOptimizerWrapper(
         model, optimizer, config.nselect, config.groupsize, config.hvd, "hvd"
     )
@@ -365,7 +366,14 @@ def predict(train_loader, valid_type, model, criterion, optimizer, device, confi
                     float(loss_val), float(loss_Etot_val), float(loss_Ei_val), float(loss_F_val)])
         res_pd.loc[res_pd.shape[0]] = res
     res_pd.sort_values(by=["path", "img_idx"], inplace=True, ascending=True)
+    rmse_etot = (res_pd['etot_mse'].mean())**0.5
+    rmse_etot_atom = rmse_etot/natoms_img[0][0]
+    rmse_ei = (res_pd['ei_mse'].mean())**0.5
+    rmse_force   = (res_pd['force_mse'].mean())**0.5
     res_pd.to_csv(save_path)
+    with open(save_rmse, 'w') as wf:
+        line = 'rmse_etot:{} rmse_etot_atom:{} rmse_ei:{} rmse_force:{}'.format(rmse_etot, rmse_etot_atom, rmse_ei, rmse_force)
+        wf.write(line)
 
 def kpu(train_loader, model, criterion, optimizer, device, config):
     kpu_save_path = os.path.join(config.store_path, config.kpu_dir)
