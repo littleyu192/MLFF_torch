@@ -1,10 +1,9 @@
 import torch
 import torch.nn as nn
 from torch.optim.optimizer import Optimizer
-import time
+import time, math
 import numpy as np
 import torch.distributed as dist
-import math
 import random
 import pandas as pd
 class KFOptimizerWrapper:
@@ -64,6 +63,7 @@ class KFOptimizerWrapper:
         Etot_predict.sum().backward()
         error = error * math.sqrt(bs)
         self.optimizer.step(error)
+        return Etot_predict
 
     def update_force(
         self, inputs: list, Force_label: torch.Tensor, update_prefactor: float = 1
@@ -76,7 +76,7 @@ class KFOptimizerWrapper:
 
         for i in range(index.shape[0]):
             self.optimizer.zero_grad()
-            Etot_predict, _, force_predict = self.model(
+            Etot_predict, Ei_predict, force_predict = self.model(
                 inputs[0], inputs[1], inputs[2], inputs[3], inputs[4], inputs[5]
             )
             error_tmp = Force_label[:, index[i]] - force_predict[:, index[i]]
@@ -101,6 +101,7 @@ class KFOptimizerWrapper:
             (tmp_force_predict.sum() + Etot_predict.sum() * 0).backward()
             error = error * math.sqrt(bs)
             self.optimizer.step(error)
+            return Etot_predict, Ei_predict, force_predict
 
     def __sample(
         self, atoms_selected: int, atoms_per_group: int, natoms: int

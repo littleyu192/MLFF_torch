@@ -1,7 +1,0 @@
-   1        ! iflag_PCA
-   2        ! nfeat_type
-   1        ! iFtype(1): 1 means 2b
-   2        ! iFtype(2): 2 means 3b
-   2        ! ntype
-   6        ! iat of first type
-   29       ! iat of second type 

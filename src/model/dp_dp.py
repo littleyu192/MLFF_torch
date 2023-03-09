@@ -1,42 +1,18 @@
 import torch
-from torch import embedding
 import torch.nn as nn
-import torch.nn.functional as F
-from torch.nn import init
-from torch.autograd import Variable
 import sys, os
+
 sys.path.append(os.getcwd())
-# import parameters as pm    
-# import prepare as pp
-# pp.readFeatnum()
+
 from model.dp_embedding import EmbeddingNet, FittingNet
-from model.calculate_force import CalculateForce
-# logging and our extension
-import logging
-logging_level_DUMP = 5
-logging_level_SUMMARY = 15
+from model.calculate_force import CalculateDR, CalculateForce
 
-# setup logging module
-logger = logging.getLogger('train.DPFF')
-
-def dump(msg, *args, **kwargs):
-    logger.log(logging_level_DUMP, msg, *args, **kwargs)
-def debug(msg, *args, **kwargs):
-    logger.debug(msg, *args, **kwargs)
-def summary(msg, *args, **kwargs):
-    logger.log(logging_level_SUMMARY, msg, *args, **kwargs)
-def info(msg, *args, **kwargs):
-    logger.info(msg, *args, **kwargs)
-def warning(msg, *args, **kwargs):
-    logger.warning(msg, *args, **kwargs)
-def error(msg, *args, **kwargs):
-    logger.error(msg, *args, **kwargs, exc_info=True)
 
 class DP(nn.Module):
     def __init__(self, config, device, stat, magic=False):
         super(DP, self).__init__()
         self.config = config
-        self.ntypes = len(config['atomType'])
+        self.ntypes = len(config["atomType"])
         self.device = device
         self.stat = stat
         self.maxNeighborNum = config["maxNeighborNum"]
@@ -52,9 +28,22 @@ class DP(nn.Module):
         
         for i in range(self.ntypes):
             for j in range(self.ntypes):
-                self.embedding_net.append(EmbeddingNet(self.config["net_cfg"]["embedding_net"], magic))
-            fitting_net_input_dim = self.config["net_cfg"]["embedding_net"]["network_size"][-1]
-            self.fitting_net.append(FittingNet(config["net_cfg"]["fitting_net"], 16 * fitting_net_input_dim, self.stat[2][i], magic))
+                self.embedding_net.append(
+                    EmbeddingNet(self.config["net_cfg"]["embedding_net"], magic)
+                )
+
+            fitting_net_input_dim = self.config["net_cfg"]["embedding_net"][
+                "network_size"
+            ][-1]
+
+            self.fitting_net.append(
+                FittingNet(
+                    config["net_cfg"]["fitting_net"],
+                    16 * fitting_net_input_dim,
+                    self.stat[2][i],
+                    magic,
+                )
+            )
 
     def get_egroup(self, Egroup_weight, divider):
         batch_size = self.Ei.shape[0]
@@ -67,9 +56,10 @@ class DP(nn.Module):
         Egroup_out = torch.divide(Egroup, divider)
         return Egroup_out
 
-
-    def forward(self, Ri, dfeat, list_neigh, natoms_img, Egroup_weight, divider, is_calc_f=None):
-
+    def forward(
+        self, Ri, dfeat, list_neigh, natoms_img, Egroup_weight, divider, is_calc_f=None
+    ):
+        
         torch.autograd.set_detect_anomaly(True)
         
         Ri_d = dfeat
@@ -80,20 +70,36 @@ class DP(nn.Module):
 
         for ntype in range(self.ntypes):
             for ntype_1 in range(self.ntypes):
-                S_Rij = Ri[:, atom_sum:atom_sum+natoms[ntype], ntype_1 * self.maxNeighborNum:(ntype_1+1) * self.maxNeighborNum, 0].unsqueeze(-1)
+                S_Rij = Ri[
+                    :,
+                    atom_sum : atom_sum + natoms[ntype],
+                    ntype_1 * self.maxNeighborNum : (ntype_1 + 1) * self.maxNeighborNum,
+                    0,
+                ].unsqueeze(-1)
                 embedding_index = ntype * self.ntypes + ntype_1
-                G = self.embedding_net[embedding_index](S_Rij) 
-                tmp_a = Ri[:, atom_sum:atom_sum+natoms[ntype], ntype_1 * self.maxNeighborNum:(ntype_1+1) * self.maxNeighborNum].transpose(-2, -1)
+                G = self.embedding_net[embedding_index](S_Rij)
+                tmp_a = Ri[
+                    :,
+                    atom_sum : atom_sum + natoms[ntype],
+                    ntype_1 * self.maxNeighborNum : (ntype_1 + 1) * self.maxNeighborNum,
+                ].transpose(-2, -1)
                 tmp_b = torch.matmul(tmp_a, G)
                 
                 if ntype_1 == 0:
                     xyz_scater_a = tmp_b
                 else:
                     xyz_scater_a = xyz_scater_a + tmp_b
+            # xyz_scater = xyz_scater_a.clone()
+
+            # DR_ntype = CalculateDR.apply(xyz_scater_a, self.maxNeighborNum, self.ntypes, list_neigh)
+
+            # import ipdb; ipdb.set_trace()
             xyz_scater_a = xyz_scater_a * 4.0 / (self.maxNeighborNum * self.ntypes * 4)
             xyz_scater_b = xyz_scater_a[:, :, :, :16]
             DR_ntype = torch.matmul(xyz_scater_a.transpose(-2, -1), xyz_scater_b)
             DR_ntype = DR_ntype.reshape(batch_size, natoms[ntype], -1)
+            # import ipdb; ipdb.set_trace()
+            
             if ntype == 0:
                 DR = DR_ntype
             else:
@@ -106,8 +112,7 @@ class DP(nn.Module):
                 Ei = torch.concat((Ei, Ei_ntype), dim=1)
             atom_sum = atom_sum + natoms[ntype]
         
-        
-        Etot = torch.sum(Ei, 1)   
+        Etot = torch.sum(Ei, 1)
         # Egroup = self.get_egroup(Ei, Egroup_weight, divider)
         F = torch.zeros((batch_size, atom_sum, 3), device=self.device)
         Ei = torch.squeeze(Ei, 2)
@@ -117,8 +122,12 @@ class DP(nn.Module):
         # print("fitting time:", start_autograd - start_fitting, 's')
 
         mask = torch.ones_like(Ei)
-        dE = torch.autograd.grad(Ei, Ri, grad_outputs=mask, retain_graph=True, create_graph=True)
-        dE = torch.stack(list(dE), dim=0).squeeze(0)  #[:,:,:,:-1] #[2,108,100,4]-->[2,108,100,3]
+        dE = torch.autograd.grad(
+            Ei, Ri, grad_outputs=mask, retain_graph=True, create_graph=True
+        )
+        dE = torch.stack(list(dE), dim=0).squeeze(
+            0
+        )  # [:,:,:,:-1] #[2,108,100,4]-->[2,108,100,3]
 
         Ri_d = Ri_d.reshape(batch_size, natoms_sum, -1, 3)
         dE = dE.reshape(batch_size, natoms_sum, 1, -1)

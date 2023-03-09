@@ -23,10 +23,6 @@ from dp_trainer import *
 # import parameters as pm
 import yaml
 
-# workpath = "/home/wuxingxing/datas/system_config/cu_72104/dpkf_data/tmp2_calc4"
-# os.chdir(workpath)
-
-# configpath= "/home/wuxingxing/codespace/mutli_mlff/cu_config_template.yaml"
 with open("/share/home/wuxingxing/codespace/mutli_mlff/cu_config_template.yaml", "r") as yamlfile:
     config = yaml.load(yamlfile, Loader=yaml.FullLoader)
 
