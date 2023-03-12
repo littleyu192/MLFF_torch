@@ -188,8 +188,6 @@ def main():
             device = torch.device("cuda:{}".format(args.gpu))
         else:
             device = torch.device("cuda")
-    elif torch.backends.mps.is_available():
-        device = torch.device("mps")
     else:
         device = torch.device("cpu")
 
@@ -210,7 +208,7 @@ def main():
     model = DP(config, device, stat, args.magic)
     model = model.to(training_type)
 
-    if not torch.cuda.is_available() and not torch.backends.mps.is_available():
+    if not torch.cuda.is_available():
         print("using CPU, this will be slow")
     elif args.hvd:
         if torch.cuda.is_available():
@@ -221,9 +219,6 @@ def main():
     elif args.gpu is not None and torch.cuda.is_available():
         torch.cuda.set_device(args.gpu)
         model = model.cuda(args.gpu)
-    elif torch.backends.mps.is_available():
-        device = torch.device("mps")
-        model = model.to(device)
     else:
         model = model.cuda()
 
@@ -332,13 +327,14 @@ def main():
 
         f_train_log = open(train_log, "w")
         f_train_log.write(
-            "epoch\t loss\t RMSE_Etot\t RMSE_Ei\t RMSE_F\t real_lr\t time\n"
+            "epoch\t loss\t RMSE_Etot\t RMSE_Ei\t RMSE_F\t real_lr\t epoch_time\t wall_time\n"
         )
 
         valid_log = os.path.join(args.store_path, "epoch_valid.dat")
         f_valid_log = open(valid_log, "w")
         f_valid_log.write("epoch\t loss\t RMSE_Etot\t RMSE_Ei\t RMSE_F\n")
 
+    time_init = time.time()
     for epoch in range(args.start_epoch, args.epochs + 1):
         if args.hvd:
             train_sampler.set_epoch(epoch)
@@ -354,6 +350,8 @@ def main():
             loss, loss_Etot, loss_Force, loss_Ei, real_lr = train(
                 train_loader, model, criterion, optimizer, epoch, args.lr, device, args
             )
+            if real_lr < 3.0e-8:
+                return
         time_end = time.time()
 
         # evaluate on validation set
@@ -364,21 +362,22 @@ def main():
         if not args.hvd or (args.hvd and hvd.rank() == 0):
             f_train_log = open(train_log, "a")
             f_train_log.write(
-                "%d %e %e %e %e %e %s\n"
+                "%d %e %e %e %e %e %s %s\n"
                 % (
                     epoch,
-                    loss,
+                    loss_Etot + loss_Force,
                     loss_Etot,
                     loss_Ei,
                     loss_Force,
                     real_lr,
                     time_end - time_start,
+                    time_end - time_init,
                 )
             )
             f_valid_log = open(valid_log, "a")
             f_valid_log.write(
                 "%d %e %e %e %e\n"
-                % (epoch, vld_loss, vld_loss_Etot, vld_loss_Ei, vld_loss_Force)
+                % (epoch, vld_loss_Etot + vld_loss_Force, vld_loss_Etot, vld_loss_Ei, vld_loss_Force)
             )
 
         # scheduler.step()
@@ -393,7 +392,7 @@ def main():
                     "epoch": epoch,
                     "state_dict": model.state_dict(),
                     "best_loss": best_loss,
-                    "optimizer": optimizer.state_dict(),
+                    # "optimizer": optimizer.state_dict(),
                     # "scheduler": scheduler.state_dict(),
                 },
                 is_best,

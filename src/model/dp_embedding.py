@@ -102,11 +102,14 @@ class FittingNet(nn.Module):
                 mean=0,
                 std=(1.0 / np.sqrt(self.network_size[i - 1] + self.network_size[i])),
             )
+
             self.weights["weight" + str(i - 1)] = nn.Parameter(wij, requires_grad=True)
+
             if self.cfg["bias"]:
                 bias = torch.Tensor(1, self.network_size[i])
                 normal(bias, mean=0, std=1)
                 self.bias["bias" + str(i - 1)] = nn.Parameter(bias, requires_grad=True)
+
             if i > 1 and self.cfg["resnet_dt"]:
                 resnet_dt = torch.Tensor(1, self.network_size[i])
                 normal(resnet_dt, mean=0.1, std=0.001)
@@ -132,6 +135,9 @@ class FittingNet(nn.Module):
             )  # 初始化指定均值
 
     def forward(self, x):
+        if self.can_cudagraph():
+            return self.specialization_forward(x)
+
         for i in range(1, len(self.network_size) - 1):
             if self.cfg["bias"]:
                 hiden = (
@@ -164,3 +170,25 @@ class FittingNet(nn.Module):
         else:
             x = torch.matmul(x, self.weights["weight" + str(i - 1)])
         return x
+
+    # Specialization for networksize (x, x, x, 1) and resnet_dt == True
+    def specialization_forward(self, x):
+
+        hiden = torch.matmul(x, self.weights["weight0"]) + self.bias["bias0"]
+        hiden = self.cfg["activation"](hiden)
+        x = hiden
+
+        hiden = torch.matmul(x, self.weights["weight1"]) + self.bias["bias1"]
+        hiden = self.cfg["activation"](hiden)
+        x = hiden * self.resnet_dt["resnet_dt1"] + x
+
+        hiden = torch.matmul(x, self.weights["weight2"]) + self.bias["bias2"]
+        hiden = self.cfg["activation"](hiden)
+        x = hiden * self.resnet_dt["resnet_dt2"] + x
+
+        x = torch.matmul(x, self.weights["weight3"]) + self.bias["bias3"]
+
+        return x
+
+    def can_cudagraph(self):
+        return len(self.cfg["network_size"]) == 4 and self.cfg["resnet_dt"]
