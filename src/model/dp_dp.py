@@ -1,11 +1,8 @@
 import torch
 import torch.nn as nn
-import sys, os
-
-sys.path.append(os.getcwd())
 
 from model.dp_embedding import EmbeddingNet, FittingNet
-from model.calculate_force import CalculateForce, CalculateDR
+from model.op_func import CalculateForce, CalculateDR
 
 
 class DP(nn.Module):
@@ -36,14 +33,15 @@ class DP(nn.Module):
                 "network_size"
             ][-1]
 
-            self.fitting_net.append(
-                FittingNet(
-                    config["net_cfg"]["fitting_net"],
-                    16 * fitting_net_input_dim,
-                    self.stat[2][i],
-                    magic,
-                )
+            fitting_net = FittingNet(
+                config["net_cfg"]["fitting_net"],
+                16 * fitting_net_input_dim,
+                self.stat[2][i],
+                magic,
             )
+
+            self.fitting_net.append(fitting_net)
+        self.init_cudagraph_done = False
 
     def get_egroup(self, Egroup_weight, divider):
         batch_size = self.Ei.shape[0]
@@ -89,16 +87,15 @@ class DP(nn.Module):
                     xyz_scater_a = tmp_b
                 else:
                     xyz_scater_a = xyz_scater_a + tmp_b
-            # xyz_scater = xyz_scater_a.clone()
 
-            DR_ntype = CalculateDR.apply(xyz_scater_a, self.maxNeighborNum, self.ntypes, list_neigh)
+            DR_ntype = CalculateDR.apply(xyz_scater_a, self.maxNeighborNum, self.ntypes)
 
-            # import ipdb; ipdb.set_trace()
+            # ======================================================
             # xyz_scater_a = xyz_scater_a * 4.0 / (self.maxNeighborNum * self.ntypes * 4)
             # xyz_scater_b = xyz_scater_a[:, :, :, :16]
             # DR_ntype = torch.matmul(xyz_scater_a.transpose(-2, -1), xyz_scater_b)
             # DR_ntype = DR_ntype.reshape(batch_size, natoms[ntype], -1)
-            # import ipdb; ipdb.set_trace()
+            # ======================================================
 
             if ntype == 0:
                 DR = DR_ntype
@@ -140,5 +137,53 @@ class DP(nn.Module):
         list_neigh = torch.unsqueeze(list_neigh, 2)
         list_neigh = (list_neigh - 1).type(torch.int)
         F = CalculateForce.apply(list_neigh, dE, Ri_d, F)
-
         return Etot, Ei, F
+
+    def init_cudagraph(
+        self, Ri, dfeat, list_neigh, natoms_img, Egroup_weight, divider, is_calc_f=None
+    ):
+
+        Ri_d = dfeat
+        natoms = natoms_img[0, 1:]
+        natoms_sum = Ri.shape[1]
+        batch_size = Ri.shape[0]
+        atom_sum = 0
+
+        for ntype in range(self.ntypes):
+            for ntype_1 in range(self.ntypes):
+                S_Rij = Ri[
+                    :,
+                    atom_sum : atom_sum + natoms[ntype],
+                    ntype_1 * self.maxNeighborNum : (ntype_1 + 1) * self.maxNeighborNum,
+                    0,
+                ].unsqueeze(-1)
+                embedding_index = ntype * self.ntypes + ntype_1
+                G = self.embedding_net[embedding_index](S_Rij)
+                tmp_a = Ri[
+                    :,
+                    atom_sum : atom_sum + natoms[ntype],
+                    ntype_1 * self.maxNeighborNum : (ntype_1 + 1) * self.maxNeighborNum,
+                ].transpose(-2, -1)
+                tmp_b = torch.matmul(tmp_a, G)
+
+                if ntype_1 == 0:
+                    xyz_scater_a = tmp_b
+                else:
+                    xyz_scater_a = xyz_scater_a + tmp_b
+
+            DR_ntype = CalculateDR.apply(
+                xyz_scater_a, self.maxNeighborNum, self.ntypes
+            )
+
+            if ntype == 0:
+                DR = DR_ntype
+            else:
+                DR = torch.concat((DR, DR_ntype), dim=1)
+
+            if self.fitting_net[ntype].can_cudagraph():
+                x = torch.randn_like(DR_ntype, requires_grad=True)
+                self.fitting_net[ntype] = torch.cuda.make_graphed_callables(
+                    self.fitting_net[ntype], (x,)
+                )
+        # import ipdb; ipdb.set_trace()
+        self.init_cudagraph_done = True

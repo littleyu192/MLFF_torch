@@ -44,10 +44,20 @@ void torch_launch_calculate_DR(torch::Tensor &xyz_scater,
                                torch::Tensor &DR);
 
 void torch_launch_calculate_DR_grad(const torch::Tensor &xyz_scater,
-                               int64_t batch_size,
-                               int64_t natoms,
-                               int64_t neigh_num,
-                               int64_t ntype,
-                               int64_t embedingnet_output_dim,
-                               const torch::Tensor &grad_output,
-                               torch::Tensor &grad);
+                                    int64_t batch_size,
+                                    int64_t natoms,
+                                    int64_t neigh_num,
+                                    int64_t ntype,
+                                    int64_t embedingnet_output_dim,
+                                    const torch::Tensor &grad_output,
+                                    torch::Tensor &grad);
+
+void torch_launch_calculate_DR_second_grad(int64_t batch_size,
+                                           int64_t natoms,
+                                           double scale,
+                                           int64_t embedingnet_output_dim,
+                                           const torch::Tensor &xyz_scater,
+                                           const torch::Tensor &grad_output,
+                                           const torch::Tensor &grad_second,
+                                           torch::Tensor &dgrad_xyz_scater,
+                                           torch::Tensor &dgrad_gradoutput);

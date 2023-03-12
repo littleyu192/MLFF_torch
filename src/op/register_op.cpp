@@ -26,6 +26,10 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
       m.def("calculate_DR_grad",
             &torch_launch_calculate_DR_grad,
             "calculate DR grad kernel warpper");
+
+      m.def("calculate_DR_second_grad",
+            &torch_launch_calculate_DR_second_grad,
+            "calculate DR second grad kernel warpper");
 }
 
 TORCH_LIBRARY(op, m)
@@ -41,4 +45,6 @@ TORCH_LIBRARY(op, m)
       m.def("calculate_DR", torch_launch_calculate_DR);
 
       m.def("calculate_DR_grad", torch_launch_calculate_DR_grad);
+
+      m.def("calculate_DR_second_grad", torch_launch_calculate_DR_second_grad);
 }
