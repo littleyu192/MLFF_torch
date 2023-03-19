@@ -8,10 +8,11 @@ from torch.autograd import Variable
 
 from loss.dploss import dp_loss, adjust_lr
 
-from optimizer.KFWrapper import KFOptimizerWrapper
+from optimizer.KFWrapper import KFOptimizerWrapper, DistributedBackend
 import horovod.torch as hvd
 
 from torch.profiler import profile, record_function, ProfilerActivity
+
 
 def train(train_loader, model, criterion, optimizer, epoch, start_lr, device, config):
     batch_time = AverageMeter("Time", ":6.3f")
@@ -68,7 +69,8 @@ def train(train_loader, model, criterion, optimizer, epoch, start_lr, device, co
         if config.profiling:
             print("=" * 60, "Start profiling model inference", "=" * 60)
             with profile(
-                activities=[ProfilerActivity.CUDA, ProfilerActivity.CPU], record_shapes=True
+                activities=[ProfilerActivity.CUDA, ProfilerActivity.CPU],
+                record_shapes=True,
             ) as prof:
                 with record_function("model_inference"):
                     Etot_predict, Ei_predict, Force_predict = model(
@@ -146,7 +148,12 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
     )
 
     KFOptWrapper = KFOptimizerWrapper(
-        model, optimizer, config.nselect, config.groupsize, config.hvd, "hvd"
+        model,
+        optimizer,
+        config.nselect,
+        config.groupsize,
+        config.hvd,
+        DistributedBackend.Horovod,
     )
 
     # switch to train mode
@@ -189,7 +196,8 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
         if config.profiling:
             print("=" * 60, "Start profiling KF update energy", "=" * 60)
             with profile(
-                activities=[ProfilerActivity.CUDA, ProfilerActivity.CPU], record_shapes=True
+                activities=[ProfilerActivity.CUDA, ProfilerActivity.CPU],
+                record_shapes=True,
             ) as prof:
                 with record_function("kf_update_energy"):
                     Etot_predict = KFOptWrapper.update_energy(kalman_inputs, Etot_label)
@@ -199,16 +207,21 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
 
             print("=" * 60, "Start profiling KF update force", "=" * 60)
             with profile(
-                activities=[ProfilerActivity.CUDA, ProfilerActivity.CPU], record_shapes=True
+                activities=[ProfilerActivity.CUDA, ProfilerActivity.CPU],
+                record_shapes=True,
             ) as prof:
                 with record_function("kf_update_force"):
-                    Etot_predict, Ei_predict, Force_predict = KFOptWrapper.update_force(kalman_inputs, Force_label, 2)
+                    Etot_predict, Ei_predict, Force_predict = KFOptWrapper.update_force(
+                        kalman_inputs, Force_label, 2
+                    )
             print(prof.key_averages().table(sort_by="cuda_time_total"))
             print("=" * 60, "Profiling KF update force end", "=" * 60)
             prof.export_chrome_trace("kf_update_force.json")
         else:
             Etot_predict = KFOptWrapper.update_energy(kalman_inputs, Etot_label)
-            Etot_predict, Ei_predict, Force_predict = KFOptWrapper.update_force(kalman_inputs, Force_label, 2)
+            Etot_predict, Ei_predict, Force_predict = KFOptWrapper.update_force(
+                kalman_inputs, Force_label, 2
+            )
 
         loss_F_val = criterion(Force_predict, Force_label)
         loss_Etot_val = criterion(Etot_predict, Etot_label)
@@ -314,7 +327,6 @@ def valid(val_loader, model, criterion, device, args):
     model.eval()
 
     run_validate(val_loader)
-   
 
     if args.hvd and (len(val_loader.sampler) * hvd.size() < len(val_loader.dataset)):
         aux_val_dataset = Subset(
