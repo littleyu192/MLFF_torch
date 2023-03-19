@@ -9,6 +9,7 @@ import torch.optim as optim
 import torch.utils.data
 import torch.utils.data.distributed
 import warnings
+import horovod.torch as hvd
 
 from model.dp_dp import DP
 
@@ -173,14 +174,13 @@ def main():
             "from checkpoints."
         )
 
-    if not os.path.exists(args.store_path):
-        os.mkdir(args.store_path)
-
     if args.hvd:
-        import horovod.torch as hvd
-
         hvd.init()
         args.gpu = hvd.local_rank()
+
+    if not os.path.exists(args.store_path):
+        if not args.hvd or (args.hvd and hvd.rank() == 0):
+            os.mkdir(args.store_path)
 
     if torch.cuda.is_available():
         if args.gpu != None:
@@ -267,7 +267,7 @@ def main():
             args.start_epoch = checkpoint["epoch"] + 1
             best_loss = checkpoint["best_loss"]
             model.load_state_dict(checkpoint["state_dict"])
-            optimizer.load_state_dict(checkpoint["optimizer"])
+            # optimizer.load_state_dict(checkpoint["optimizer"])
             # scheduler.load_state_dict(checkpoint["scheduler"])
             print(
                 "=> loaded checkpoint '{}' (epoch {})".format(
@@ -377,7 +377,13 @@ def main():
             f_valid_log = open(valid_log, "a")
             f_valid_log.write(
                 "%d %e %e %e %e\n"
-                % (epoch, vld_loss_Etot + vld_loss_Force, vld_loss_Etot, vld_loss_Ei, vld_loss_Force)
+                % (
+                    epoch,
+                    vld_loss_Etot + vld_loss_Force,
+                    vld_loss_Etot,
+                    vld_loss_Ei,
+                    vld_loss_Force,
+                )
             )
 
         # scheduler.step()

@@ -5,6 +5,14 @@ import time
 import numpy as np
 import torch.distributed as dist
 import math
+from enum import Enum, auto
+import horovod as hvd
+
+
+class DistributedBackend(Enum):
+    Torch = auto()
+    Horovod = auto()
+
 
 class KFOptimizerWrapper:
     def __init__(
@@ -14,7 +22,7 @@ class KFOptimizerWrapper:
         atoms_selected: int,
         atoms_per_group: int,
         is_distributed: bool = False,
-        distributed_backend: str = "torch",  # torch or horovod
+        distributed_backend: DistributedBackend = DistributedBackend.Horovod,  # torch or horovod
     ) -> None:
         self.model = model
         self.optimizer = optimizer
@@ -49,11 +57,9 @@ class KFOptimizerWrapper:
         error = error.mean()
 
         if self.is_distributed:
-            if self.distributed_backend == "horovod":
-                import horovod as hvd
-
+            if self.distributed_backend == DistributedBackend.Horovod:
                 error = hvd.torch.allreduce(error)
-            elif self.distributed_backend == "torch":
+            elif self.distributed_backend == DistributedBackend.Torch:
                 dist.all_reduce(error)
                 error /= dist.get_world_size()
 
@@ -86,11 +92,9 @@ class KFOptimizerWrapper:
             error = error_tmp.mean() / natoms_sum
 
             if self.is_distributed:
-                if self.distributed_backend == "horovod":
-                    import horovod as hvd
-
+                if self.distributed_backend == DistributedBackend.Horovod:
                     error = hvd.torch.allreduce(error)
-                elif self.distributed_backend == "torch":
+                elif self.distributed_backend == DistributedBackend.Torch:
                     dist.all_reduce(error)
                     error /= dist.get_world_size()
 
@@ -111,6 +115,7 @@ class KFOptimizerWrapper:
         index = range(natoms)
         res = np.random.choice(index, atoms_selected).reshape(-1, atoms_per_group)
         return res
+
 
 # with torch.autograd.profiler.profile(enabled=True, use_cuda=True, record_shapes=False) as prof:
 #     the code u wanna profile
