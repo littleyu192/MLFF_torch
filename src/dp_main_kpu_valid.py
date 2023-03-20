@@ -233,7 +233,6 @@ def main():
     
     # Create dataset
     train_dataset = MovementDataset(config["data_paths"], is_train=True)
-    valid_dataset = MovementDataset(config["data_paths"], is_train=True)
 
     # create model
     davg, dstd, ener_shift = train_dataset.get_stat()
@@ -332,12 +331,8 @@ def main():
         train_sampler = torch.utils.data.distributed.DistributedSampler(
             train_dataset, num_replicas=hvd.size(), rank=hvd.rank()
         )
-        val_sampler = torch.utils.data.distributed.DistributedSampler(
-            valid_dataset, num_replicas=hvd.size(), rank=hvd.rank(), drop_last=True
-        )
     else:
         train_sampler = None
-        val_sampler = None
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
@@ -346,15 +341,6 @@ def main():
         num_workers=args.workers,
         pin_memory=True,
         sampler=train_sampler,
-    )
-
-    val_loader = torch.utils.data.DataLoader(
-        valid_dataset,
-        batch_size=args.batch_size,
-        shuffle=False,
-        num_workers=args.workers,
-        pin_memory=True,
-        sampler=val_sampler,
     )
 
     if args.evaluate:
@@ -367,79 +353,6 @@ def main():
         # validate(val_loader, model, criterion, args)
         kpu(train_loader, model, criterion, optimizer, device, args)
         return
-
-    if not args.hvd or (args.hvd and hvd.rank() == 0):
-        train_log = os.path.join(args.store_path, "epoch_train.dat")
-
-        f_train_log = open(train_log, "a")
-        f_train_log.write(
-            "epoch\t loss\t RMSE_Etot\t RMSE_Ei\t RMSE_F\t real_lr\t time\n"
-        )
-
-        valid_log = os.path.join(args.store_path, "epoch_valid.dat")
-        f_valid_log = open(valid_log, "a")
-        f_valid_log.write("epoch\t loss\t RMSE_Etot\t RMSE_Ei\t RMSE_F\n")
-
-    for epoch in range(args.start_epoch, args.epochs + 1):
-        if args.hvd:
-            train_sampler.set_epoch(epoch)
-
-        # train for one epoch
-        time_start = time.time()
-        if args.opt == "LKF" or args.opt == "GKF":
-            real_lr = args.lr
-            loss, loss_Etot, loss_Force, loss_Ei = train_KF(
-                train_loader, model, criterion, optimizer, epoch, device, args
-            )
-        else:
-            loss, loss_Etot, loss_Force, loss_Ei, real_lr = train(
-                train_loader, model, criterion, optimizer, epoch, args.lr, device, args
-            )
-        time_end = time.time()
-
-        # evaluate on validation set
-        vld_loss, vld_loss_Etot, vld_loss_Force, vld_loss_Ei = valid(
-            val_loader, model, criterion, device, args
-        )
-
-        if not args.hvd or (args.hvd and hvd.rank() == 0):
-            f_train_log = open(train_log, "a")
-            f_train_log.write(
-                "%d %e %e %e %e %e %s\n"
-                % (
-                    epoch,
-                    loss,
-                    loss_Etot,
-                    loss_Ei,
-                    loss_Force,
-                    real_lr,
-                    time_end - time_start,
-                )
-            )
-            f_valid_log = open(valid_log, "a")
-            f_valid_log.write(
-                "%d %e %e %e %e\n"
-                % (epoch, vld_loss, vld_loss_Etot, vld_loss_Ei, vld_loss_Force)
-            )
-
-        # scheduler.step()
-
-        # remember best loss and save checkpoint
-        is_best = vld_loss < best_loss
-        best_loss = min(loss, best_loss)
-
-        if not args.hvd or (args.hvd and hvd.rank() == 0):
-            save_checkpoint(
-                {
-                    "epoch": epoch,
-                    "state_dict": model.state_dict(),
-                    "best_loss": best_loss,
-                    "optimizer": optimizer.state_dict()
-                },
-                is_best,
-                "checkpoint.pth.tar",
-                args.store_path
-            )
 
 if __name__ == "__main__":
     main()

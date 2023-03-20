@@ -360,7 +360,9 @@ def predict(train_loader, valid_type, model, criterion, optimizer, device, confi
 
     model.eval()
     
-    res_pd = pd.DataFrame(columns=["img_idx", "path", "etot_lab", "etot_pre", "force_mean_lab", "force_mean_pre", "loss", "etot_mse", "ei_mse", "force_mse"])
+    res_pd = pd.DataFrame(columns=["img_idx", "path", "etot_lab", "etot_pre", "force_mean_lab", "force_mean_pre", \
+        "loss", "etot_mse", "ei_mse", "force_mse", \
+        "etot_rmse", "etot_atom_rmse", "ei_rmse", "force_rmse"])
 
     for i, sample_batches in enumerate(train_loader):
         if config.datatype == "float64":
@@ -394,16 +396,23 @@ def predict(train_loader, valid_type, model, criterion, optimizer, device, confi
         loss_F_val = criterion(Force_predict, Force_label)
         loss_Ei_val = criterion(Ei_predict, Ei_label)
         loss_val = loss_F_val + loss_Etot_val
+        # rmse
+        Etot_rmse = loss_Etot_val ** 0.5
+        etot_atom_rmse = Etot_rmse / natoms_img[0][0]
+        Ei_rmse = loss_Ei_val ** 0.5
+        F_rmse = loss_F_val ** 0.5
+        # rmse per-atom
         res = []
         res.extend([index_image, file_path, float(Etot_label), float(Etot_predict), float(Force_label.abs().mean()), float(Force_predict.abs().mean()), \
-                    float(loss_val), float(loss_Etot_val), float(loss_Ei_val), float(loss_F_val)])
+                    float(loss_val), float(loss_Etot_val), float(loss_Ei_val), float(loss_F_val), \
+                        float(Etot_rmse), float(etot_atom_rmse), float(Ei_rmse), float(F_rmse)])
         res_pd.loc[res_pd.shape[0]] = res
-    res_pd.sort_values(by=["path", "img_idx"], inplace=True, ascending=True)
-    rmse_etot = (res_pd['etot_mse'].mean())**0.5
-    rmse_etot_atom = rmse_etot/natoms_img[0][0]
-    rmse_ei = (res_pd['ei_mse'].mean())**0.5
-    rmse_force   = (res_pd['force_mse'].mean())**0.5
     res_pd.to_csv(save_path)
+    res_pd.sort_values(by=["path", "img_idx"], inplace=True, ascending=True)
+    rmse_etot = res_pd['etot_rmse'].mean()
+    rmse_etot_atom = res_pd['etot_atom_rmse'].mean()
+    rmse_ei = res_pd['ei_rmse'].mean()
+    rmse_force   = res_pd['force_rmse'].mean()
     with open(save_rmse, 'w') as wf:
         line = 'rmse_etot:{} rmse_etot_atom:{} rmse_ei:{} rmse_force:{}'.format(rmse_etot, rmse_etot_atom, rmse_ei, rmse_force)
         wf.write(line)
