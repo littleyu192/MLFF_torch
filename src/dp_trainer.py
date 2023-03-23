@@ -347,13 +347,13 @@ param {*} device
 param {*} config
 return {*}
 '''
-def predict(train_loader, valid_type, model, criterion, optimizer, device, config):
+def predict(train_loader, model, criterion, optimizer, device, config):
     save_dir = os.path.join(config.store_path, config.eval_name)
     if not config.hvd or (config.hvd and hvd.rank() == 0):
         if os.path.exists(save_dir) is False:
             os.makedirs(save_dir)
-    save_path = os.path.join(save_dir, "{}_valid.csv".format(valid_type))
-    save_rmse = os.path.join(save_dir, "{}_valid_rmse.txt".format(valid_type))
+    save_path = os.path.join(save_dir, "prediction.csv")
+    save_rmse = os.path.join(save_dir, "prediction_valid_rmse.txt")
     KFOptWrapper = KFOptimizerWrapper(
         model, optimizer, config.nselect, config.groupsize, config.hvd, "hvd"
     )
@@ -431,6 +431,7 @@ def kpu(train_loader, model, criterion, optimizer, device, config):
 
     df = pd.DataFrame(columns = ["batch", "gpu", "img_idx", "natoms", \
                                 "mse_loss", "mse_e", "mse_ei", "mse_f",\
+                                "rmse_loss", "rmse_etot", "rmse_e", "rmse_ei", "rmse_f",\
                                 "etot_lab", "etot_pre", "f_avg_lab", "f_avg_pre", \
                                 "f_x_norm", "f_y_norm", "f_z_norm", "f_kpu" , "etot_kpu"])
 
@@ -471,9 +472,16 @@ def kpu(train_loader, model, criterion, optimizer, device, config):
         loss_Etot_val = criterion(Etot_predict, Etot_label)
         loss_Ei_val = criterion(Ei_predict, Ei_label)
         loss_val = loss_F_val + loss_Etot_val
-        
+        # rmse
+        Etot_rmse = loss_Etot_val ** 0.5
+        etot_atom_rmse = Etot_rmse / natoms_img[0][0]
+        Ei_rmse = loss_Ei_val ** 0.5
+        F_rmse = loss_F_val ** 0.5
+        loss_rmse = Etot_rmse + F_rmse
+
         avg_kpu = [i, config.gpu, index_image, int(natoms_sum), \
             float(loss_val), float(loss_Etot_val) , float(loss_Ei_val), float(loss_F_val), \
+            float(loss_rmse), float(Etot_rmse), float(etot_atom_rmse) , float(Ei_rmse), float(F_rmse), \
             float(Etot_label), float(Etot_predict), float(f_avg_lab), float(f_avg_pre), \
             float(f_x_norm), float(f_y_norm), float(f_z_norm), \
             float(f_kpu), float(etot_kpu)]
@@ -482,7 +490,7 @@ def kpu(train_loader, model, criterion, optimizer, device, config):
         df.loc[i] = avg_kpu
         print("img idx {} kpu claculate done, process: {} \n\tkpu: {}".format(index_image, df.shape[0] / len(train_loader), avg_kpu))
 
-        if df.shape[0] % 10 == 0:
+        if df.shape[0] % 20 == 0:
             df.to_csv(os.path.join(kpu_save_path,"gpu_{}_kpu_info.csv".format(config.gpu)))
     
     df.to_csv(os.path.join(kpu_save_path,"gpu_{}_kpu_info.csv".format(config.gpu)))

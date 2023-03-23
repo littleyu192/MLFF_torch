@@ -8,6 +8,7 @@ import math
 import torch
 from collections import Counter
 import argparse
+import subprocess as sp
 
 def collect_all_sourcefiles(workDir, sourceFileName="MOVEMENT"):
 
@@ -61,7 +62,7 @@ def gen_config_inputfile(config):
         GenFeatInput.write(str(config["E_tolerance"]) + "    ! E_tolerance  \n")
 
 
-def gen_train_data(config):
+def gen_train_data(config, is_real_Ep=True):
     trainset_dir = config["trainSetDir"]
     dRFeatureInputDir = config["dRFeatureInputDir"]
     dRFeatureOutputDir = config["dRFeatureOutputDir"]
@@ -77,7 +78,7 @@ def gen_train_data(config):
     gen_config_inputfile(config)
 
     movement_files = collect_all_sourcefiles(trainset_dir, "MOVEMENT")
-
+            
     location_path = os.path.join(config["dRFeatureInputDir"], "location")
     with open(location_path, "w") as location_writer:
         location_writer.write(str(len(movement_files)) + "\n")
@@ -89,8 +90,35 @@ def gen_train_data(config):
     command = "gen_dR.x | tee ./output/out"
     print("==============Start generating data==============")
     os.system(command)
+    # Ei.dat with respect to the real Etot
+    if is_real_Ep is True:
+        # remove fortran generated Ei
+        print ("Removing " + trainset_dir + "Ei.dat")
+        sp.run(["mv", trainset_dir + "/Ei.dat", trainset_dir + "/Ei_plus.dat"])
+        get_real_Ep(movement_files,trainset_dir)
     print("==============Success==============")
 
+def get_real_Ep(movement_files,train_set_dir):
+    # make Etot label the real Etot(one with minus sign)
+    for movement_file in movement_files:
+        with open(os.path.join(movement_file, "MOVEMENT"), "r") as mov:
+            lines = mov.readlines()
+            
+            num_atom = 0 
+            Ep = 0.0 
+            
+            #print(os.path.join(movement_file, "MOVEMENT"))
+            for line in lines:
+                if "atoms" in line:
+                    raw = line.split() 
+                    num_atom = int(raw[0]) 
+                    Ep = float(raw[-5])
+                    
+                    print(num_atom, Ep)
+                    # write Ep / natom 
+                    with open(os.path.join(train_set_dir, "Ei.dat"), "a") as Ei_out:
+                        for i in range(num_atom):
+                            Ei_out.write(str(Ep/num_atom)+"\n")
 
 def save_npy_files(data_path, data_set):
     print("Saving to ", data_path)
@@ -620,7 +648,7 @@ def al_main():
     with open(config_path, "r") as yamlfile:
         config = yaml.load(yamlfile, Loader=yaml.FullLoader)
         print("Read Config successful")
-    gen_train_data(config)
+    gen_train_data(config, is_real_Ep=True)
     sepper_data(config, davg_path)
 
 def main():
@@ -636,7 +664,7 @@ def main():
         config = yaml.load(yamlfile, Loader=yaml.FullLoader)
         print("Read Config successful")
 
-    gen_train_data(config)
+    gen_train_data(config, is_real_Ep=True)
     sepper_data(config)
 
 if __name__ == "__main__":

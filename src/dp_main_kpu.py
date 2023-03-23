@@ -317,7 +317,7 @@ def main():
         optimizer = hvd.DistributedOptimizer(
             optimizer, named_parameters=model.named_parameters()
         )
-        if args.resume and (args.opt == "LKF" or args.opt == "GKF"):
+        if args.resume and (os.path.isfile(file_name)) and (args.opt == "LKF" or args.opt == "GKF"):
             # after hvd.DistributedOptimizer, the matrix P willed be reset to Identity matrix
             # its because hvd.DistributedOptimizer will initialize a new object of Optimizer Class
             load_p = checkpoint["optimizer"]['state'][0]['P']
