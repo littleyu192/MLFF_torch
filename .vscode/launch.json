@@ -59,6 +59,42 @@
 
         },
         {
+            "name": "dp_kpu",
+            "type": "python",
+            // "request": "launch",
+            "request": "launch",
+            "localRoot": "@{workspaceRoot}",
+            "remoteRoot": "/share/home/wuxingxing/codespace/mutli_mlff",
+            // "port": 22,
+            // "host": "10.18.98.1",
+            "program": "/share/home/wuxingxing/codespace/mutli_mlff/src/dp_kpu.py",
+            // "console": "integratedTerminal",
+            "console": "integratedTerminal",
+            "env": {"PYTHONPATH": "${workspaceRoot}"
+            },
+            "envFile": "${workspaceFolder}/.env",
+            "outputCapture": "std",
+            "justMyCode": false,
+            // single GPU
+            // "args": [
+            //     "--dp", "--gpu", "0", "--opt", "LKF", "--epochs", "50", "-s", "sngbch", "-r",  
+            //     "-b", "1", "-k", "-f", "2"
+            //     ]
+
+            // multi GPUs
+            // "args": [
+            //     "--hvd", "--opt", "LKF", "--epochs", "100", "-r", "-b", "1", "-k", "-f", "1", "--kpu_dir", "test_md_kpu_dir",
+            //     "-c", "/share/home/wuxingxing/datas/al_dir/si_system/iter.0000/training/md_kpu_0.yaml", 
+            //     "-s", "/share/home/wuxingxing/datas/al_dir/si_system/iter.0000/training/model_dir"
+            // ]
+            // cu kpu:
+            "args": [ 
+                "--hvd", "--opt", "LKF", "--epochs", "100", "-r", "-b", "1", "-k", "-f", "1", "--kpu_dir", "debug_md_kpu_dir_nr",
+                "-c", "/share/home/wuxingxing/datas/system_config/cu_72104/dft_test/dft_cu_4phases/md_kpu.yaml", 
+                "-s", "/share/home/wuxingxing/datas/system_config/cu_72104/dft_test/dft_cu_4phases/train_data"
+            ]
+        },
+        {
             "name": "dp_main_kpu",
             "type": "python",
             // "request": "launch",
@@ -88,11 +124,11 @@
             //     "-s", "/share/home/wuxingxing/datas/al_dir/si_system/iter.0000/training/model_dir"
             // ]
             // cu kpu:
-            // "args": [ 
-            //     "--hvd", "--opt", "LKF", "--epochs", "100", "-r", "-b", "1", "-k", "-f", "1", "--kpu_dir", "ali_md_kpu_dir",
-            //     "-c", "/share/home/wuxingxing/datas/al_dir/cu_bulk_system/iter.0000/training/md_kpu.yaml", 
-            //     "-s", "/share/home/wuxingxing/datas/al_dir/cu_bulk_system/iter.0000/training/model_dir"
-            // ]
+            "args": [ 
+                "--hvd", "--opt", "LKF", "--epochs", "100", "-r", "-b", "1", "-k", "-f", "1", "--kpu_dir", "debug_md_kpu_dir",
+                "-c", "/share/home/wuxingxing/datas/system_config/cu_72104/dft_test/dft_cu_4phases/md_kpu.yaml", 
+                "-s", "/share/home/wuxingxing/datas/system_config/cu_72104/dft_test/dft_cu_4phases/train_data"
+            ]
 
             // cuo valid:
             // "args": [ 
@@ -123,11 +159,11 @@
             // ]
             
             // train
-            "args": [
-                "--hvd", "--opt", "LKF", "--epochs", "100", "-r", "-b", "128",
-                "-c", "/share/home/wuxingxing/datas/al_dir/cu_bulk_system/iter.0004/training/train.yaml", 
-                "-s", "/share/home/wuxingxing/datas/al_dir/cu_bulk_system/iter.0004/training/test_3090_model_dir"
-            ]
+            // "args": [
+            //     "--hvd", "--opt", "LKF", "--epochs", "100", "-r", "-b", "128",
+            //     "-c", "/share/home/wuxingxing/datas/al_dir/cu_bulk_system/iter.0004/training/train.yaml", 
+            //     "-s", "/share/home/wuxingxing/datas/al_dir/cu_bulk_system/iter.0004/training/test_3090_model_dir"
+            // ]
 
         },
         {

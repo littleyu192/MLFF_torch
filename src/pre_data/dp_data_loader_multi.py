@@ -32,10 +32,12 @@ class MovementDataset(Dataset):
 
         self.dirs = []
         for data_path in data_paths:
+            tmp_dir = []
             for current_dir, child_dir, child_file in os.walk(data_path, followlinks=True):
                 if len(child_dir) == 0 and "Ri.npy" in child_file:
-                    self.dirs.append(current_dir)
-
+                    tmp_dir.append(current_dir)
+            tmp_dir = sorted(tmp_dir, key=lambda x: int(x.split('/')[-1].split('_')[-1]))
+            self.dirs.extend(tmp_dir)
         # self.dirs = sorted(self.dirs)
 
         self.__compute_stat_output(10, 1e-3)

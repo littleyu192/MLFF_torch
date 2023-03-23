@@ -229,6 +229,12 @@ class LKFOptimizer(Optimizer):
         for i in range(len(P)):
             self._state["P"][i] = P[i].cpu().to(self._params[0].device)
 
+    def set_kalman_P_noramlize(self, P, kalman_lambda = 0.999999999999872):
+        self._state.update({"kalman_lambda": kalman_lambda})
+        for i in range(len(P)):
+            P[i] = P[i]/P[i].max()
+            self._state["P"][i] = P[i].cpu().to(self._params[0].device)
+
     """
     @Description :
     the kpu of energy_total and atom force: kpu = H * P * H_t, the result is a scalar

@@ -322,6 +322,7 @@ def main():
             # its because hvd.DistributedOptimizer will initialize a new object of Optimizer Class
             load_p = checkpoint["optimizer"]['state'][0]['P']
             optimizer.set_kalman_P(load_p, checkpoint["optimizer"]['state'][0]['kalman_lambda'])
+            # optimizer.set_kalman_P_noramlize(load_p, checkpoint["optimizer"]['state'][0]['kalman_lambda'])
         # Broadcast parameters from rank 0 to all other processes.
         hvd.broadcast_parameters(model.state_dict(), root_rank=0)
 
