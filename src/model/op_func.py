@@ -3,6 +3,41 @@ from torch.autograd import Function
 import op
 
 
+class Matmul(Function):
+    @staticmethod
+    def forward(ctx, x, w, bias):
+        dims = x.shape
+        m = dims[-2]
+        k = dims[-1]
+        n = w.shape[-1]
+
+        output_shape = [x.shape[i] for i in range(len(dims))]
+        output_shape[-1] = n
+
+        output = torch.empty(
+            output_shape,
+            device=x.device,
+            dtype=x.dtype,
+        )
+        op.matmul_bias_tanh(int(x.nelement() / (m * k)), x, w, bias, output)
+        ctx.save_for_backward(x, w, output)
+        return output
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        inputs = ctx.saved_tensors
+        x = inputs[0]
+        w = inputs[1]
+        hiden = inputs[2]
+
+        grad_output = grad_output * (1 - hiden.mul(hiden))
+        return (
+            torch.matmul(grad_output, w.transpose(-2, -1)),
+            torch.matmul(x.transpose(-2, -1), grad_output),
+            grad_output,
+        )
+
+
 class CalculateForce(Function):
     @staticmethod
     def forward(ctx, list_neigh, dE, Ri_d, F):
@@ -183,7 +218,7 @@ class CalculateDRGrad(Function):
         xyz_scater = inputs[0]
         grad_output = inputs[1]
         neigh_num_ntype = inputs[2]  # store on host
-        
+
         dims = xyz_scater.shape
         batch_size = dims[0]
         natoms = dims[1]

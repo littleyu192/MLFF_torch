@@ -61,3 +61,9 @@ void torch_launch_calculate_DR_second_grad(int64_t batch_size,
                                            const torch::Tensor &grad_second,
                                            torch::Tensor &dgrad_xyz_scater,
                                            torch::Tensor &dgrad_gradoutput);
+
+void torch_launch_matmul_bias_tanh(int64_t batch_size,
+                                   const torch::Tensor &x,
+                                   const torch::Tensor &w,
+                                   const torch::Tensor &bias,
+                                   torch::Tensor &out);

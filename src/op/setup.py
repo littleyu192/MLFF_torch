@@ -21,6 +21,8 @@ setup(
                 "calculate_DR.cpp",
                 "kernel/calculateDR.cu",
                 "register_op.cpp",
+                "kernel/cutlass_gemm_array.cu",
+                "matmul_bias_tanh.cpp",
             ],
         ),
     ],

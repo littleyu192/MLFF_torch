@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from torch.nn.init import normal_ as normal
 import numpy as np
+from model.op_func import Matmul
 
 
 class EmbeddingNet(nn.Module):
@@ -77,12 +78,16 @@ class EmbeddingNet(nn.Module):
         hiden = self.cfg["activation"](hiden)
         x = hiden
 
-        hiden = torch.matmul(x, self.weights[1]) + self.bias[1]
-        hiden = self.cfg["activation"](hiden)
+        # import ipdb; ipdb.set_trace()
+        hiden = Matmul.apply(x, self.weights[1], self.bias[1])
+
+        # hiden = torch.matmul(x, self.weights[1]) + self.bias[1]
+        # hiden = self.cfg["activation"](hiden)
         x = hiden + x
 
-        hiden = torch.matmul(x, self.weights[2]) + self.bias[2]
-        hiden = self.cfg["activation"](hiden)
+        # hiden = torch.matmul(x, self.weights[2]) + self.bias[2]
+        # hiden = self.cfg["activation"](hiden)
+        hiden = Matmul.apply(x, self.weights[2], self.bias[2])
         x = hiden + x
 
         return x
@@ -180,16 +185,19 @@ class FittingNet(nn.Module):
     # Specialization for networksize (x, x, x, 1) and resnet_dt == True
     # @torch.compile
     def specialization_forward(self, x):
-        hiden = torch.matmul(x, self.weights[0]) + self.bias[0]
-        hiden = self.cfg["activation"](hiden)
+        hiden = Matmul.apply(x, self.weights[0], self.bias[0])
+        # hiden = torch.matmul(x, self.weights[0]) + self.bias[0]
+        # hiden = self.cfg["activation"](hiden)
         x = hiden
 
-        hiden = torch.matmul(x, self.weights[1]) + self.bias[1]
-        hiden = self.cfg["activation"](hiden)
+        hiden = Matmul.apply(x, self.weights[1], self.bias[1])
+        # hiden = torch.matmul(x, self.weights[1]) + self.bias[1]
+        # hiden = self.cfg["activation"](hiden)
         x = hiden * self.resnet_dt[0] + x
 
-        hiden = torch.matmul(x, self.weights[2]) + self.bias[2]
-        hiden = self.cfg["activation"](hiden)
+        hiden = Matmul.apply(x, self.weights[2], self.bias[2])
+        # hiden = torch.matmul(x, self.weights[2]) + self.bias[2]
+        # hiden = self.cfg["activation"](hiden)
         x = hiden * self.resnet_dt[1] + x
 
         x = torch.matmul(x, self.weights[3]) + self.bias[3]

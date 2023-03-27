@@ -30,6 +30,10 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
       m.def("calculate_DR_second_grad",
             &torch_launch_calculate_DR_second_grad,
             "calculate DR second grad kernel warpper");
+      
+      m.def("matmul_bias_tanh",
+            &torch_launch_matmul_bias_tanh,
+            "matmul bias tanh kernel warpper");
 }
 
 TORCH_LIBRARY(op, m)
@@ -47,4 +51,6 @@ TORCH_LIBRARY(op, m)
       m.def("calculate_DR_grad", torch_launch_calculate_DR_grad);
 
       m.def("calculate_DR_second_grad", torch_launch_calculate_DR_second_grad);
+
+      m.def("matmul_bias_tanh", torch_launch_matmul_bias_tanh);
 }
