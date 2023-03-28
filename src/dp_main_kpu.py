@@ -233,7 +233,7 @@ def main():
     
     # Create dataset
     train_dataset = MovementDataset(config["data_paths"], is_train=True)
-    valid_dataset = MovementDataset(config["data_paths"], is_train=True)
+    valid_dataset = MovementDataset(config["data_paths"], is_train=False)
 
     # create model
     davg, dstd, ener_shift = train_dataset.get_stat()

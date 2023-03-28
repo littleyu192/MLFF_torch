@@ -651,21 +651,5 @@ def al_main():
     gen_train_data(config, is_real_Ep=True)
     sepper_data(config, davg_path)
 
-def main():
-    try:
-        config_path = sys.argv[1]
-        movement_dir = sys.argv[2]
-        cwd = os.getcwd()
-        os.chdir(movement_dir)
-    except:
-        print('work dir is current dir')
-        config_path = "/home/wuxingxing/codespace/mutli_mlff/cu_config_template.yaml"
-    with open(config_path, "r") as yamlfile:
-        config = yaml.load(yamlfile, Loader=yaml.FullLoader)
-        print("Read Config successful")
-
-    gen_train_data(config, is_real_Ep=True)
-    sepper_data(config)
-
 if __name__ == "__main__":
     al_main()
