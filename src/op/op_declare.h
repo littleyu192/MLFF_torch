@@ -67,3 +67,14 @@ void torch_launch_matmul_bias_tanh(int64_t batch_size,
                                    const torch::Tensor &w,
                                    const torch::Tensor &bias,
                                    torch::Tensor &out);
+
+void torch_launch_matmul_bias(int64_t batch_size,
+                              const torch::Tensor &x,
+                              const torch::Tensor &w,
+                              const torch::Tensor &bias,
+                              torch::Tensor &out);
+
+void torch_launch_matmul(int64_t batch_size,
+                         const torch::Tensor &x,
+                         const torch::Tensor &w,
+                         torch::Tensor &out);
