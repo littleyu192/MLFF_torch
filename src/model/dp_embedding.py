@@ -71,13 +71,6 @@ class EmbeddingNet(nn.Module):
                 x = hiden
         return x
 
-    def set_no_grad(self):
-        for param in self.weights:
-            param.requires_grad_(False)
-
-        for param in self.bias:
-            param.requires_grad_(False)
-
     # Specialization for networksize (x, x, x) and resnet_dt == false
     # @torch.compile
     def specialization_forward(self, x):
@@ -156,13 +149,6 @@ class FittingNet(nn.Module):
             bias_init = torch.randn(1, self.network_size[i])
             normal(bias_init, mean=ener_shift, std=1.0)
             self.bias.append(nn.Parameter(bias_init, requires_grad=True))  # 初始化指定均值
-
-    def set_no_grad(self):
-        for param in self.weights:
-            param.requires_grad_(False)
-
-        for param in self.bias:
-            param.requires_grad_(False)
 
     def forward(self, x):
         if self.is_specialized():

@@ -101,6 +101,7 @@ class KFOptimizerWrapper:
             tmp_force_predict = force_predict[:, index[i]] * update_prefactor
             tmp_force_predict[mask] = -update_prefactor * tmp_force_predict[mask]
 
+            self.model.requires_grad_(True)
             # In order to solve a pytorch bug, reference: https://github.com/pytorch/pytorch/issues/43259
             (tmp_force_predict.sum() + Etot_predict.sum() * 0).backward()
             error = error * math.sqrt(bs)
@@ -114,6 +115,12 @@ class KFOptimizerWrapper:
             raise Exception("divider")
         index = range(natoms)
         res = np.random.choice(index, atoms_selected).reshape(-1, atoms_per_group)
+        # import ipdb;ipdb.set_trace()
+        # res = np.array([[  2,  83,  42,  19,  77,  81], \
+        # [ 60,  20,  90,  67,   7,  55], \
+        # [ 83,  71,  85,  80,  82,  61], \
+        # [ 67, 100, 100, 103,  63,  52]])
+
         return res
 
 

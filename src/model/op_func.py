@@ -20,15 +20,16 @@ class MatmulBiasTanh(Function):
             dtype=x.dtype,
         )
         op.matmul_bias_tanh(int(x.nelement() / (m * k)), x, w, bias, output)
-        ctx.save_for_backward(x, w, output)
+        ctx.save_for_backward(x, w, bias, output)
         return output
 
     @staticmethod
     def backward(ctx, grad_output):
         inputs = ctx.saved_tensors
-        x = inputs[0]
-        w = inputs[1]
-        hiden = inputs[2]
+        x, w, bias, hiden = inputs
+
+        grad_x = grad_w = grad_bias = None
+        # import ipdb; ipdb.set_trace()
 
         grad_output = grad_output * (1 - hiden.mul(hiden))
 
@@ -38,19 +39,22 @@ class MatmulBiasTanh(Function):
         #     None, None,
         # )
         # w.requires_grad = False
+        if x.requires_grad:
+            grad_x = torch.matmul(grad_output, w.transpose(-2, -1))
+            # grad_x = Matmul.apply(grad_output, w, False, True, False, True)
 
-        grad_x = torch.matmul(grad_output, w.transpose(-2, -1))
         # with torch.no_grad():
-        # grad_x = Matmul.apply(grad_output, w, False, True, False, True)
+        if w.requires_grad:
+            grad_w = torch.matmul(x.transpose(-2, -1), grad_output)
+            # grad_w = Matmul.apply(x, grad_output, True, False, False, False)
 
-        # with torch.no_grad():
-        grad_w = torch.matmul(x.transpose(-2, -1), grad_output)
-        # grad_w = Matmul.apply(x, grad_output, True, False, False, False)
+        if bias.requires_grad:
+            grad_bias = grad_output
 
         return (
             grad_x,
             grad_w,
-            grad_output,
+            grad_bias,
         )
 
 
@@ -90,49 +94,60 @@ class Matmul(Function):
         broadcastX = tmp[3]
         broadcastW = tmp[4]
 
-        grad_x = torch.empty_like(x)
-        output_shape = [x.shape[i] for i in range(x.dim())]
-        output_shape[-2] = w.shape[-2]
-        output_shape[-1] = w.shape[-1]
+        grad_x = grad_w = None
 
-        grad_w = torch.empty(
-            output_shape,
-            device=x.device,
-            dtype=x.dtype,
-        )
+        if x.requires_grad:
+            grad_x = torch.empty_like(x)
+
+        if w.requires_grad:
+            output_shape = [x.shape[i] for i in range(x.dim())]
+            output_shape[-2] = w.shape[-2]
+            output_shape[-1] = w.shape[-1]
+
+            grad_w = torch.empty(
+                output_shape,
+                device=x.device,
+                dtype=x.dtype,
+            )
         # import ipdb; ipdb.set_trace()
 
         if transX and transW:
-            op.matmul(
-                batch_count, w, grad_output, True, True, broadcastW, False, grad_x
-            )
-
-            op.matmul(
-                batch_count, grad_output, x, True, True, False, broadcastX, grad_w
-            )
+            if x.requires_grad:
+                op.matmul(
+                    batch_count, w, grad_output, True, True, broadcastW, False, grad_x
+                )
+            if w.requires_grad:
+                op.matmul(
+                    batch_count, grad_output, x, True, True, False, broadcastX, grad_w
+                )
         elif transX and not transW:
-            op.matmul(
-                batch_count, w, grad_output, False, True, broadcastW, False, grad_x
-            )
+            if x.requires_grad:
+                op.matmul(
+                    batch_count, w, grad_output, False, True, broadcastW, False, grad_x
+                )
 
-            op.matmul(
-                batch_count, x, grad_output, False, False, broadcastX, False, grad_w
-            )
+            if w.requires_grad:
+                op.matmul(
+                    batch_count, x, grad_output, False, False, broadcastX, False, grad_w
+                )
         elif not transX and transW:
-            op.matmul(
-                batch_count, grad_output, w, False, False, False, broadcastW, grad_x
-            )
-
-            op.matmul(
-                batch_count, grad_output, x, True, False, False, broadcastX, grad_w
-            )
+            if x.requires_grad:
+                op.matmul(
+                    batch_count, grad_output, w, False, False, False, broadcastW, grad_x
+                )
+            if w.requires_grad:
+                op.matmul(
+                    batch_count, grad_output, x, True, False, False, broadcastX, grad_w
+                )
         else:
-            op.matmul(
-                batch_count, grad_output, w, False, True, False, broadcastW, grad_x
-            )
-            op.matmul(
-                batch_count, x, grad_output, True, False, broadcastX, False, grad_w
-            )
+            if x.requires_grad:
+                op.matmul(
+                    batch_count, grad_output, w, False, True, False, broadcastW, grad_x
+                )
+            if w.requires_grad:
+                op.matmul(
+                    batch_count, x, grad_output, True, False, broadcastX, False, grad_w
+                )
 
         return (
             grad_x,

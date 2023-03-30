@@ -59,6 +59,7 @@ class DP(nn.Module):
     ):
 
         torch.autograd.set_detect_anomaly(True)
+        # Ri.requires_grad_(True)
 
         Ri_d = dfeat
         natoms = natoms_img[0, 1:]
@@ -118,9 +119,8 @@ class DP(nn.Module):
         # start_autograd = time.time()
         # print("fitting time:", start_autograd - start_fitting, 's')
         
-        # self.embedding_net[0].set_no_grad()
-        # self.fitting_net[0].set_no_grad()
         # import ipdb; ipdb.set_trace()
+        self.requires_grad_(False)
         mask = torch.ones_like(Ei)
         dE = torch.autograd.grad(
             Ei, Ri, grad_outputs=mask, retain_graph=True, create_graph=True
