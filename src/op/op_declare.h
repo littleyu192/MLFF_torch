@@ -77,4 +77,6 @@ void torch_launch_matmul_bias(int64_t batch_size,
 void torch_launch_matmul(int64_t batch_size,
                          const torch::Tensor &x,
                          const torch::Tensor &w,
+                         bool transX, bool transW,
+                         bool broadcastX, bool broadcastW,
                          torch::Tensor &out);

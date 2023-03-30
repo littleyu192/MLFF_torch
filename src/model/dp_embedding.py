@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch.nn.init import normal_ as normal
 import numpy as np
-from model.op_func import Matmul
+from model.op_func import MatmulBiasTanh
 
 
 class EmbeddingNet(nn.Module):
@@ -71,7 +71,14 @@ class EmbeddingNet(nn.Module):
                 x = hiden
         return x
 
-     # Specialization for networksize (x, x, x) and resnet_dt == false
+    def set_no_grad(self):
+        for param in self.weights:
+            param.requires_grad_(False)
+
+        for param in self.bias:
+            param.requires_grad_(False)
+
+    # Specialization for networksize (x, x, x) and resnet_dt == false
     # @torch.compile
     def specialization_forward(self, x):
         hiden = torch.matmul(x, self.weights[0]) + self.bias[0]
@@ -79,7 +86,7 @@ class EmbeddingNet(nn.Module):
         x = hiden
 
         # import ipdb; ipdb.set_trace()
-        hiden = Matmul.apply(x, self.weights[1], self.bias[1])
+        hiden = MatmulBiasTanh.apply(x, self.weights[1], self.bias[1])
 
         # hiden = torch.matmul(x, self.weights[1]) + self.bias[1]
         # hiden = self.cfg["activation"](hiden)
@@ -87,14 +94,13 @@ class EmbeddingNet(nn.Module):
 
         # hiden = torch.matmul(x, self.weights[2]) + self.bias[2]
         # hiden = self.cfg["activation"](hiden)
-        hiden = Matmul.apply(x, self.weights[2], self.bias[2])
+        hiden = MatmulBiasTanh.apply(x, self.weights[2], self.bias[2])
         x = hiden + x
 
         return x
 
     def is_specialized(self):
         return len(self.cfg["network_size"]) == 3 and not self.cfg["resnet_dt"]
-
 
 
 class FittingNet(nn.Module):
@@ -151,6 +157,13 @@ class FittingNet(nn.Module):
             normal(bias_init, mean=ener_shift, std=1.0)
             self.bias.append(nn.Parameter(bias_init, requires_grad=True))  # 初始化指定均值
 
+    def set_no_grad(self):
+        for param in self.weights:
+            param.requires_grad_(False)
+
+        for param in self.bias:
+            param.requires_grad_(False)
+
     def forward(self, x):
         if self.is_specialized():
             return self.specialization_forward(x)
@@ -185,17 +198,17 @@ class FittingNet(nn.Module):
     # Specialization for networksize (x, x, x, 1) and resnet_dt == True
     # @torch.compile
     def specialization_forward(self, x):
-        hiden = Matmul.apply(x, self.weights[0], self.bias[0])
+        hiden = MatmulBiasTanh.apply(x, self.weights[0], self.bias[0])
         # hiden = torch.matmul(x, self.weights[0]) + self.bias[0]
         # hiden = self.cfg["activation"](hiden)
         x = hiden
 
-        hiden = Matmul.apply(x, self.weights[1], self.bias[1])
+        hiden = MatmulBiasTanh.apply(x, self.weights[1], self.bias[1])
         # hiden = torch.matmul(x, self.weights[1]) + self.bias[1]
         # hiden = self.cfg["activation"](hiden)
         x = hiden * self.resnet_dt[0] + x
 
-        hiden = Matmul.apply(x, self.weights[2], self.bias[2])
+        hiden = MatmulBiasTanh.apply(x, self.weights[2], self.bias[2])
         # hiden = torch.matmul(x, self.weights[2]) + self.bias[2]
         # hiden = self.cfg["activation"](hiden)
         x = hiden * self.resnet_dt[1] + x

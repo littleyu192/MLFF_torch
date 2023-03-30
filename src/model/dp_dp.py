@@ -117,7 +117,10 @@ class DP(nn.Module):
             return Etot, Ei, F
         # start_autograd = time.time()
         # print("fitting time:", start_autograd - start_fitting, 's')
-
+        
+        # self.embedding_net[0].set_no_grad()
+        # self.fitting_net[0].set_no_grad()
+        # import ipdb; ipdb.set_trace()
         mask = torch.ones_like(Ei)
         dE = torch.autograd.grad(
             Ei, Ri, grad_outputs=mask, retain_graph=True, create_graph=True

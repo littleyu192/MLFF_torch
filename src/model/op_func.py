@@ -3,7 +3,7 @@ from torch.autograd import Function
 import op
 
 
-class Matmul(Function):
+class MatmulBiasTanh(Function):
     @staticmethod
     def forward(ctx, x, w, bias):
         dims = x.shape
@@ -31,10 +31,116 @@ class Matmul(Function):
         hiden = inputs[2]
 
         grad_output = grad_output * (1 - hiden.mul(hiden))
+
+        # import ipdb; ipdb.set_trace()
+        # return (
+        #     torch.matmul(grad_output, w.transpose(-2, -1)),
+        #     None, None,
+        # )
+        # w.requires_grad = False
+
+        grad_x = torch.matmul(grad_output, w.transpose(-2, -1))
+        # with torch.no_grad():
+        # grad_x = Matmul.apply(grad_output, w, False, True, False, True)
+
+        # with torch.no_grad():
+        grad_w = torch.matmul(x.transpose(-2, -1), grad_output)
+        # grad_w = Matmul.apply(x, grad_output, True, False, False, False)
+
         return (
-            torch.matmul(grad_output, w.transpose(-2, -1)),
-            torch.matmul(x.transpose(-2, -1), grad_output),
+            grad_x,
+            grad_w,
             grad_output,
+        )
+
+
+class Matmul(Function):
+    @staticmethod
+    def forward(ctx, x, w, transX, transW, broadcastX, broadcastW):
+        dims = x.shape
+        m = dims[-1] if transX else dims[-2]
+        k = dims[-2] if transX else dims[-1]
+        n = w.shape[-2] if transW else w.shape[-1]
+
+        output_shape = [x.shape[i] for i in range(len(dims))]
+        output_shape[-2] = m
+        output_shape[-1] = n
+
+        output = torch.empty(
+            output_shape,
+            device=x.device,
+            dtype=x.dtype,
+        )
+        batch_count = int(x.nelement() / (m * k))
+        op.matmul(batch_count, x, w, transX, transW, broadcastX, broadcastW, output)
+        tmp = torch.Tensor([batch_count, transX, transW, broadcastX, broadcastW])
+        ctx.save_for_backward(x, w, tmp)
+        # import ipdb; ipdb.set_trace()
+        return output
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        inputs = ctx.saved_tensors
+        x = inputs[0]
+        w = inputs[1]
+        tmp = inputs[2]
+        batch_count = tmp[0]
+        transX = tmp[1]
+        transW = tmp[2]
+        broadcastX = tmp[3]
+        broadcastW = tmp[4]
+
+        grad_x = torch.empty_like(x)
+        output_shape = [x.shape[i] for i in range(x.dim())]
+        output_shape[-2] = w.shape[-2]
+        output_shape[-1] = w.shape[-1]
+
+        grad_w = torch.empty(
+            output_shape,
+            device=x.device,
+            dtype=x.dtype,
+        )
+        # import ipdb; ipdb.set_trace()
+
+        if transX and transW:
+            op.matmul(
+                batch_count, w, grad_output, True, True, broadcastW, False, grad_x
+            )
+
+            op.matmul(
+                batch_count, grad_output, x, True, True, False, broadcastX, grad_w
+            )
+        elif transX and not transW:
+            op.matmul(
+                batch_count, w, grad_output, False, True, broadcastW, False, grad_x
+            )
+
+            op.matmul(
+                batch_count, x, grad_output, False, False, broadcastX, False, grad_w
+            )
+        elif not transX and transW:
+            op.matmul(
+                batch_count, grad_output, w, False, False, False, broadcastW, grad_x
+            )
+
+            op.matmul(
+                batch_count, grad_output, x, True, False, False, broadcastX, grad_w
+            )
+        else:
+            op.matmul(
+                batch_count, grad_output, w, False, True, False, broadcastW, grad_x
+            )
+            op.matmul(
+                batch_count, x, grad_output, True, False, broadcastX, False, grad_w
+            )
+
+        return (
+            grad_x,
+            grad_w,
+            None,
+            None,
+            None,
+            None,
         )
 
 
