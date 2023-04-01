@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 from model.dp_embedding import EmbeddingNet, FittingNet
-from model.op_func import CalculateForce, CalculateDR
+from model.op_func import CalculateForce, CalculateDR, CalculateDRGrad
 
 
 class DP(nn.Module):
@@ -57,7 +57,6 @@ class DP(nn.Module):
     def forward(
         self, Ri, dfeat, list_neigh, natoms_img, Egroup_weight, divider, is_calc_f=None
     ):
-
         torch.autograd.set_detect_anomaly(True)
         # Ri.requires_grad_(True)
 
@@ -118,18 +117,38 @@ class DP(nn.Module):
             return Etot, Ei, F
         # start_autograd = time.time()
         # print("fitting time:", start_autograd - start_fitting, 's')
-        
-        # import ipdb; ipdb.set_trace()
-        self.requires_grad_(False)
-        mask = torch.ones_like(Ei)
-        dE = torch.autograd.grad(
-            Ei, Ri, grad_outputs=mask, retain_graph=True, create_graph=True
+
+        dEi_dD = self.fitting_net[0].compute_grad()
+        dEi_dRG = CalculateDRGrad.apply(
+            xyz_scater_a, dEi_dD, self.maxNeighborNum, self.ntypes
         )
-        dE = torch.stack(list(dE), dim=0).squeeze(
-            0
-        )  # [:,:,:,:-1] #[2,108,100,4]-->[2,108,100,3]
+        dEi_dG = torch.matmul(tmp_a.transpose(-2, -1), dEi_dRG)
+        dEi_dR1 = self.embedding_net[0].compute_grad(dEi_dG)
+
+        # # Ri_replicate_25_4 = Ri.unsqueeze(-2).repeat(1,1,1,25,1).reshape(32,108,100,-1)
+        # Ri_replicate_25_4 = tmp_a.unsqueeze(-2).repeat(1,1,1,25,1).reshape(32,108,100,-1)
+        # # R_times_dE_dR1=Ri_replicate_25_4.mul(dEi_dR1)
+        # R_times_dE_dR1=torch.matmul(Ri_replicate_25_4, dEi_dR1)
+        # G_R1 = G.repeat(1,1,1,1,4).reshape(32,108,100,-1)
+        # # dE_dR2_4 = G_R1.mul(dEi_dRG.transpose(-2,-1).reshape(32,108,-1).unsqueeze(-1))
+        # dE_dR2_4 = torch.matmul(G, dEi_dRG.transpose(-2,-1))
+        dE_dR2_4_xxx = torch.matmul(dEi_dRG, G.transpose(-2, -1)).transpose(-2, -1)
+        # import ipdb;ipdb.set_trace()
+        dE_dR2_4_xxx[:, :, :, 0] += dEi_dR1.squeeze(-1)
+        dE = dE_dR2_4_xxx
+
+        # self.requires_grad_(False)
+        # mask = torch.ones_like(Ei)
+        # dE = torch.autograd.grad(
+        #     Ei, Ri, grad_outputs=mask, retain_graph=True, create_graph=True
+        # )
+
+        # dE = torch.stack(list(dE), dim=0).squeeze(
+        #     0
+        # )  # [:,:,:,:-1] #[2,108,100,4]-->[2,108,100,3]
 
         Ri_d = Ri_d.reshape(batch_size, natoms_sum, -1, 3)
+        # import ipdb;ipdb.set_trace()
         dE = dE.reshape(batch_size, natoms_sum, 1, -1)
 
         # start_force = time.time()
@@ -145,7 +164,6 @@ class DP(nn.Module):
     def init_cudagraph(
         self, Ri, dfeat, list_neigh, natoms_img, Egroup_weight, divider, is_calc_f=None
     ):
-
         Ri_d = dfeat
         natoms = natoms_img[0, 1:]
         natoms_sum = Ri.shape[1]
@@ -174,9 +192,7 @@ class DP(nn.Module):
                 else:
                     xyz_scater_a = xyz_scater_a + tmp_b
 
-            DR_ntype = CalculateDR.apply(
-                xyz_scater_a, self.maxNeighborNum, self.ntypes
-            )
+            DR_ntype = CalculateDR.apply(xyz_scater_a, self.maxNeighborNum, self.ntypes)
 
             if ntype == 0:
                 DR = DR_ntype

@@ -101,7 +101,6 @@ class KFOptimizerWrapper:
             tmp_force_predict = force_predict[:, index[i]] * update_prefactor
             tmp_force_predict[mask] = -update_prefactor * tmp_force_predict[mask]
 
-            self.model.requires_grad_(True)
             # In order to solve a pytorch bug, reference: https://github.com/pytorch/pytorch/issues/43259
             (tmp_force_predict.sum() + Etot_predict.sum() * 0).backward()
             error = error * math.sqrt(bs)

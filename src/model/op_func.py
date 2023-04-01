@@ -25,8 +25,7 @@ class MatmulBiasTanh(Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        inputs = ctx.saved_tensors
-        x, w, bias, hiden = inputs
+        x, w, bias, hiden = ctx.saved_tensors
 
         grad_x = grad_w = grad_bias = None
         # import ipdb; ipdb.set_trace()
@@ -40,13 +39,13 @@ class MatmulBiasTanh(Function):
         # )
         # w.requires_grad = False
         if x.requires_grad:
-            grad_x = torch.matmul(grad_output, w.transpose(-2, -1))
-            # grad_x = Matmul.apply(grad_output, w, False, True, False, True)
+            # grad_x = torch.matmul(grad_output, w.transpose(-2, -1))
+            grad_x = Matmul.apply(grad_output, w, False, True, False, True)
 
         # with torch.no_grad():
         if w.requires_grad:
-            grad_w = torch.matmul(x.transpose(-2, -1), grad_output)
-            # grad_w = Matmul.apply(x, grad_output, True, False, False, False)
+            # grad_w = torch.matmul(x.transpose(-2, -1), grad_output)
+            grad_w = Matmul.apply(x, grad_output, True, False, False, False)
 
         if bias.requires_grad:
             grad_bias = grad_output

@@ -170,7 +170,7 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
                 sample_batches["Force"][:, :, :].double().to(device)
             )  # [40,108,3]
 
-            Ri = Variable(sample_batches["Ri"].double().to(device), requires_grad=True)
+            Ri = Variable(sample_batches["Ri"].double().to(device), requires_grad=False)
             Ri_d = Variable(sample_batches["Ri_d"].to(device))
 
         elif config.datatype == "float32":
@@ -179,7 +179,7 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
                 sample_batches["Force"][:, :, :].float().to(device)
             )  # [40,108,3]
 
-            Ri = Variable(sample_batches["Ri"].float().to(device), requires_grad=True)
+            Ri = Variable(sample_batches["Ri"].float().to(device), requires_grad=False)
             Ri_d = Variable(sample_batches["Ri_d"].float().to(device))
 
         Etot_label = torch.sum(Ei_label.unsqueeze(2), dim=1)

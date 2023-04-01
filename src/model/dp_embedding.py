@@ -44,6 +44,7 @@ class EmbeddingNet(nn.Module):
                 resnet_dt = torch.Tensor(1, self.network_size[i])
                 normal(resnet_dt, mean=1, std=0.001)
                 self.resnet_dt.append(nn.Parameter(resnet_dt, requires_grad=True))
+        self.inter_compute = []
 
     def forward(self, x):
         if self.is_specialized():
@@ -74,24 +75,37 @@ class EmbeddingNet(nn.Module):
     # Specialization for networksize (x, x, x) and resnet_dt == false
     # @torch.compile
     def specialization_forward(self, x):
+        self.inter_compute = []
         hiden = torch.matmul(x, self.weights[0]) + self.bias[0]
         hiden = self.cfg["activation"](hiden)
         x = hiden
+        self.inter_compute.append(hiden)
 
         # import ipdb; ipdb.set_trace()
         hiden = MatmulBiasTanh.apply(x, self.weights[1], self.bias[1])
-
         # hiden = torch.matmul(x, self.weights[1]) + self.bias[1]
         # hiden = self.cfg["activation"](hiden)
+        self.inter_compute.append(hiden)
         x = hiden + x
 
         # hiden = torch.matmul(x, self.weights[2]) + self.bias[2]
         # hiden = self.cfg["activation"](hiden)
         hiden = MatmulBiasTanh.apply(x, self.weights[2], self.bias[2])
+        self.inter_compute.append(hiden)
         x = hiden + x
+        
 
         return x
-
+    
+    def compute_grad(self, grad_output):
+        hidens = self.inter_compute
+        grad_output_hiden2_final_to_hiden1_final = grad_output + torch.matmul(grad_output *  (1-hidens[2].mul(hidens[2])),  self.weights[2].transpose(-2,-1))
+        # grad_output_hiden2_final_to_hiden1 = grad_output_hiden2_final_to_hiden1_final
+        grad_output_hiden2_final_to_hiden0 = grad_output_hiden2_final_to_hiden1_final + torch.matmul(grad_output_hiden2_final_to_hiden1_final *  (1-hidens[1].mul(hidens[1])),  self.weights[1].transpose(-2,-1))
+        grad_output_hiden2_final_to_R1 = torch.matmul(grad_output_hiden2_final_to_hiden0 *  (1-hidens[0].mul(hidens[0])),  self.weights[0].transpose(-2,-1))
+        # import ipdb; ipdb.set_trace()
+        return grad_output_hiden2_final_to_R1
+    
     def is_specialized(self):
         return len(self.cfg["network_size"]) == 3 and not self.cfg["resnet_dt"]
 
@@ -149,6 +163,8 @@ class FittingNet(nn.Module):
             bias_init = torch.randn(1, self.network_size[i])
             normal(bias_init, mean=ener_shift, std=1.0)
             self.bias.append(nn.Parameter(bias_init, requires_grad=True))  # 初始化指定均值
+        
+        self.inter_compute = []
 
     def forward(self, x):
         if self.is_specialized():
@@ -184,24 +200,48 @@ class FittingNet(nn.Module):
     # Specialization for networksize (x, x, x, 1) and resnet_dt == True
     # @torch.compile
     def specialization_forward(self, x):
+        self.inter_compute = []
         hiden = MatmulBiasTanh.apply(x, self.weights[0], self.bias[0])
         # hiden = torch.matmul(x, self.weights[0]) + self.bias[0]
         # hiden = self.cfg["activation"](hiden)
+        self.inter_compute.append(hiden)
         x = hiden
 
         hiden = MatmulBiasTanh.apply(x, self.weights[1], self.bias[1])
+
         # hiden = torch.matmul(x, self.weights[1]) + self.bias[1]
         # hiden = self.cfg["activation"](hiden)
-        x = hiden * self.resnet_dt[0] + x
+        self.inter_compute.append(hiden)
+        # x = hiden * self.resnet_dt[0] + x
+        x = hiden + x
 
         hiden = MatmulBiasTanh.apply(x, self.weights[2], self.bias[2])
+
         # hiden = torch.matmul(x, self.weights[2]) + self.bias[2]
         # hiden = self.cfg["activation"](hiden)
-        x = hiden * self.resnet_dt[1] + x
+        self.inter_compute.append(hiden)
+        # x = hiden * self.resnet_dt[1] + x
+        x = hiden + x
 
         x = torch.matmul(x, self.weights[3]) + self.bias[3]
+        self.inter_compute.append(x)
 
         return x
+    
+    def compute_grad(self):
+        hidens = self.inter_compute
+        # grad_output = grad_output * (1 - hidens[-1].mul(hidens[-1]))
+        # grad_x = torch.matmul(grad_output, self.weights[3].transpose(-2, -1))
 
+        grad_output_Ei_to_hiden2_final = self.weights[3].transpose(-2, -1)
+        grad_output_Ei_to_hiden2 = grad_output_Ei_to_hiden2_final
+        grad_output_Ei_to_hiden1_final = grad_output_Ei_to_hiden2_final + torch.matmul(grad_output_Ei_to_hiden2 *  (1-hidens[2].mul(hidens[2])),  self.weights[2].transpose(-2,-1))
+        # grad_output_Ei_to_hiden1 = grad_output_Ei_to_hiden1_final
+        grad_output_Ei_to_hiden0 = grad_output_Ei_to_hiden1_final + torch.matmul(grad_output_Ei_to_hiden1_final * (1-hidens[1].mul(hidens[1])), self.weights[1].transpose(-2,-1))
+        grad_output_Ei_to_D =  torch.matmul(grad_output_Ei_to_hiden0 * (1-hidens[0].mul(hidens[0])), self.weights[0].transpose(-2,-1))
+        # self.inter_compute = []
+        # import ipdb; ipdb.set_trace()
+        return grad_output_Ei_to_D
+    
     def is_specialized(self):
         return len(self.cfg["network_size"]) == 4 and self.cfg["resnet_dt"]
