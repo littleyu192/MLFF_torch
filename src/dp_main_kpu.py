@@ -397,36 +397,30 @@ def main():
             )
         time_end = time.time()
 
-        # evaluate on validation set
-        vld_loss, vld_loss_Etot, vld_loss_Force, vld_loss_Ei = valid(
-            val_loader, model, criterion, device, args
-        )
-
         if not args.hvd or (args.hvd and hvd.rank() == 0):
             f_train_log = open(train_log, "a")
             f_train_log.write(
                 "%d %e %e %e %e %e %s\n"
-                % (
-                    epoch,
-                    loss,
-                    loss_Etot,
-                    loss_Ei,
-                    loss_Force,
-                    real_lr,
-                    time_end - time_start,
+                % (epoch, loss, loss_Etot, loss_Ei, loss_Force, real_lr, time_end - time_start)
+            )
+        
+        if len(val_loader) > 0: 
+            # evaluate on validation set
+            vld_loss, vld_loss_Etot, vld_loss_Force, vld_loss_Ei = valid(
+                val_loader, model, criterion, device, args
+            )
+            if not args.hvd or (args.hvd and hvd.rank() == 0):
+                f_valid_log = open(valid_log, "a")
+                f_valid_log.write(
+                    "%d %e %e %e %e\n"
+                    % (epoch, vld_loss, vld_loss_Etot, vld_loss_Ei, vld_loss_Force)
                 )
-            )
-            f_valid_log = open(valid_log, "a")
-            f_valid_log.write(
-                "%d %e %e %e %e\n"
-                % (epoch, vld_loss, vld_loss_Etot, vld_loss_Ei, vld_loss_Force)
-            )
-
-        # scheduler.step()
-
-        # remember best loss and save checkpoint
-        is_best = vld_loss < best_loss
-        best_loss = min(loss, best_loss)
+            # remember best loss and save checkpoint
+            is_best = vld_loss < best_loss
+            best_loss = min(loss, best_loss)
+        else:
+            best_loss = 1.0
+            is_best = True
 
         if not args.hvd or (args.hvd and hvd.rank() == 0):
             save_checkpoint(

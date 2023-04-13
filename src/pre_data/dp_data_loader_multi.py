@@ -39,7 +39,8 @@ class MovementDataset(Dataset):
             tmp_dir = sorted(tmp_dir, key=lambda x: int(x.split('/')[-1].split('_')[-1]))
             self.dirs.extend(tmp_dir)
         # self.dirs = sorted(self.dirs)
-
+        if len(self.dirs) == 0:
+            return None
         self.__compute_stat_output(10, 1e-3)
 
     def __load_data(self, path):
