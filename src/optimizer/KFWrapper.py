@@ -111,9 +111,9 @@ class KFOptimizerWrapper:
         return Egroup_predict
     
     def update_virial(
-        self, inputs: list, Virial_label: torch.Tensor, update_prefactor: float = 1
+        self, inputs: list, Virial_label: torch.Tensor, update_prefactor: float = 0.0001
     ) -> None:
-        _, _, _, _, Virial_predict = self.model(
+        Etot_predict, _, _, _, Virial_predict = self.model(
             inputs[0],
             inputs[1],
             inputs[2],
@@ -147,7 +147,7 @@ class KFOptimizerWrapper:
         Virial_predict = update_prefactor * Virial_predict
         Virial_predict[mask] = -update_prefactor * Virial_predict[mask]
 
-        Virial_predict.sum().backward()
+        (Virial_predict.sum() + Etot_predict.sum() * 0).backward()
         error = error * math.sqrt(bs)
         self.optimizer.step(error)
         return Virial_predict
