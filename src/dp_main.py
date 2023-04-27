@@ -9,6 +9,7 @@ import torch.optim as optim
 import torch.utils.data
 import torch.utils.data.distributed
 import warnings
+import numpy as np
 
 from model.dp_dp import DP
 
@@ -400,6 +401,38 @@ def main():
                 "checkpoint.pth.tar",
                 args.store_path,
             )
+
+        if epoch == args.epochs:
+            if os.path.exists('./weights.txt'):
+                os.remove('./weights.txt')
+            write_weights = open('./weights.txt', 'a')
+
+            write_weights.writelines('Max Neighbor:' + '\n')
+            write_weights.writelines(str(config['maxNeighborNum']))
+            write_weights.writelines('\n')  
+
+            davg = np.load("./train/davg.npy")
+            dstd = np.load("./train/dstd.npy")
+            write_weights.writelines('davg:' + '\n')
+            atom_type = davg.shape[0]
+            
+            for i in range(atom_type):
+                write_weights.writelines(str(list(davg[i,:4])))
+                write_weights.writelines('\n')
+            write_weights.writelines('dstd:' + '\n')
+
+            for i in range(atom_type):
+                write_weights.writelines(str(list(dstd[i,:4])))
+                write_weights.writelines('\n')
+            write_weights.writelines('\n')
+
+            for key, value in model.named_parameters():
+                print(key, value)
+                write_weights.writelines(key + '\n')
+                write_weights.writelines(str(value.cpu().tolist()[0]))
+                write_weights.writelines('\n\n')
+            write_weights.close()
+
 
 
 if __name__ == "__main__":
