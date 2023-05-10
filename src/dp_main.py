@@ -333,12 +333,12 @@ def main():
 
         f_train_log = open(train_log, "w")
         f_train_log.write(
-            "epoch\t loss\t RMSE_Etot\t RMSE_Ei\t RMSE_F\t real_lr\t time\n"
+            "epoch\t loss\t RMSE_Etot\t RMSE_Ei\t RMSE_F\t RMSE_V\t real_lr\t time\n"
         )
 
         valid_log = os.path.join(args.store_path, "epoch_valid.dat")
         f_valid_log = open(valid_log, "w")
-        f_valid_log.write("epoch\t loss\t RMSE_Etot\t RMSE_Ei\t RMSE_F\n")
+        f_valid_log.write("epoch\t loss\t RMSE_Etot\t RMSE_Ei\t RMSE_F\t RMSE_V\n")
 
     for epoch in range(args.start_epoch, args.epochs + 1):
         if args.hvd:
@@ -365,21 +365,22 @@ def main():
         if not args.hvd or (args.hvd and hvd.rank() == 0):
             f_train_log = open(train_log, "a")
             f_train_log.write(
-                "%d %e %e %e %e %e %s\n"
+                "%d %e %e %e %e %e %e %s\n"
                 % (
                     epoch,
                     loss,
                     loss_Etot,
                     loss_Ei,
                     loss_Force,
+                    loss_virial,
                     real_lr,
                     time_end - time_start,
                 )
             )
             f_valid_log = open(valid_log, "a")
             f_valid_log.write(
-                "%d %e %e %e %e\n"
-                % (epoch, vld_loss, vld_loss_Etot, vld_loss_Ei, vld_loss_Force)
+                "%d %e %e %e %e %e\n"
+                % (epoch, vld_loss, vld_loss_Etot, vld_loss_Ei, vld_loss_Force, val_loss_virial)
             )
 
         # scheduler.step()

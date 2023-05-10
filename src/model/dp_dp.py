@@ -135,7 +135,7 @@ class DP(nn.Module):
 
         # virial = CalculateVirialForce.apply(list_neigh, dE, Ri[:,:,:,:3], Ri_d)
         virial = CalculateVirialForce.apply(list_neigh, dE, ImageDR, Ri_d)
-        virial = virial * (-1)
+        # virial = virial * (-1)
         # print(Etot)
         # print(virial)
         # print("==============================")
