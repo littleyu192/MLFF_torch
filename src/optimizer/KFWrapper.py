@@ -145,12 +145,61 @@ class KFOptimizerWrapper:
                 error /= dist.get_world_size()
 
         Virial_predict = update_prefactor * Virial_predict
-        Virial_predict[mask] = -update_prefactor * Virial_predict[mask]
+        Virial_predict[mask] = -1.0 * Virial_predict[mask]
 
         (Virial_predict.sum() + Etot_predict.sum() * 0).backward()
         error = error * math.sqrt(bs)
         self.optimizer.step(error)
         return Virial_predict
+
+    def update_virial_test(
+        self, inputs: list, Virial_label: torch.Tensor, update_prefactor: float = 1
+    ) -> None:
+        Etot_predict, Ei_predict, Force_predict, Egroup_predict, Virial_predict = self.model(
+            inputs[0],
+            inputs[1],
+            inputs[2],
+            inputs[3],
+            inputs[4],
+            inputs[5],
+            inputs[6]
+        )
+        natoms_sum = inputs[4][0, 0]
+        self.optimizer.set_grad_prefactor(natoms_sum)
+
+        self.optimizer.zero_grad()
+        bs = Virial_label.shape[0]
+        #print(Etot_predict.shape)
+        #print(Force_predict.shape)
+        #print(Virial_label.shape)
+        #print(Virial_predict.shape)
+        error = Virial_label.squeeze(1) - Virial_predict
+        #print(error.shape)
+        #print(error)
+        error = error/(natoms_sum)
+        mask = error < 0
+
+        error = error * update_prefactor
+        error[mask] = -1 * error[mask]
+        #print(error)
+        error = error.mean()
+
+        if self.is_distributed:
+            if self.distributed_backend == "horovod":
+                import horovod as hvd
+
+                error = hvd.torch.allreduce(error)
+            elif self.distributed_backend == "torch":
+                dist.all_reduce(error)
+                error /= dist.get_world_size()
+
+        tmp_Virial_predict = update_prefactor * Virial_predict
+        tmp_Virial_predict[mask] = -1.0 * Virial_predict[mask]
+
+        (tmp_Virial_predict.sum() + Etot_predict.sum() * 0).backward()
+        error = error * math.sqrt(bs)
+        self.optimizer.step(error)
+        return Etot_predict, Ei_predict, Force_predict, Egroup_predict, Virial_predict
 
 
     def update_force(

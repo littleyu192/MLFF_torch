@@ -51,7 +51,7 @@ class MovementDataset(Dataset):
         return len(self.dirs)
 
     def __compute_stat_output(self, image_num=10, rcond=1e-3):
-
+        energy_per_species=[]
         data = self.__getitem__(0)
 
         self.ener_shift = []
@@ -77,13 +77,22 @@ class MovementDataset(Dataset):
         #     self.ener_shift.append(ener_shift[0, 0])
         # energy_ntype = energy[:, natoms_sum:natoms_sum+natoms_per_type[ntype]]
         # natoms_sum += natoms_per_type[ntype]
-        energy_sum = energy.sum(axis=1)
-        energy_avg = np.average(energy_sum)
+        #energy_sum = energy.sum(axis=1)
+        #energy_avg = np.average(energy_sum)
         # energy_one = np.ones_like(energy_sum) * natoms_per_type[ntype]
-        ener_shift, _, _, _ = np.linalg.lstsq(
-            [natoms_per_type], [energy_avg], rcond=rcond
-        )
-        self.ener_shift = ener_shift.tolist()
+        #ener_shift, _, _, _ = np.linalg.lstsq(
+        #    [natoms_per_type], [energy_avg], rcond=rcond
+        #)
+        #self.ener_shift = ener_shift.tolist()
+        for index,num in zip(range(len(natoms_per_type)),natoms_per_type):
+            if index == 0:
+                #print(energy[:,:num].mean().shape)
+                energy_per_species.append(energy[:,:num].mean())
+            else:
+                num_before = natoms_per_type[index-1]
+                energy_per_species.append(energy[:,num_before:num_before+num].mean())
+
+        self.ener_shift = energy_per_species
 
     def get_stat(self):
         return self.davg, self.dstd, self.ener_shift
