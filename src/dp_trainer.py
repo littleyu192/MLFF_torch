@@ -253,9 +253,9 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
             prof.export_chrome_trace("kf_update_force.json")
         else:
             # import ipdb;ipdb.set_trace()
+            KFOptWrapper.update_virial(kalman_inputs, Virial_label, 0.1)
             KFOptWrapper.update_energy(kalman_inputs, Etot_label)
             # KFOptWrapper.update_egroup(kalman_inputs, Egroup_label)
-            KFOptWrapper.update_virial(kalman_inputs, Virial_label)
             Etot_predict, Ei_predict, Force_predict, Egroup_predict, Virial_predict = KFOptWrapper.update_force(
                 kalman_inputs, Force_label, 2
             )
