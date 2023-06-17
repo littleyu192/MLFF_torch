@@ -196,7 +196,7 @@ class MLFFNet(nn.Module):
         n_a_ofs_fortran_b = torch.arange(0, batch_size * (natom+1), (natom+1))\
                             .repeat_interleave(natom * neighbor_num)
         n_a_idx_fortran_b = n_a_idx_fortran.type(torch.int64) + n_a_ofs_fortran_b.to(self.device)
-        dEi_neighbors = result_dEi_dFeat_fortran\
+        dEi_neighbors = result_dEi_dFeat_fortran.to(self.device)\
                         .reshape(batch_size * (natom+1), dim_feat)[n_a_idx_fortran_b,]\
                         .reshape(batch_size, natom, neighbor_num, 1, dim_feat)
         Force = torch.matmul(dEi_neighbors.to(self.device), dfeat).sum([2, 3])

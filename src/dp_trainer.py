@@ -86,7 +86,7 @@ def train(train_loader, model, criterion, optimizer, epoch, start_lr, device, co
             )
 
         optimizer.zero_grad()
-
+        # print(torch.cuda.memory_allocated(device=device))
         loss_F_val = criterion(Force_predict, Force_label)
         loss_Etot_val = criterion(Etot_predict, Etot_label)
         # loss_Ei_val = criterion(Ei_predict, Ei_label)
@@ -222,6 +222,7 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
             Etot_predict, Ei_predict, Force_predict = KFOptWrapper.update_force(
                 kalman_inputs, Force_label, 2
             )
+        # print(torch.cuda.memory_allocated(device=device))
 
         loss_F_val = criterion(Force_predict, Force_label)
         loss_Etot_val = criterion(Etot_predict, Etot_label)
