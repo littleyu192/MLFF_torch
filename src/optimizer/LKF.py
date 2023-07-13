@@ -229,6 +229,7 @@ class LKFOptimizer(Optimizer):
         for i in range(len(P)):
             self._state["P"][i] = P[i].cpu().to(self._params[0].device)
 
+    #this function for KPU test 
     def set_kalman_P_noramlize(self, P, kalman_lambda = 0.999999999999872):
         self._state.update({"kalman_lambda": kalman_lambda})
         for i in range(len(P)):

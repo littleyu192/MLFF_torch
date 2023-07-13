@@ -6,6 +6,7 @@ import torch
 from torch.utils.data import Subset
 from torch.autograd import Variable
 import pandas as pd
+import numpy as np
 from loss.dploss import dp_loss, adjust_lr
 
 from optimizer.KFWrapper import KFOptimizerWrapper
@@ -391,6 +392,8 @@ def predict(train_loader, model, criterion, optimizer, device, config):
         file_path = int(sample_batches["file_path"])
         kalman_inputs = [Ri, Ri_d, dR_neigh_list, natoms_img, None, None]
         Etot_predict, Ei_predict, Force_predict = KFOptWrapper.valid(kalman_inputs, Etot_label)
+        np.savetxt(os.path.join(save_dir, "Force_predict_{}.dat".format(index_image)), Force_predict.squeeze(0).data.cpu().numpy())
+        # np.savetxt(os.path.join(save_dir, "Force_label_{}.dat".format(index_image)), Force_label.squeeze(0).data.cpu().numpy())
         # error
         loss_Etot_val = criterion(Etot_predict, Etot_label)
         loss_F_val = criterion(Force_predict, Force_label)

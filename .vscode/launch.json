@@ -22,8 +22,9 @@
             "outputCapture": "std",
             "justMyCode": false,
             "args": [
-                "-c", "/share/home/wuxingxing/al_dir/cu_system/i0_i6_dft_kpu_test/final_test/cu_config_template.yaml", 
-                "-w", "/share/home/wuxingxing/al_dir/cu_system/i0_i6_dft_kpu_test/final_test"
+                "-c", "/share/home/wuxingxing/datas/al_dir/hfo2/hfo2_config_template.yaml", 
+                "-d", "/share/home/wuxingxing/al_dir/hfo2/init_data/train",
+                "-w", "/share/home/wuxingxing/datas/al_dir/hfo2/iter.0001/labeling/lab_dpkf_dir/feature_dir"
                 // "-d", "/share/home/wuxingxing/datas/al_dir/cu_bulk_system/iter.0000/exploring/init_dp/train"
             ]
             //"-d", "/share/home/wuxingxing/datas/system_config/cu_72104/dpkf_data/calc4/train"
@@ -88,11 +89,11 @@
             //     "-s", "/share/home/wuxingxing/datas/al_dir/si_system/iter.0000/training/model_dir"
             // ]
             // cu kpu:
-            // "args": [ 
-            //     "--hvd", "--opt", "LKF", "--epochs", "100", "-r", "-b", "1", "-k", "-f", "1", "--kpu_dir", "debug_md_kpu_dir_nr2",
-            //     "-c", "/share/home/wuxingxing/datas/system_config/cu_72104/dft_test/dft_cu_4phases/md_kpu.yaml", 
-            //     "-s", "/share/home/wuxingxing/datas/system_config/cu_72104/dft_test/dft_cu_4phases/train_data"
-            // ]
+            "args": [ 
+                "--hvd", "--opt", "LKF", "--epochs", "100", "-r", "-b", "1", "-e", "-f", "1", "--eval_name", "phono", 
+                "-c", "/share/home/wuxingxing/al_dir/al/final/phy/phonopy/valid.yaml", 
+                "-s", "/share/home/wuxingxing/al_dir/al/final/final_train"
+            ]
             // prediction
             // "args": [ 
             //     "--hvd", "--opt", "LKF", "--epochs", "100", "-r", "-b", "1", "-k", "-f", "1", "--kpu_dir", "debug_md_kpu_dir_nr2",

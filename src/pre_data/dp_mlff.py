@@ -112,8 +112,9 @@ def get_real_Ep(movement_files,train_set_dir):
                 if "atoms" in line:
                     raw = line.split() 
                     num_atom = int(raw[0]) 
-                    Ep = float(raw[-5])
-                    
+                    # Ep = float(raw[-5])
+                    Ep = float(line.split('=')[2].strip().split()[1])
+
                     print(num_atom, Ep)
                     # write Ep / natom 
                     with open(os.path.join(train_set_dir, "Ei.dat"), "a") as Ei_out:
