@@ -2,6 +2,12 @@ import torch
 from torch.autograd import Function
 import op
 
+class KalmanUpdate(Function):
+    @staticmethod
+    def forward(ctx, P, K, alpha, beta):
+        N = P.shape[0]
+        op.kalman_update(N, alpha, beta, K, P)
+        return
 
 class MatmulBiasTanh(Function):
     @staticmethod

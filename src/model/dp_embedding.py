@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch.nn.init import normal_ as normal
 import numpy as np
-from model.op_func import MatmulBiasTanh
+# from model.op_func import MatmulBiasTanh
 
 
 class EmbeddingNet(nn.Module):
@@ -82,15 +82,15 @@ class EmbeddingNet(nn.Module):
         self.inter_compute.append(hiden)
 
         # import ipdb; ipdb.set_trace()
-        hiden = MatmulBiasTanh.apply(x, self.weights[1], self.bias[1])
-        # hiden = torch.matmul(x, self.weights[1]) + self.bias[1]
-        # hiden = self.cfg["activation"](hiden)
+        # hiden = MatmulBiasTanh.apply(x, self.weights[1], self.bias[1])
+        hiden = torch.matmul(x, self.weights[1]) + self.bias[1]
+        hiden = self.cfg["activation"](hiden)
         self.inter_compute.append(hiden)
         x = hiden + x
 
-        # hiden = torch.matmul(x, self.weights[2]) + self.bias[2]
-        # hiden = self.cfg["activation"](hiden)
-        hiden = MatmulBiasTanh.apply(x, self.weights[2], self.bias[2])
+        hiden = torch.matmul(x, self.weights[2]) + self.bias[2]
+        hiden = self.cfg["activation"](hiden)
+        # hiden = MatmulBiasTanh.apply(x, self.weights[2], self.bias[2])
         self.inter_compute.append(hiden)
         x = hiden + x
         
@@ -201,24 +201,24 @@ class FittingNet(nn.Module):
     # @torch.compile
     def specialization_forward(self, x):
         self.inter_compute = []
-        hiden = MatmulBiasTanh.apply(x, self.weights[0], self.bias[0])
-        # hiden = torch.matmul(x, self.weights[0]) + self.bias[0]
-        # hiden = self.cfg["activation"](hiden)
+        # hiden = MatmulBiasTanh.apply(x, self.weights[0], self.bias[0])
+        hiden = torch.matmul(x, self.weights[0]) + self.bias[0]
+        hiden = self.cfg["activation"](hiden)
         self.inter_compute.append(hiden)
         x = hiden
 
-        hiden = MatmulBiasTanh.apply(x, self.weights[1], self.bias[1])
+        # hiden = MatmulBiasTanh.apply(x, self.weights[1], self.bias[1])
 
-        # hiden = torch.matmul(x, self.weights[1]) + self.bias[1]
-        # hiden = self.cfg["activation"](hiden)
+        hiden = torch.matmul(x, self.weights[1]) + self.bias[1]
+        hiden = self.cfg["activation"](hiden)
         self.inter_compute.append(hiden)
         # x = hiden * self.resnet_dt[0] + x
         x = hiden + x
 
-        hiden = MatmulBiasTanh.apply(x, self.weights[2], self.bias[2])
+        # hiden = MatmulBiasTanh.apply(x, self.weights[2], self.bias[2])
 
-        # hiden = torch.matmul(x, self.weights[2]) + self.bias[2]
-        # hiden = self.cfg["activation"](hiden)
+        hiden = torch.matmul(x, self.weights[2]) + self.bias[2]
+        hiden = self.cfg["activation"](hiden)
         self.inter_compute.append(hiden)
         # x = hiden * self.resnet_dt[1] + x
         x = hiden + x
