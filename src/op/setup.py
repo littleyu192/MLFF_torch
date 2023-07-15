@@ -1,30 +1,24 @@
 from setuptools import setup
 from torch.utils.cpp_extension import BuildExtension, CUDAExtension
-#import sys
-#sys.path.append("/home/husiyu/tools/cuda-11/bin")
+import glob
+
+cuda_source = glob.glob("**/*.cu", recursive=True)
+cpp_source = glob.glob("**/*.cpp", recursive=True)
 
 setup(
     name="op",
+    version="0.1.0",
+    author="Siyu Hu",
     include_dirs=["include"],
     ext_modules=[
         CUDAExtension(
             "op",
-            [
-                "calculate_force.cpp", 
-                "kernel/calculateForce.cu",
-                "calculate_force_grad.cpp",
-                "kernel/calculateForceGrad.cu",
-                "calculate_virial_force.cpp", 
-                "kernel/calculateVirial.cu",
-                "calculate_virial_force_grad.cpp", 
-                "kernel/calculateVirialGrad.cu",
-                "calculate_DR.cpp",
-                "kernel/calculateDR.cu",
-                "register_op.cpp",
-            ],
+            cuda_source + cpp_source,
+            extra_compile_args={"nvcc": ["-std=c++17"]},
         ),
     ],
-    cmdclass={
-        "build_ext": BuildExtension
-    }
+    cmdclass={"build_ext": BuildExtension},
+    install_requires=[
+        "torch",
+    ],
 )

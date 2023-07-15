@@ -1,7 +1,7 @@
 import torch
 from torch.optim.optimizer import Optimizer
 import math
-
+from model.op_func import KalmanUpdate
 
 class LKFOptimizer(Optimizer):
     def __init__(
@@ -116,18 +116,33 @@ class LKFOptimizer(Optimizer):
         block_size = self.__get_blocksize()
         kalman_nue = self.__get_nue()
 
+        # tmp = 0
+        # for i in range(weights_num):
+        #     tmp = tmp + (kalman_lambda + torch.matmul(torch.matmul(H[i].T, P[i]), H[i]))
+
+        # A = 1 / tmp
+
+        # for i in range(weights_num):
+        #     K = torch.matmul(P[i], H[i])
+        #     weights[i] = weights[i] + A * error * K
+        #     P[i] = (1 / kalman_lambda) * (P[i] - A * torch.matmul(K, K.T))
+        
         tmp = 0
+        K = []
         for i in range(weights_num):
-            tmp = tmp + (kalman_lambda + torch.matmul(torch.matmul(H[i].T, P[i]), H[i]))
+            K.append(torch.matmul(P[i], H[i]))
+            tmp = tmp + (kalman_lambda + torch.matmul(H[i].T, K[i]))
 
         A = 1 / tmp
+        error = A * error
+        alpha = 1 / kalman_lambda
 
         for i in range(weights_num):
-            K = torch.matmul(P[i], H[i])
+            # K = torch.matmul(P[i], H[i])
+            weights[i] = weights[i] + error * K[i]
+            KalmanUpdate.apply(P[i], K[i], alpha, A)
 
-            weights[i] = weights[i] + A * error * K
-
-            P[i] = (1 / kalman_lambda) * (P[i] - A * torch.matmul(K, K.T))
+            
 
         kalman_lambda = kalman_nue * kalman_lambda + 1 - kalman_nue
         self._state.update({"kalman_lambda": kalman_lambda})
