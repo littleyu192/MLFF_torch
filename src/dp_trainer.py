@@ -109,6 +109,8 @@ def train(train_loader, model, criterion, optimizer, epoch, start_lr, device, co
         )
 
         loss.backward()
+        # print("==========Memory summary==========")
+        # print(torch.cuda.memory_summary(device=device, abbreviated=False))
         optimizer.step()
 
         # measure accuracy and record loss

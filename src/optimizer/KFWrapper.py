@@ -103,6 +103,8 @@ class KFOptimizerWrapper:
 
             # In order to solve a pytorch bug, reference: https://github.com/pytorch/pytorch/issues/43259
             (tmp_force_predict.sum() + Etot_predict.sum() * 0).backward()
+            # print("==========Memory summary==========")
+            # print(torch.cuda.memory_summary(device=Etot_predict.device, abbreviated=False))
             error = error * math.sqrt(bs)
             self.optimizer.step(error)
         return Etot_predict, Ei_predict, force_predict

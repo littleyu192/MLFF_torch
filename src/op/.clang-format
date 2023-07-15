@@ -1,0 +1,288 @@
+---
+#########################################################################################
+# Tencent C++ code style
+
+Language: Cpp
+BasedOnStyle: Google
+
+# If true, analyze the formatted file for the most common alignment of & and *
+DerivePointerAlignment: false
+
+PointerAlignment: Right
+
+# Only sort headers in each include block
+SortIncludes: true
+IncludeBlocks: Preserve
+
+# Indents directives after the hash e.g.,
+#   #if defined(WIN)
+#   #  include <windows.h>
+#   #else
+#   #  include <curl.h>
+#   #endif
+# IndentPPDirectives: AfterHash
+
+#########################################################################################
+# XNet specific C++ code style
+
+# The extra indent or outdent of access modifiers, e.g. public:
+# [NOTE] Tencent requires: -3
+AccessModifierOffset: -4
+
+# Horizontally aligns arguments after an open bracket?
+AlignAfterOpenBracket: AlwaysBreak
+
+# Style of aligning consecutive bit field
+AlignConsecutiveBitFields: AcrossEmptyLinesAndComments
+
+# Style of aligning consecutive declarations
+#AlignConsecutiveDeclarations: None
+
+# Style of aligning consecutive macro definitions
+AlignConsecutiveMacros: AcrossEmptyLinesAndComments
+
+# Dependent on the value, int f() { return 0; } can be put on a single line
+AllowShortFunctionsOnASingleLine: None
+
+# Dependent on the value, if (a) return; can be put on a single line
+AllowShortIfStatementsOnASingleLine: Never
+
+# Dependent on the value, auto lambda []() { return 0; } can be put on a single line
+AllowShortLambdasOnASingleLine: All
+
+# If true, while (true) continue; can be put on a single line
+AllowShortLoopsOnASingleLine: false
+
+# Aligns trailing comments?
+AlignTrailingComments: false
+
+# Always break before multiline string literals?
+AlwaysBreakBeforeMultilineStrings: true
+
+# The template declaration breaking style to use
+AlwaysBreakTemplateDeclarations: true
+
+# Control of individual brace wrapping cases, valid when BreakBeforeBraces is Custom
+BraceWrapping:
+    AfterCaseLabel: true
+    AfterClass: true
+    AfterControlStatement: true
+    AfterEnum: true
+    AfterFunction: true
+    AfterNamespace: false
+    AfterObjCDeclaration: true
+    AfterStruct: true
+    AfterUnion: true
+    AfterExternBlock: true
+    BeforeCatch: true
+    BeforeElse: true
+    BeforeLambdaBody: true
+    BeforeWhile: true
+    IndentBraces: false
+    SplitEmptyFunction: true
+    SplitEmptyRecord: true
+    SplitEmptyNamespace: true
+
+BreakBeforeBinaryOperators: None
+
+# The brace breaking style to use. Candidates: Custom, Allman, Attach
+# [NOTE] Tencent requires: Attach
+BreakBeforeBraces: Custom
+
+# Ternary operators will be placed after line breaks?
+BreakBeforeTernaryOperators: false
+
+# The constructor initializers style to use
+BreakConstructorInitializers: BeforeComma
+
+# The column limit. A column limit of 0 means that there is no column limit
+ColumnLimit: 88
+
+# Consecutive namespace declarations will be on the same line?
+CompactNamespaces: false
+
+# Analyze the formatted file for the most used line ending
+DeriveLineEnding: true
+
+# Adds missing namespace end comments and fixes invalid existing ones?
+FixNamespaceComments: true
+
+# Indent case label blocks one level from the case label
+IndentCaseBlocks: true
+
+# Indent case labels one level from the switch statement
+IndentCaseLabels: false
+
+# IndentExternBlockStyle is the type of indenting of extern blocks
+IndentExternBlock: NoIndent
+
+# The preprocessor directive indenting style to use
+IndentPPDirectives: None
+
+# The number of columns to use for indentation
+IndentWidth: 4
+
+# Indent if a function definition or declaration is wrapped after the type
+IndentWrappedFunctionNames: false
+
+# A regular expression matching macros that start a block
+MacroBlockBegin: 'XNET_SREFLECT_(STRUCT|UNION)_BEGIN'
+
+# A regular expression matching macros that end a block
+MacroBlockEnd: 'XNET_SREFLECT_(STRUCT|UNION)_END'
+
+# The maximum number of consecutive empty lines to keep
+#MaxEmptyLinesToKeep: 1
+
+# Attempt to re-flow comments?
+ReflowComments: false
+
+# A space will be inserted after the ‘template’ keyword?
+SpaceAfterTemplateKeyword: true
+
+Standard: Auto
+
+# The way to use tab characters in the resulting file
+UseTab: Never
+
+---
+#########################################################################################
+# Tencent Objective C++ code style
+
+Language: ObjC
+BasedOnStyle: WebKit
+
+AccessModifierOffset: -4
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AlignEscapedNewlinesLeft: true
+AlignOperands: true
+# AlignTrailingComments: true
+SpacesBeforeTrailingComments: 2
+AllowAllParametersOfDeclarationOnNextLine: true
+AllowShortBlocksOnASingleLine : false
+AllowShortCaseLabelsOnASingleLine: false
+# AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+ColumnLimit: 88
+CommentPragmas: '^ IWYU pragma:'
+PointerAlignment: Right
+IndentWidth: 4
+MaxEmptyLinesToKeep: 1
+ObjCBreakBeforeNestedBlockParam: false
+ObjCSpaceAfterProperty: true
+ObjCBlockIndentWidth: 4
+SpacesInSquareBrackets: false
+SpacesInParentheses : false
+SpaceBeforeAssignmentOperators: true
+SpacesInContainerLiterals: false
+# IndentWrappedFunctionNames: true
+KeepEmptyLinesAtTheStartOfBlocks: false
+SpaceAfterCStyleCast: false
+SortIncludes: false
+# IndentCaseLabels: true
+# BreakBeforeBraces: Attach
+TabWidth: 4
+UseTab: Never
+
+#########################################################################################
+# XNet specific Objective C++ code style
+
+# Horizontally aligns arguments after an open bracket?
+AlignAfterOpenBracket: AlwaysBreak
+
+# Style of aligning consecutive bit field
+AlignConsecutiveBitFields: AcrossEmptyLinesAndComments
+
+# Style of aligning consecutive macro definitions
+AlignConsecutiveMacros: AcrossEmptyLinesAndComments
+
+# Dependent on the value, int f() { return 0; } can be put on a single line
+AllowShortFunctionsOnASingleLine: None
+
+# Dependent on the value, auto lambda []() { return 0; } can be put on a single line
+AllowShortLambdasOnASingleLine: All
+
+# Aligns trailing comments?
+AlignTrailingComments: false
+
+# Always break before multiline string literals?
+AlwaysBreakBeforeMultilineStrings: true
+
+# The template declaration breaking style to use
+AlwaysBreakTemplateDeclarations: true
+
+# Control of individual brace wrapping cases, valid when BreakBeforeBraces is Custom
+BraceWrapping:
+    AfterCaseLabel: true
+    AfterClass: true
+    AfterControlStatement: true
+    AfterEnum: true
+    AfterFunction: true
+    AfterNamespace: false
+    AfterObjCDeclaration: true
+    AfterStruct: true
+    AfterUnion: true
+    AfterExternBlock: true
+    BeforeCatch: true
+    BeforeElse: true
+    BeforeLambdaBody: true
+    BeforeWhile: true
+    IndentBraces: false
+    SplitEmptyFunction: true
+    SplitEmptyRecord: true
+    SplitEmptyNamespace: true
+
+BreakBeforeBinaryOperators: None
+
+# The brace breaking style to use. Candidates: Custom, Allman, Attach
+# [NOTE] Tencent requires: Attach
+BreakBeforeBraces: Custom
+
+# Ternary operators will be placed after line breaks?
+BreakBeforeTernaryOperators: false
+
+# The constructor initializers style to use
+BreakConstructorInitializers: BeforeComma
+
+# Consecutive namespace declarations will be on the same line?
+CompactNamespaces: false
+
+# Analyze the formatted file for the most used line ending
+DeriveLineEnding: true
+
+# Adds missing namespace end comments and fixes invalid existing ones?
+FixNamespaceComments: true
+
+# Indent case label blocks one level from the case label
+IndentCaseBlocks: true
+
+# Indent case labels one level from the switch statement
+IndentCaseLabels: false
+
+# IndentExternBlockStyle is the type of indenting of extern blocks
+IndentExternBlock: NoIndent
+
+# The preprocessor directive indenting style to use
+IndentPPDirectives: None
+
+# Indent if a function definition or declaration is wrapped after the type
+IndentWrappedFunctionNames: false
+
+# A regular expression matching macros that start a block
+MacroBlockBegin: 'XNET_SREFLECT_(STRUCT|UNION)_BEGIN'
+
+# A regular expression matching macros that end a block
+MacroBlockEnd: 'XNET_SREFLECT_(STRUCT|UNION)_END'
+
+# The indentation used for namespaces
+NamespaceIndentation: None
+
+# Attempt to re-flow comments?
+ReflowComments: false
+
+# A space will be inserted after the ‘template’ keyword?
+SpaceAfterTemplateKeyword: true
+
+Standard: Auto

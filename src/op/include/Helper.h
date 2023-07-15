@@ -28,37 +28,38 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
-#pragma once
+#ifndef OP_SRC_INCLUDE_HELPER_H_
+#define OP_SRC_INCLUDE_HELPER_H_
 
 #include "cuda_runtime.h"
 
 /**
  * Panic wrapper for unwinding CUTLASS errors
  */
-#define CUTLASS_CHECK(status)                                                                    \
-  {                                                                                              \
-    cutlass::Status error = status;                                                              \
-    if (error != cutlass::Status::kSuccess) {                                                    \
-      std::cerr << "Got cutlass error: " << cutlassGetStatusString(error) << " at: " << __LINE__ \
-                << std::endl;                                                                    \
-      exit(EXIT_FAILURE);                                                                        \
-    }                                                                                            \
-  }
-
+#define CUTLASS_CHECK(status)                                                   \
+    {                                                                           \
+        cutlass::Status error = status;                                         \
+        if (error != cutlass::Status::kSuccess) /*NOLINT*/                      \
+        {                                                                       \
+            std::cerr << "Got cutlass error: " << cutlassGetStatusString(error) \
+                      << " at: " << __LINE__ << std::endl;                      \
+            exit(EXIT_FAILURE);                                                 \
+        }                                                                       \
+    }
 
 /**
  * Panic wrapper for unwinding CUDA runtime errors
  */
-#define CUDA_CHECK(status)                                              \
-  {                                                                     \
-    cudaError_t error = status;                                         \
-    if (error != cudaSuccess) {                                         \
-      std::cerr << "Got bad cuda status: " << cudaGetErrorString(error) \
-                << " at line: " << __LINE__ << std::endl;               \
-      exit(EXIT_FAILURE);                                               \
-    }                                                                   \
-  }
-
+#define CUDA_CHECK(status)                                                    \
+    {                                                                         \
+        cudaError_t error = status;                                           \
+        if (error != cudaSuccess) /*NOLINT*/                                  \
+        {                                                                     \
+            std::cerr << "Got bad cuda status: " << cudaGetErrorString(error) \
+                      << " at line: " << __LINE__ << std::endl;               \
+            exit(EXIT_FAILURE);                                               \
+        }                                                                     \
+    }
 
 /**
  * GPU timer for recording the elapsed time across kernel(s) launched in GPU stream
@@ -105,3 +106,5 @@ struct GpuTimer
         return elapsed;
     }
 };
+
+#endif  // OP_SRC_INCLUDE_HELPER_H_
