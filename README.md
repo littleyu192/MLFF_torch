@@ -30,44 +30,41 @@ We implemented GKF based MLP(users can choose the above features), [Adam based D
 
 ## Installation
 
-export MKLROOT=/the/path/to/mkl
 
-```sh
 with conda:
-	# create conda env
-	conda create -n *name* python=3.8
-	conda activate *name*
-	conda install astunparse numpy ninja pyyaml mkl mkl-include setuptools cmake cffi typing_extensions future six requests dataclasses
-	conda install -c pytorch magma-cuda110  # use the magma-cuda* that matches your CUDA version
-	git clone --recursive https://github.com/pytorch/pytorch
-	cd pytorch
-	# if you are updating an existing checkout
-	git submodule sync
-	git submodule update --init --recursive --jobs 0
-	export CMAKE_PREFIX_PATH=${CONDA_PREFIX:-"$(dirname $(which conda))/../"}
-	python setup.py install
-```
-
+git clone https://github.com/littleyu192/MLFF_torch.git
 ```sh
-with dorcker:
+	# 1. anaconda: create and activate conda env 
+	conda create -n dpkf python=3.10
+	conda activate dpkf
+	# install packages:
+	pip install torch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cu118
+	pip install ipdb pyyaml 
 
-```
-
-```sh
-horovod installation(optional):
-	conda activate *name*
-	# download NCCL  in https://developer.nvidia.com/nccl
-	HOROVOD_WITH_PYTORCH=1 HOROVOD_WITHOUT_TENSORFLOW=1 HOROVOD_WITHOUT_MXNET=1 HOROVOD_GPU_OPERATIONS=NCCL HOROVOD_NCCL_INCLUDE=/home/husiyu/tools/nccl_2.15/include HOROVOD_NCCL_LIB=/home/husiyu/tools/nccl_2.15/lib  pip install horovod
-
-```
-
-```sh
-	# compile
+	# 2. compile
+	export MKLROOT=/the/path/to/mkl
+	module load cmake/3.27
+	module load cuda/11.8
+	module load gcc/9.5.0
 	cd /the/path/the/MLFF_torch/src
 	./build.sh
 	export PATH=the/path/to/MLFF_torch/src/bin:$PATH
 	cd op && python setup.py install
 	conda deactivate *name*
+```
+
+with dorcker
+1. download MLFF.zip from: https://zenodo.org/records/10213773 
+2. unzip
+3. mv MLFF directory to /home/husiyu/Project
+```sh
+
+	docker pull jingzf0214/torch:v2
+	docker run --gpus all -d -it --name=torchMLFF  -v /home/husiyu/Project:/root/Project jingzf0214/torch:v2 /bin/bash
+	docker exec -it torchMLFF /bin/bash
+	cd /root/Project/MLFF/RLEKF/src && bash build.sh
+	export PATH="/root/Project/MLFF/RLEKF/src/bin:$PATH"
+	cd op && python setup.py install
 ```
 
 ## Quick start
@@ -95,8 +92,7 @@ horovod installation(optional):
 	python the/path/to/MLFF_torch/src/pre_data/seper.py  # in parameters.py, test_ratio = 0.2 for default
 	python the/path/to/MLFF_torch/src/pre_data/gen_data.py 
 ```
-> model training
-1. Train in one GPU
+> model training(Train in one GPU)
 ```sh
 	python the/path/to/MLFF_torch/src/main.py --gpu 0 -b 1 --opt GKF --epochs 30 -s GKFrecord
 	# --gpu 0(0 is the idx of GPU)
@@ -105,28 +101,7 @@ horovod installation(optional):
 	# -s GKFrecord(assign the directory of stored model and log file)
 ```
 
-2. Train in multi GPUs(One node)
-```sh
-	python the/path/to/MLFF_torch/src/main.py --dist-url 'tcp://127.0.0.1:1235' --dist-backend 'nccl' --multiprocessing-distributed --world-size 1 --rank 0 -b 4 --opt GKF --epochs 30 -s GKF_4gpus
-	# do not need to assigh GPU 
-	# -b 4(the batch size should set an integer multiple of the used GPUs, e.g.,4, 8, 12)
-	# --opt GKF(use the default optimizer if using MLP net)
-	# -s GKFrecord(assign the directory of stored model and log file)
-```
-
-3. Train in multi GPUs(Multi nodes)
-```sh
-	# in the root node:
-	python the/path/to/MLFF_torch/src/main.py --dist-url 'tcp://127.0.0.1:1235' --dist-backend 'nccl' --multiprocessing-distributed --world-size 2 --rank 0 -b 8 --opt GKF --epochs 30 -s GKF_8gpus
-	# in the child nodes:
-	python the/path/to/MLFF_torch/src/main.py --dist-url 'tcp://$root_node_IP$:1235' --dist-backend 'nccl' --multiprocessing-distributed --world-size 2 --rank 1 -b 8 --opt GKF --epochs 30 -s GKF_8gpus
-	# do not need to assigh GPU 
-	# -b 8(the batch size should set an integer multiple of the used GPUs, e.g.,8, 16, etc)
-	# --opt GKF(use the default optimizer if using MLP net)
-	# -s GKFrecord(assign the directory of stored model and log file)
-```
-
-### DP
+### DPMD
 > generate features
 ```sh
 	cd the/path/to/data
@@ -135,8 +110,7 @@ horovod installation(optional):
 	cp the/path/to/MLFF_torch/src/cu_config_template.yaml config.yaml
 	python the/path/to/MLFF_torch/src/pre_data/dp_mlff.py
 ```
-> model training
-1. Train in one GPU
+> model training(Train in one GPU)
 ```sh
 	python the/path/to/MLFF_torch/src/dp_main.py --gpu 0 -b 1 --opt ADAM --epochs 1000 -s dprecord
 	# --gpu 0(0 is the idx of GPU)
@@ -145,23 +119,8 @@ horovod installation(optional):
 	# -s dprecord(assign the directory of stored model and log file)
 ```
 
-2. Train in multi GPUs(One node)
-```sh
-	horovodrun -np 4 -H localhost:4 python the/path/to/MLFF_torch/src/dp_main.py --hvd -b 4 --opt ADAM --epochs 1000 -s dp_4gpus
-	# do not need to assigh GPU 
-	# -b 4(the batch size should set an integer multiple of the used GPUs, e.g.,4, 8, 12)
-	# --opt ADAM(use the default optimizer if using DP net)
-	# -s dp_4gpus(assign the directory of stored model and log file)
-```
 
-3. Train in multi GPUs(Multi nodes)
-```sh
-	horovodrun -np 8 -H server1:2,server2:2 python the/path/to/MLFF_torch/src/dp_main.py --opt ADAM -b 8 --epochs 200 --hvd -s dp_8gpus
-	# do not need to assigh GPU 
-	# -b 8(the batch size should set an integer multiple of the used GPUs, e.g.,8, 16, etc)
-	# --opt ADAM(use the default optimizer if using DP net)
-	# -s dp_8gpus(assign the directory of stored model and log file)
-```
+
 
 
 ### DPKF
@@ -171,7 +130,7 @@ horovod installation(optional):
 > model validation
 ```sh
 	python the/path/to/MLFF_torch/src/dp_main.py --opt LKF -b 1 -s dpkfrecord -r -e
-	(or: horovodrun -np 4 -H localhost:4 python the/path/to/MLFF_torch/src/dp_main.py --hvd --opt LKF -b 32 -s dpkf_4gpus -r -e)
+	(or: torchrun --nproc_per_node=4 the/path/to/MLFF_torch/src/dp_main.py --ddp --opt LKF -b 32 -s dpkf_4gpus -r -e)
 	# -s follows the directory of model you wanna evaluate
 	# -r means recover
 	# -e means evaluate
@@ -205,4 +164,3 @@ If you use this code in any future publications, please cite this:
 
 
 **If you have any questions, contact husiyu20b@ict.ac.cn**
-
