@@ -9,7 +9,8 @@ import torch.optim as optim
 import torch.utils.data
 import torch.utils.data.distributed
 import warnings
-import horovod.torch as hvd
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 from model.dp_dp import DP
 
@@ -118,10 +119,10 @@ parser.add_argument(
     help="evaluate model on validation set",
 )
 parser.add_argument(
-    "--hvd",
-    dest="hvd",
+    "--ddp",
+    dest="ddp",
     action="store_true",
-    help="dist training by horovod",
+    help="enable distributed training (torch.distributed DDP)",
 )
 parser.add_argument(
     "--seed", default=None, type=int, help="seed for initializing training. "
@@ -174,12 +175,15 @@ def main():
             "from checkpoints."
         )
 
-    if args.hvd:
-        hvd.init()
-        args.gpu = hvd.local_rank()
+    if args.ddp:
+        backend = "nccl" if torch.cuda.is_available() else "gloo"
+        dist.init_process_group(backend=backend)
+        # Prefer torchrun-provided LOCAL_RANK if available
+        if os.environ.get("LOCAL_RANK") is not None:
+            args.gpu = int(os.environ["LOCAL_RANK"])
 
     if not os.path.exists(args.store_path):
-        if not args.hvd or (args.hvd and hvd.rank() == 0):
+        if not args.ddp or (args.ddp and (not dist.is_initialized() or dist.get_rank() == 0)):
             os.mkdir(args.store_path)
 
     if torch.cuda.is_available():
@@ -210,17 +214,26 @@ def main():
 
     if not torch.cuda.is_available():
         print("using CPU, this will be slow")
-    elif args.hvd:
+    elif args.ddp:
         if torch.cuda.is_available():
             if args.gpu is not None:
                 torch.cuda.set_device(args.gpu)
                 model.cuda(args.gpu)
-                args.batch_size = int(args.batch_size / hvd.size())
+                world_size = dist.get_world_size() if dist.is_initialized() else 1
+                if world_size > 1:
+                    args.batch_size = max(1, int(args.batch_size / world_size))
     elif args.gpu is not None and torch.cuda.is_available():
         torch.cuda.set_device(args.gpu)
         model = model.cuda(args.gpu)
     else:
         model = model.cuda()
+
+    # Wrap with DDP if distributed
+    if args.ddp:
+        if torch.cuda.is_available() and args.gpu is not None:
+            model = DDP(model, device_ids=[args.gpu], output_device=args.gpu)
+        else:
+            model = DDP(model)
 
     # define loss function (criterion), optimizer, and learning rate scheduler
     criterion = nn.MSELoss().to(device)
@@ -266,7 +279,8 @@ def main():
 
             args.start_epoch = checkpoint["epoch"] + 1
             best_loss = checkpoint["best_loss"]
-            model.load_state_dict(checkpoint["state_dict"])
+            target_model = model.module if isinstance(model, DDP) else model
+            target_model.load_state_dict(checkpoint["state_dict"])
             # optimizer.load_state_dict(checkpoint["optimizer"])
             # scheduler.load_state_dict(checkpoint["scheduler"])
             print(
@@ -277,23 +291,19 @@ def main():
         else:
             print("=> no checkpoint found at '{}'".format(file_name))
 
-    if args.hvd:
-        optimizer = hvd.DistributedOptimizer(
-            optimizer, named_parameters=model.named_parameters()
-        )
-
-        # Broadcast parameters from rank 0 to all other processes.
-        hvd.broadcast_parameters(model.state_dict(), root_rank=0)
+    # For DDP, gradients are synchronized during backward; no special optimizer wrapper or broadcast needed.
 
     # """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
     # scheduler = StepLR(optimizer, step_size=30, gamma=0.1)
 
-    if args.hvd:
+    if args.ddp:
+        world_size = dist.get_world_size() if dist.is_initialized() else 1
+        rank = dist.get_rank() if dist.is_initialized() else 0
         train_sampler = torch.utils.data.distributed.DistributedSampler(
-            train_dataset, num_replicas=hvd.size(), rank=hvd.rank()
+            train_dataset, num_replicas=world_size, rank=rank
         )
         val_sampler = torch.utils.data.distributed.DistributedSampler(
-            valid_dataset, num_replicas=hvd.size(), rank=hvd.rank(), drop_last=True
+            valid_dataset, num_replicas=world_size, rank=rank, drop_last=True
         )
     else:
         train_sampler = None
@@ -322,7 +332,7 @@ def main():
         valid(val_loader, model, criterion, device, args)
         return
 
-    if not args.hvd or (args.hvd and hvd.rank() == 0):
+    if not args.ddp or (args.ddp and (not dist.is_initialized() or dist.get_rank() == 0)):
         train_log = os.path.join(args.store_path, "epoch_train.dat")
 
         f_train_log = open(train_log, "w")
@@ -336,7 +346,7 @@ def main():
 
     time_init = time.time()
     for epoch in range(args.start_epoch, args.epochs + 1):
-        if args.hvd:
+        if args.ddp and isinstance(train_sampler, torch.utils.data.distributed.DistributedSampler):
             train_sampler.set_epoch(epoch)
 
         # train for one epoch
@@ -359,7 +369,7 @@ def main():
             val_loader, model, criterion, device, args
         )
 
-        if not args.hvd or (args.hvd and hvd.rank() == 0):
+        if not args.ddp or (args.ddp and (not dist.is_initialized() or dist.get_rank() == 0)):
             f_train_log = open(train_log, "a")
             f_train_log.write(
                 "%d %e %e %e %e %e %s %s\n"
@@ -392,11 +402,11 @@ def main():
         is_best = vld_loss < best_loss
         best_loss = min(loss, best_loss)
 
-        if not args.hvd or (args.hvd and hvd.rank() == 0):
+        if not args.ddp or (args.ddp and (not dist.is_initialized() or dist.get_rank() == 0)):
             save_checkpoint(
                 {
                     "epoch": epoch,
-                    "state_dict": model.state_dict(),
+                    "state_dict": model.module.state_dict() if isinstance(model, DDP) else model.state_dict(),
                     "best_loss": best_loss,
                     # "optimizer": optimizer.state_dict(),
                     # "scheduler": scheduler.state_dict(),
