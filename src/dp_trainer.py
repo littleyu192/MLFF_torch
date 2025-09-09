@@ -9,7 +9,7 @@ from torch.autograd import Variable
 from loss.dploss import dp_loss, adjust_lr
 
 from optimizer.KFWrapper import KFOptimizerWrapper, DistributedBackend
-import horovod.torch as hvd
+import torch.distributed as dist
 
 from torch.profiler import profile, record_function, ProfilerActivity
 
@@ -152,8 +152,8 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
         optimizer,
         config.nselect,
         config.groupsize,
-        config.hvd,
-        DistributedBackend.Horovod,
+        dist.is_available() and dist.is_initialized(),
+        DistributedBackend.Torch,
     )
 
     # switch to train mode
@@ -241,7 +241,7 @@ def train_KF(train_loader, model, criterion, optimizer, epoch, device, config):
         if i % config.print_freq == 0:
             progress.display(i + 1)
 
-    if config.hvd:
+    if dist.is_available() and dist.is_initialized():
         losses.all_reduce()
         loss_Etot.all_reduce()
         loss_Force.all_reduce()
@@ -313,12 +313,16 @@ def valid(val_loader, model, criterion, device, args):
     loss_Etot = AverageMeter("Etot", ":.4e", Summary.ROOT)
     loss_Force = AverageMeter("Force", ":.4e", Summary.ROOT)
     loss_Ei = AverageMeter("Ei", ":.4e", Summary.ROOT)
+    world_size = dist.get_world_size() if dist.is_available() and dist.is_initialized() else 1
+    need_aux = False
+    if dist.is_available() and dist.is_initialized() and hasattr(val_loader, "sampler") and val_loader.sampler is not None:
+        try:
+            need_aux = (len(val_loader.sampler) * world_size) < len(val_loader.dataset)
+        except Exception:
+            need_aux = False
+
     progress = ProgressMeter(
-        len(val_loader)
-        + (
-            args.hvd
-            and (len(val_loader.sampler) * hvd.size() < len(val_loader.dataset))
-        ),
+        len(val_loader) + (1 if need_aux else 0),
         [batch_time, losses, loss_Etot, loss_Force, loss_Ei],
         prefix="Test: ",
     )
@@ -328,10 +332,10 @@ def valid(val_loader, model, criterion, device, args):
 
     run_validate(val_loader)
 
-    if args.hvd and (len(val_loader.sampler) * hvd.size() < len(val_loader.dataset)):
+    if dist.is_available() and dist.is_initialized() and need_aux:
         aux_val_dataset = Subset(
             val_loader.dataset,
-            range(len(val_loader.sampler) * hvd.size(), len(val_loader.dataset)),
+            range(len(val_loader.sampler) * world_size, len(val_loader.dataset)),
         )
         aux_val_loader = torch.utils.data.DataLoader(
             aux_val_dataset,
@@ -342,7 +346,7 @@ def valid(val_loader, model, criterion, device, args):
         )
         run_validate(aux_val_loader, len(val_loader))
 
-    if args.hvd:
+    if dist.is_available() and dist.is_initialized():
         losses.all_reduce()
         loss_Etot.all_reduce()
         loss_Force.all_reduce()
@@ -400,8 +404,8 @@ class AverageMeter(object):
             device = torch.device("cpu")
 
         total = torch.tensor([self.sum, self.count], dtype=torch.float32, device=device)
-        total = hvd.allreduce(total, hvd.Sum)
-        # dist.all_reduce(total, dist.ReduceOp.SUM, async_op=False)
+        if dist.is_available() and dist.is_initialized():
+            dist.all_reduce(total, dist.ReduceOp.SUM, async_op=False)
         self.sum, self.count = total.tolist()
         self.avg = self.sum / self.count
         self.root = self.avg**0.5

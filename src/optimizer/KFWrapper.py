@@ -6,7 +6,6 @@ import numpy as np
 import torch.distributed as dist
 import math
 from enum import Enum, auto
-import horovod as hvd
 
 
 class DistributedBackend(Enum):
@@ -22,7 +21,7 @@ class KFOptimizerWrapper:
         atoms_selected: int,
         atoms_per_group: int,
         is_distributed: bool = False,
-        distributed_backend: DistributedBackend = DistributedBackend.Horovod,  # torch or horovod
+        distributed_backend: DistributedBackend = DistributedBackend.Torch,  # torch DDP (legacy Horovod removed)
     ) -> None:
         self.model = model
         self.optimizer = optimizer
@@ -57,9 +56,7 @@ class KFOptimizerWrapper:
         error = error.mean()
 
         if self.is_distributed:
-            if self.distributed_backend == DistributedBackend.Horovod:
-                error = hvd.torch.allreduce(error)
-            elif self.distributed_backend == DistributedBackend.Torch:
+            if self.distributed_backend == DistributedBackend.Torch and dist.is_available() and dist.is_initialized():
                 dist.all_reduce(error)
                 error /= dist.get_world_size()
 
@@ -92,9 +89,7 @@ class KFOptimizerWrapper:
             error = error_tmp.mean() / natoms_sum
 
             if self.is_distributed:
-                if self.distributed_backend == DistributedBackend.Horovod:
-                    error = hvd.torch.allreduce(error)
-                elif self.distributed_backend == DistributedBackend.Torch:
+                if self.distributed_backend == DistributedBackend.Torch and dist.is_available() and dist.is_initialized():
                     dist.all_reduce(error)
                     error /= dist.get_world_size()
 
